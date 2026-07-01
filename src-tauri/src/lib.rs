@@ -73,6 +73,34 @@ pub fn run() {
         })
         
         // 运行应用（加载配置文件中定义的资源）
+        // 使用 match 而非 expect，在启动失败时输出错误信息而非直接 panic
         .run(tauri::generate_context!())
-        .expect("启动 GitTimePrism 应用时发生错误");
+        .unwrap_or_else(|e| {
+            eprintln!("[GitTimePrism] 应用启动失败: {}", e);
+            // 在某些环境（如沙箱）下，log 插件可能因权限不足而初始化失败
+            // 此时尝试不使用 log 插件重新启动
+            eprintln!("[GitTimePrism] 尝试跳过日志插件重新启动...");
+            
+            // 重新构建不带日志插件的 Tauri 应用
+            tauri::Builder::default()
+                .plugin(tauri_plugin_shell::init())
+                .plugin(tauri_plugin_dialog::init())
+                .plugin(tauri_plugin_fs::init())
+                .invoke_handler(tauri::generate_handler![
+                    commands::system::check_git_installed,
+                    commands::system::open_external_url,
+                    commands::terminal::start_pty,
+                    commands::terminal::write_to_pty,
+                    commands::terminal::resize_pty,
+                    commands::terminal::kill_pty,
+                ])
+                .manage(commands::terminal::PtyManager::new())
+                .setup(|app| {
+                    eprintln!("[GitTimePrism] 应用启动完成（无日志功能）");
+                    let _ = utils::watcher::init_file_watcher(app.handle().clone());
+                    Ok(())
+                })
+                .run(tauri::generate_context!())
+                .expect("启动 GitTimePrism 应用时发生错误（无日志模式）");
+        })
 }

@@ -21,6 +21,11 @@ const viteConfig = defineConfig({
     port: 5173,
     // 端口被占用时报错而非自动切换（Tauri 依赖固定端口）
     strictPort: true,
+    // 文件监听配置
+    watch: {
+      // 忽略 src-tauri 目录（Rust 编译产物会被 Cargo 锁定，Vite 监听会导致 EBUSY 错误）
+      ignored: ['**/src-tauri/**'],
+    },
   },
   // 不清除终端屏幕（避免开发时频繁清除输出）
   clearScreen: false,
