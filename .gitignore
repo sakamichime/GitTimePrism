@@ -1,2 +1,27 @@
+# Trae 文档（内部规划文件，不需要提交）
 .trae/documents/
 .trae/specs/
+
+# Node.js 依赖目录
+node_modules/
+
+# Vite 构建输出目录
+dist/
+
+# Rust 编译输出目录（Tauri 生成）
+src-tauri/target/
+
+# Tauri 自动生成的文件
+src-tauri/gen/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE 配置文件
+.vscode/
+.idea/
+
+# 环境变量文件
+.env
+.env.*

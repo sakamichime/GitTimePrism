@@ -1,0 +1,283 @@
+/**
+ * ============================================================
+ * 组件样式文件
+ * ============================================================
+ *
+ * 这个文件定义了应用中各个 UI 组件的样式。
+ * 这些组件按照功能划分：
+ *   - 工具栏（Toolbar）：顶部的操作按钮区域
+ *   - 主内容区（Main Content）：包含侧边栏、中间面板、详情面板的三栏布局
+ *   - 状态栏（Statusbar）：底部的状态信息栏
+ *   - 终端面板（Terminal）：底部的命令行终端
+ *   - 通用面板组件：面板头部、面板内容区等
+ *   - 拖拽调整手柄（Resize Handle）：面板之间可拖拽的分隔线
+ *   - 工具类：隐藏、折叠等
+ *
+ * 所有颜色和尺寸都引用 variables.css 中定义的 CSS 变量，
+ * 这样主题切换时组件样式会自动更新。
+ * ============================================================
+ */
+
+/* ============================================================
+ * 工具栏 (.toolbar)
+ * ============================================================
+ * 工具栏位于应用最顶部，包含各种操作按钮（如打开仓库、拉取、推送等）。
+ * 使用弹性布局让按钮水平排列，spacer 可以把按钮推到两边。
+* ============================================================ */
+.toolbar {
+  display: flex;                              /* 弹性布局，子元素水平排列 */
+  align-items: center;                        /* 垂直居中对齐 */
+  height: var(--toolbar-height);              /* 高度使用 CSS 变量 */
+  min-height: var(--toolbar-height);          /* 最小高度（防止被压缩） */
+  background: var(--bg-secondary);            /* 背景色 */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+  padding: 0 12px;                            /* 左右内边距 12px */
+  gap: 8px;                                   /* 子元素之间的间距 */
+  z-index: 100;                              /* 层级较高，确保在其他元素之上 */
+}
+
+/* 工具栏中的分组区域 - 把相关的按钮包在一起 */
+.toolbar-section {
+  display: flex;     /* 弹性布局 */
+  align-items: center; /* 垂直居中 */
+  gap: 4px;          /* 按钮之间的小间距 */
+}
+
+/* 工具栏中的弹性间隔 - 占据剩余空间，把后面的按钮推到右边 */
+.toolbar-spacer {
+  flex: 1;           /* 自动占据所有剩余空间 */
+}
+
+/* 工具栏中的分隔线 - 用来分隔不同功能组的按钮 */
+.toolbar-divider {
+  width: 1px;         /* 1像素宽的竖线 */
+  height: 20px;      /* 20像素高 */
+  background: var(--border); /* 使用边框色 */
+}
+
+/* ============================================================
+ * 主内容区 (.main-content)
+ * ============================================================
+ * 主内容区是工具栏下方、状态栏上方的区域。
+* 它包含侧边栏（左）、中间面板（中）、详情面板（右）三个子面板。
+ * 使用弹性布局实现三栏并列排列。
+* ============================================================ */
+.main-content {
+  display: flex;       /* 弹性布局，三栏水平排列 */
+  flex: 1;             /* 占据剩余的所有垂直空间 */
+  overflow: hidden;    /* 隐藏超出部分 */
+  position: relative; /* 相对定位，作为内部绝对定位元素的参考 */
+}
+
+/* ============================================================
+ * 侧边栏 (.sidebar)
+ * ============================================================
+ * 侧边栏位于主内容区的最左侧，用于显示仓库列表、分支列表等导航信息。
+ * 宽度可以通过拖拽手柄调整。
+* ============================================================ */
+.sidebar {
+  width: var(--sidebar-width);                     /* 默认宽度 */
+  min-width: var(--sidebar-min-width);             /* 最小宽度（防止拖得太窄） */
+  max-width: var(--sidebar-max-width);             /* 最大宽度（防止拖得太宽） */
+  background: var(--bg-secondary);                 /* 背景色 */
+  border-right: 1px solid var(--border);           /* 右侧边框（与中间面板分隔） */
+  flex-direction: column;                           /* 子元素垂直排列 */
+  flex-shrink: 0;                                   /* 不允许被压缩（保持设定宽度） */
+  display: flex;                                    /* 弹性布局 */
+  overflow: hidden;                                 /* 隐藏超出部分 */
+}
+
+/* ============================================================
+ * 中间面板 (.center-panel)
+ * ============================================================
+ * 中间面板位于侧边栏和详情面板之间，用于显示提交历史、文件差异等主要内容。
+ * 它占据剩余的所有水平空间（flex: 1），是三栏中最主要的部分。
+* ============================================================ */
+.center-panel {
+  flex: 1;                  /* 占据所有剩余水平空间 */
+  min-width: 300px;         /* 最小宽度，确保内容不会挤得太窄 */
+  flex-direction: column;   /* 子元素垂直排列 */
+  display: flex;            /* 弹性布局 */
+  overflow: hidden;         /* 隐藏超出部分 */
+}
+
+/* ============================================================
+ * 详情面板 (.detail-panel)
+ * ============================================================
+ * 详情面板位于主内容区的最右侧，用于显示选中提交的详细信息、文件变更等。
+ * 宽度可以通过拖拽手柄调整。
+* ============================================================ */
+.detail-panel {
+  width: var(--detail-panel-width);                 /* 默认宽度 */
+  min-width: var(--detail-panel-min-width);         /* 最小宽度 */
+  max-width: var(--detail-panel-max-width);         /* 最大宽度 */
+  background: var(--bg-secondary);                  /* 背景色 */
+  border-left: 1px solid var(--border);             /* 左侧边框（与中间面板分隔） */
+  flex-shrink: 0;                                  /* 不允许被压缩 */
+  display: flex;                                   /* 弹性布局 */
+  flex-direction: column;                           /* 子元素垂直排列 */
+  overflow: hidden;                                 /* 隐藏超出部分 */
+}
+
+/* ============================================================
+ * 垂直拖拽手柄 (.resize-handle-vertical)
+ * ============================================================
+ * 这是一个位于左右两个面板之间的细长条，用户可以拖动它来调整面板的宽度。
+ * 默认很窄（4px），鼠标悬停时会变宽（6px）并变色，提示用户可以拖拽。
+* ============================================================ */
+.resize-handle-vertical {
+  width: var(--resize-handle-width);                /* 默认 4px 宽 */
+  background: transparent;                        /* 默认透明（几乎看不见） */
+  cursor: col-resize;                              /* 鼠标变为水平调整大小的图标 */
+  transition: width var(--transition-fast),
+              background var(--transition-fast);    /* 宽度和背景色的过渡动画 */
+  flex-shrink: 0;                                  /* 不允许被压缩 */
+  position: relative;                             /* 相对定位 */
+  z-index: 10;                                     /* 层级稍高，确保可点击 */
+}
+
+/* 垂直拖拽手柄悬停效果 */
+.resize-handle-vertical:hover {
+  width: var(--resize-handle-hover-width);          /* 变宽到 6px */
+  background: var(--accent);                       /* 变为强调色 */
+}
+
+/* ============================================================
+ * 水平拖拽手柄 (.resize-handle-horizontal)
+ * ============================================================
+ * 与垂直手柄类似，但用于上下方向的面板调整（如终端面板的高度）。
+* ============================================================ */
+.resize-handle-horizontal {
+  height: var(--resize-handle-width);               /* 默认 4px 高 */
+  background: transparent;                          /* 默认透明 */
+  cursor: row-resize;                               /* 鼠标变为垂直调整大小的图标 */
+  transition: height var(--transition-fast),
+              background var(--transition-fast);    /* 高度和背景色的过渡动画 */
+  flex-shrink: 0;                                  /* 不允许被压缩 */
+  position: relative;                               /* 相对定位 */
+  z-index: 10;                                     /* 层级稍高 */
+}
+
+/* 水平拖拽手柄悬停效果 */
+.resize-handle-horizontal:hover {
+  height: var(--resize-handle-hover-width);          /* 变高到 6px */
+  background: var(--accent);                         /* 变为强调色 */
+}
+
+/* ============================================================
+ * 状态栏 (.statusbar)
+ * ============================================================
+ * 状态栏位于应用最底部，显示 Git 版本、当前分支、主题切换等状态信息。
+ * 高度很小（24px），文字也很小，是辅助信息区域。
+* ============================================================ */
+.statusbar {
+  display: flex;                                  /* 弹性布局，子元素水平排列 */
+  align-items: center;                            /* 垂直居中 */
+  height: var(--statusbar-height);                /* 状态栏高度 */
+  background: var(--bg-tertiary);                 /* 背景色 */
+  border-top: 1px solid var(--border);            /* 顶部边框 */
+  font-size: var(--font-size-xs);                 /* 超小字号 */
+  color: var(--text-muted);                       /* 弱化文字色 */
+  padding: 0 8px;                                  /* 左右内边距 */
+  gap: 12px;                                      /* 子元素间距 */
+}
+
+/* 状态栏中的单个信息项 */
+.statusbar-item {
+  display: flex;       /* 弹性布局 */
+  align-items: center; /* 垂直居中 */
+  gap: 4px;            /* 图标和文字之间的间距 */
+  white-space: nowrap; /* 不允许换行 */
+}
+
+/* 状态栏中的弹性间隔 - 把后面的信息项推到右边 */
+.statusbar-spacer {
+  flex: 1;            /* 占据所有剩余空间 */
+}
+
+/* ============================================================
+ * 终端面板 (.terminal-panel)
+ * ============================================================
+ * 终端面板是一个可折叠的命令行终端区域，位于主内容区下方。
+ * 用户可以在这里执行 Git 命令。
+ * 高度可以通过拖拽手柄调整。
+* ============================================================ */
+.terminal-panel {
+  height: var(--terminal-height);                 /* 默认高度 */
+  min-height: var(--terminal-min-height);         /* 最小高度 */
+  max-height: var(--terminal-max-height);         /* 最大高度 */
+  background: var(--bg-tertiary);                 /* 背景色 */
+  border-top: 1px solid var(--border);            /* 顶部边框 */
+  display: flex;                                  /* 弹性布局 */
+  flex-direction: column;                          /* 子元素垂直排列 */
+  overflow: hidden;                                /* 隐藏超出部分 */
+}
+
+/* 终端面板的头部 - 包含标题和关闭按钮 */
+.terminal-header {
+  height: 30px;                                   /* 头部高度 */
+  background: var(--bg-secondary);                /* 背景色 */
+  border-bottom: 1px solid var(--border-subtle);   /* 底部弱化边框 */
+  display: flex;                                  /* 弹性布局 */
+  align-items: center;                            /* 垂直居中 */
+  justify-content: space-between;                 /* 子元素两端对齐 */
+  padding: 0 12px;                                 /* 左右内边距 */
+  font-size: var(--font-size-sm);                 /* 小字号 */
+  color: var(--text-secondary);                    /* 次要文字色 */
+  flex-shrink: 0;                                 /* 不允许被压缩 */
+}
+
+/* 终端面板的内容区域 - 显示命令输出 */
+.terminal-body {
+  flex: 1;               /* 占据剩余空间 */
+  overflow: hidden;      /* 隐藏超出部分 */
+  padding: 4px;          /* 内边距 */
+  font-family: var(--font-mono); /* 使用等宽字体 */
+  font-size: var(--font-size-sm); /* 小字号 */
+}
+
+/* ============================================================
+ * 通用面板头部 (.panel-header)
+ * ============================================================
+ * 各个面板（侧边栏、详情面板等）的头部区域，包含标题和操作按钮。
+* ============================================================ */
+.panel-header {
+  height: 32px;                                   /* 头部高度 */
+  display: flex;                                  /* 弹性布局 */
+  align-items: center;                            /* 垂直居中 */
+  justify-content: space-between;                 /* 子元素两端对齐（标题在左，按钮在右） */
+  padding: 0 12px;                                 /* 左右内边距 */
+  border-bottom: 1px solid var(--border-subtle);   /* 底部弱化边框 */
+  font-size: var(--font-size-sm);                 /* 小字号 */
+  color: var(--text-secondary);                    /* 次要文字色 */
+  flex-shrink: 0;                                 /* 不允许被压缩 */
+}
+
+/* ============================================================
+ * 通用面板内容区 (.panel-body)
+ * ============================================================
+ * 各个面板的可滚动内容区域，列表、详情等信息都在这里显示。
+* ============================================================ */
+.panel-body {
+  flex: 1;                  /* 占据面板的剩余空间 */
+  overflow-y: auto;         /* 内容超出时允许纵向滚动 */
+  padding: 8px;             /* 内边距 */
+}
+
+/* ============================================================
+ * 工具类样式
+ * ============================================================
+ * 这些是通用的辅助类，用于控制元素的显示和隐藏。
+* ============================================================ */
+
+/* 完全隐藏元素 - display:none 意味着元素不占据任何空间 */
+.hidden {
+  display: none !important; /* !important 确保优先级最高 */
+}
+
+/* 折叠元素 - 高度变为 0，视觉上消失但仍占据水平空间 */
+.collapsed {
+  height: 0 !important;    /* !important 确保优先级最高 */
+  overflow: hidden;         /* 隐藏折叠后的内容 */
+  border: none !important;  /* 折叠时去掉边框 */
+}

@@ -1,0 +1,67 @@
+{
+  "app": {
+    "name": "GitTimePrism",
+    "description": "Git Visual GUI Tool"
+  },
+  "toolbar": {
+    "openRepo": "Open Repository",
+    "cloneRepo": "Clone Repository",
+    "initRepo": "Initialize Repository",
+    "pull": "Pull",
+    "push": "Push",
+    "fetch": "Fetch",
+    "toggleTerminal": "Toggle Terminal"
+  },
+  "sidebar": {
+    "repositories": "Repositories",
+    "branches": "Branches",
+    "stashes": "Stashes",
+    "submodules": "Submodules",
+    "noRepoOpen": "No Repository Open",
+    "addRepo": "Add Repository"
+  },
+  "center": {
+    "welcome": "Welcome to GitTimePrism",
+    "commitHistory": "Commit History",
+    "noCommits": "No commits yet"
+  },
+  "detail": {
+    "title": "Details",
+    "selectCommit": "Select a commit to view details"
+  },
+  "statusbar": {
+    "gitVersion": "Git Version",
+    "checking": "Checking...",
+    "notInstalled": "Not Installed",
+    "theme": "Theme"
+  },
+  "terminal": {
+    "title": "Terminal",
+    "close": "Close"
+  },
+  "git": {
+    "notInstalled": {
+      "title": "Git Not Found",
+      "message": "GitTimePrism requires Git to run. Please install Git first.",
+      "downloadButton": "Download Git",
+      "downloadUrl": "https://git-scm.com/download/win",
+      "retryButton": "Retry Detection"
+    }
+  },
+  "theme": {
+    "dark": "Dark",
+    "light": "Light",
+    "toggle": "Toggle Theme",
+    "followSystem": "Follow System"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "close": "Close",
+    "delete": "Delete",
+    "refresh": "Refresh",
+    "settings": "Settings",
+    "ok": "OK"
+  }
+}

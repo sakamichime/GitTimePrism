@@ -1,0 +1,54 @@
+[package]
+# 项目名称
+name = "gittimeprism"
+# 项目版本号
+version = "0.1.0"
+# 项目描述
+description = "GitTimePrism - 全功能 Git 可视化 GUI 工具"
+# 作者信息
+authors = ["GitTimePrism"]
+# 开源许可证
+license = "MIT"
+# Rust 版本要求
+edition = "2021"
+# 支持的最低 Rust 版本
+rust-version = "1.77.2"
+
+# 库配置（Tauri 需要编译为库以支持移动端）
+[lib]
+# 库名称（main.rs 中通过此名称调用 run 函数）
+name = "gittimeprism_lib"
+# 编译为多种库类型以支持不同平台
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# 构建依赖（仅在编译时使用）
+[build-dependencies]
+# Tauri 构建脚本，处理资源配置等构建任务
+tauri-build = { version = "2", features = [] }
+
+# 运行时依赖（编译到最终程序中的库）
+[dependencies]
+# Tauri 核心框架，提供窗口管理、IPC 通信等功能
+tauri = { version = "2", features = [] }
+# Tauri Shell 插件，用于打开外部链接和执行系统命令
+tauri-plugin-shell = "2"
+# Tauri 对话框插件，提供原生对话框（消息框、文件选择等）
+tauri-plugin-dialog = "2"
+# Tauri 文件系统插件，提供文件读写操作
+tauri-plugin-fs = "2"
+# Tauri 日志插件，提供日志记录功能
+tauri-plugin-log = "2"
+# serde 序列化/反序列化库，用于 Rust 结构体与 JSON 之间的转换
+serde = { version = "1", features = ["derive"] }
+# serde_json 库，用于处理 JSON 格式的数据
+serde_json = "1"
+# log 日志记录库的 Rust 接口
+log = "0.4"
+# thiserror 库，用于方便地定义自定义错误类型
+thiserror = "2"
+# portable-pty 库，提供跨平台的伪终端(PTY)支持，用于内嵌终端功能
+portable-pty = "0.8"
+
+# Windows 平台特定依赖
+[target.'cfg(windows)'.dependencies]
+# 不需要额外的 Windows crate，CREATE_NO_WINDOW 通过 os::windows::process::CommandExt 实现

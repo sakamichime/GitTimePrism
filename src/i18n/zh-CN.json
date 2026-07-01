@@ -1,0 +1,67 @@
+{
+  "app": {
+    "name": "GitTimePrism",
+    "description": "Git 可视化 GUI 工具"
+  },
+  "toolbar": {
+    "openRepo": "打开仓库",
+    "cloneRepo": "克隆仓库",
+    "initRepo": "初始化仓库",
+    "pull": "拉取",
+    "push": "推送",
+    "fetch": "获取",
+    "toggleTerminal": "切换终端"
+  },
+  "sidebar": {
+    "repositories": "仓库",
+    "branches": "分支",
+    "stashes": "暂存",
+    "submodules": "子模块",
+    "noRepoOpen": "没有打开的仓库",
+    "addRepo": "添加仓库"
+  },
+  "center": {
+    "welcome": "欢迎使用 GitTimePrism",
+    "commitHistory": "提交历史",
+    "noCommits": "暂无提交记录"
+  },
+  "detail": {
+    "title": "详情",
+    "selectCommit": "请选择一个提交查看详情"
+  },
+  "statusbar": {
+    "gitVersion": "Git 版本",
+    "checking": "检测中...",
+    "notInstalled": "未安装",
+    "theme": "主题"
+  },
+  "terminal": {
+    "title": "终端",
+    "close": "关闭"
+  },
+  "git": {
+    "notInstalled": {
+      "title": "未检测到 Git",
+      "message": "GitTimePrism 需要 Git 才能运行。请先安装 Git。",
+      "downloadButton": "下载 Git",
+      "downloadUrl": "https://git-scm.com/download/win",
+      "retryButton": "重新检测"
+    }
+  },
+  "theme": {
+    "dark": "暗色",
+    "light": "亮色",
+    "toggle": "切换主题",
+    "followSystem": "跟随系统"
+  },
+  "common": {
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "close": "关闭",
+    "delete": "删除",
+    "refresh": "刷新",
+    "settings": "设置",
+    "ok": "确定"
+  }
+}
