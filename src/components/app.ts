@@ -7,6 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { t } from '../services/i18n.js';
 import { GitInstaller } from './git-installer.js';
 import { TerminalPanel } from './terminal.js';
+import { repoService } from '../services/repo-service.js';
 
 export class App {
   /** 工具栏 DOM 元素引用 */
@@ -87,8 +88,12 @@ export class App {
         <div class="statusbar-item" id="statusbar-git-version">Git: ${t('statusbar.checking')}</div>
         <div class="statusbar-item" id="statusbar-repo-path"></div>
         <div class="statusbar-spacer"></div>
+        <!-- 切换终端按钮（从顶部 toolbar 迁移至此） -->
+        <div class="statusbar-item" id="statusbar-terminal">
+          <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('toolbar.toggleTerminal')}</button>
+        </div>
         <div class="statusbar-item" id="statusbar-theme">
-          <button class="btn" id="btn-toggle-theme" title="${t('theme.toggle')}">${t('theme.toggle')}</button>
+          <button class="btn" id="btn-toggle-theme" title="${t('theme.toggle')}" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('theme.toggle')}</button>
         </div>
       </footer>
     `;
@@ -196,6 +201,48 @@ export class App {
     // 绑定终端按钮
     document.getElementById('btn-toggle-terminal')?.addEventListener('click', () => this.toggleTerminal());
     document.getElementById('btn-close-terminal')?.addEventListener('click', () => this.toggleTerminal());
+
+    // ---- 绑定仓库操作按钮 ----
+    // 打开仓库按钮：弹出文件选择对话框，选择一个目录后加载该 Git 仓库
+    document.getElementById('btn-open-repo')?.addEventListener('click', async () => {
+      try {
+        const dir = await repoService.selectDirectory();
+        if (!dir) return; // 用户取消了选择
+        const info = await repoService.openRepo(dir);
+        this.onRepoOpened(info);
+      } catch (err) {
+        console.error('打开仓库失败:', err);
+      }
+    });
+
+    // 克隆仓库按钮：弹出提示让用户输入 URL，然后选择保存目录
+    document.getElementById('btn-clone-repo')?.addEventListener('click', async () => {
+      try {
+        // 使用简单的 prompt 获取仓库 URL
+        const url = prompt(t('repo.cloneUrlPrompt'));
+        if (!url) return; // 用户取消了输入
+        const dir = await repoService.selectDirectory();
+        if (!dir) return; // 用户取消了选择
+        await repoService.cloneRepo(url, dir);
+        // 克隆完成后自动打开该仓库
+        const info = await repoService.openRepo(dir);
+        this.onRepoOpened(info);
+      } catch (err) {
+        console.error('克隆仓库失败:', err);
+      }
+    });
+
+    // 初始化仓库按钮：选择一个目录，在该目录下执行 git init
+    document.getElementById('btn-init-repo')?.addEventListener('click', async () => {
+      try {
+        const dir = await repoService.selectDirectory();
+        if (!dir) return; // 用户取消了选择
+        const info = await repoService.initRepo(dir);
+        this.onRepoOpened(info);
+      } catch (err) {
+        console.error('初始化仓库失败:', err);
+      }
+    });
   }
 
   /** 切换终端面板的显示/隐藏 */
@@ -246,5 +293,84 @@ export class App {
     
     const installer = new GitInstaller(centerBody);
     await installer.checkAndHandle();
+  }
+
+  /**
+   * 仓库打开后的 UI 更新回调
+   * 当用户打开/克隆/初始化仓库后，更新各个面板显示仓库信息
+   * 
+   * @param info - 从后端获取的仓库基本信息
+   */
+  private async onRepoOpened(info: import('../services/repo-service.js').RepoInfo): Promise<void> {
+    // 更新状态栏显示当前仓库路径
+    const repoPathEl = document.getElementById('statusbar-repo-path');
+    if (repoPathEl) {
+      repoPathEl.textContent = info.path;
+    }
+
+    // 更新 sidebar 显示分支列表
+    try {
+      const branches = await repoService.getBranches(info.path);
+      const sidebarBody = document.getElementById('sidebar-body');
+      if (sidebarBody) {
+        if (branches.local.length === 0) {
+          sidebarBody.innerHTML = `<p style="color: var(--text-muted); padding: 16px; text-align: center;">${t('sidebar.noRepoOpen')}</p>`;
+        } else {
+          // 显示分支列表
+          sidebarBody.innerHTML = branches.local.map((b) => {
+            const current = b.is_current ? 'style="color: var(--accent-color); font-weight: 600;"' : '';
+            const icon = b.is_current ? '&#9654;' : '&#9655;'; // 实心三角/空心三角
+            const aheadBehind = (b.ahead > 0 || b.behind > 0) ? ` <span style="color: var(--text-muted); font-size: var(--font-size-xs);">↑${b.ahead} ↓${b.behind}</span>` : '';
+            return `<div ${current} style="padding: 6px 16px; cursor: pointer; border-bottom: 1px solid var(--divider);">${icon} ${b.name}${aheadBehind}</div>`;
+          }).join('');
+        }
+      }
+    } catch (err) {
+      console.error('获取分支列表失败:', err);
+    }
+
+    // 更新 center-panel 显示文件状态
+    try {
+      const status = await repoService.getRepoStatus(info.path);
+      const centerBody = document.getElementById('center-body');
+      if (centerBody) {
+        if (status.entries.length === 0) {
+          centerBody.innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); padding: 40px;">
+              <p style="font-size: var(--font-size-lg); margin-bottom: 8px;">✓ ${t('repo.cleanWorkingTree')}</p>
+              <p>${t('center.welcome')}</p>
+            </div>`;
+        } else {
+          centerBody.innerHTML = `
+            <div style="padding: 8px 16px; border-bottom: 1px solid var(--divider); color: var(--text-muted);">
+              ${t('repo.changesCount', { count: status.entries.length })}
+            </div>
+            ${status.entries.map((e) => {
+              const icon = this.getStatusIcon(e.status);
+              const staged = e.staged ? `<span style="color: var(--green); font-size: var(--font-size-xs);">S</span>` : `<span style="color: var(--text-muted); font-size: var(--font-size-xs);">W</span>`;
+              return `<div style="padding: 4px 16px; border-bottom: 1px solid var(--divider); display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm);">${staged} ${icon} <span style="flex: 1; overflow: hidden; text-overflow: ellipsis;">${e.path}</span></div>`;
+            }).join('')}`;
+        }
+      }
+    } catch (err) {
+      console.error('获取仓库状态失败:', err);
+    }
+  }
+
+  /**
+   * 根据文件状态返回对应的图标字符
+   * 用于在文件列表中显示变更类型的直观标识
+   */
+  private getStatusIcon(status: string): string {
+    switch (status) {
+      case 'Modified': return '✎';
+      case 'Added': return '+';
+      case 'Deleted': return '✕';
+      case 'Untracked': return '?';
+      case 'Renamed': return '→';
+      case 'Copied': return '⧉';
+      case 'Unmerged': return '⚠';
+      default: return '?';
+    }
   }
 }

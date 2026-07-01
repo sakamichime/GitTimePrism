@@ -54,6 +54,11 @@
     "toggle": "切换主题",
     "followSystem": "跟随系统"
   },
+  "repo": {
+    "cloneUrlPrompt": "请输入远程仓库 URL：",
+    "cleanWorkingTree": "工作区干净",
+    "changesCount": "{count} 个文件变更"
+  },
   "common": {
     "cancel": "取消",
     "confirm": "确认",

@@ -54,6 +54,11 @@
     "toggle": "Toggle Theme",
     "followSystem": "Follow System"
   },
+  "repo": {
+    "cloneUrlPrompt": "Enter remote repository URL:",
+    "cleanWorkingTree": "Clean Working Tree",
+    "changesCount": "{count} file(s) changed"
+  },
   "common": {
     "cancel": "Cancel",
     "confirm": "Confirm",

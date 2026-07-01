@@ -15,6 +15,8 @@
 pub mod commands;
 // 引入自定义的工具模块
 pub mod utils;
+// 引入 Git CLI 封装模块（仓库管理、文件状态、分支、提交历史等）
+pub mod git;
 
 /**
  * Tauri 应用主运行函数
@@ -54,6 +56,13 @@ pub fn run() {
             commands::terminal::write_to_pty,
             commands::terminal::resize_pty,
             commands::terminal::kill_pty,
+            // 仓库管理命令（第二阶段核心功能）
+            commands::repo::open_repo,
+            commands::repo::init_repo,
+            commands::repo::clone_repo,
+            commands::repo::get_repo_status,
+            commands::repo::get_branches,
+            commands::repo::get_commit_log,
         ])
         
         // 注册终端 PTY 管理器为全局状态（所有命令都可以访问）
@@ -93,6 +102,13 @@ pub fn run() {
                     commands::terminal::write_to_pty,
                     commands::terminal::resize_pty,
                     commands::terminal::kill_pty,
+                    // 仓库管理命令（第二阶段核心功能）
+                    commands::repo::open_repo,
+                    commands::repo::init_repo,
+                    commands::repo::clone_repo,
+                    commands::repo::get_repo_status,
+                    commands::repo::get_branches,
+                    commands::repo::get_commit_log,
                 ])
                 .manage(commands::terminal::PtyManager::new())
                 .setup(|app| {

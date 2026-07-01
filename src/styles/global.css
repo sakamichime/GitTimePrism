@@ -43,7 +43,8 @@ body {
   font-family: var(--font-ui); /* 使用 variables.css 中定义的 UI 字体 */
   font-size: var(--font-size-base); /* 使用基础字号 */
   color: var(--text-primary); /* 使用主文字色 */
-  background-color: var(--bg-primary); /* 使用主背景色 */
+  background-color: var(--bg-primary); /* 主背景色（纯色兜底） */
+  background-image: var(--app-bg);      /* 渐变底图，用于毛玻璃透视效果 */
   -webkit-user-select: none; /* 禁止用户选中文字（WebKit 内核浏览器） */
   user-select: none;     /* 禁止用户选中文字（标准属性） */
   line-height: 1.5;      /* 行高为字号的 1.5 倍，让文字有舒适的间距 */
@@ -62,12 +63,12 @@ body {
 
 /* 滚动条的轨道（滚动条背后的那条"槽"） */
 ::-webkit-scrollbar-track {
-  background: var(--bg-tertiary); /* 轨道使用三级背景色 */
+  background: transparent; /* 透明轨道，让毛玻璃效果透出 */
 }
 
 /* 滚动条的滑块（可以拖动的那个部分） */
 ::-webkit-scrollbar-thumb {
-  background: var(--border); /* 滑块使用边框色 */
+  background: var(--scrollbar-thumb); /* 半透明滑块色，与毛玻璃协调 */
   border-radius: 4px;       /* 圆角让滑块更圆润 */
 }
 
@@ -185,4 +186,18 @@ pre,
   display: flex;         /* 弹性布局 */
   flex-direction: column; /* 列方向（从上到下排列子元素） */
   overflow: hidden;      /* 隐藏超出部分 */
+  background-image: var(--app-bg); /* 渐变底图，各面板的毛玻璃效果透出此背景 */
+  background-size: cover;      /* 渐变覆盖整个容器 */
+}
+
+/* ============================================================
+ * 毛玻璃效果工具类 (.glass)
+ * ============================================================
+ * 为需要毛玻璃效果的元素提供通用的滤镜属性。
+ * 元素自身还需要设置半透明的 background 才能看到效果。
+ * 使用 -webkit- 前缀兼容 Safari / 旧版 Chromium。
+ * ============================================================ */
+.glass {
+  -webkit-backdrop-filter: blur(20px) saturate(180%); /* Safari / 旧版 Chromium 前缀 */
+  backdrop-filter: blur(20px) saturate(180%);         /* 标准属性（Chrome 76+, Edge 79+） */
 }

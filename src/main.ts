@@ -7,9 +7,9 @@
  * 4. 监听来自 Rust 后端的事件
  */
 
-// 导入全局样式文件
-import './styles/global.css';
+// 导入全局样式文件（变量定义必须最先加载，因为其他样式文件引用了这些变量）
 import './styles/variables.css';
+import './styles/global.css';
 import './styles/components.css';
 
 // 导入 xterm.js 终端样式
