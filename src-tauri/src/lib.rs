@@ -65,13 +65,22 @@ pub fn run() {
         
         // 应用启动时执行的初始化逻辑
         .setup(|app| {
-            // 记录启动信息到控制台（不使用日志插件，避免沙箱权限问题）
+            // 记录启动信息到控制台
             eprintln!("[GitTimePrism] 应用启动完成");
             
             // 调用文件监听初始化（基础框架版本，暂不监听具体目录）
-            // app.handle() 返回 &AppHandle，但 init_file_watcher 需要 AppHandle（所有权）
-            // 所以使用 clone() 获取一个独立的 AppHandle 副本
             utils::watcher::init_file_watcher(app.handle().clone())?;
+
+            // Windows 平台：为透明窗口设置 DWM 扩展属性
+            // 启用 DWM 组合效果，让窗口背景真正透明
+            #[cfg(target_os = "windows")]
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_decorations(false);
+                    eprintln!("[GitTimePrism] Windows 透明窗口已配置");
+                }
+            }
             
             Ok(())
         })

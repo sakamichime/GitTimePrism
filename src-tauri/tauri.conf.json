@@ -24,7 +24,8 @@
         "center": true,
         "decorations": false,
         "transparent": true,
-        "shadow": true
+        "shadow": true,
+        "backgroundColor": "#00000000"
       }
     ],
     "security": {

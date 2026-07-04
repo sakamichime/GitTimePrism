@@ -42,7 +42,7 @@ export class App {
     this.initResizeHandles();
     this.initKeyboardShortcuts();
     this.initThemeToggle();
-    this.initWallpaper();
+    this.initWallpaper(); // 壁纸初始化（内部异步处理）
     this.checkGitInstallation();
   }
 
@@ -175,12 +175,8 @@ export class App {
    * 3. 绑定壁纸选择按钮
    */
   private initWallpaper(): void {
-    // 尝试加载已保存的壁纸
-    const saved = wallpaperService.loadWallpaper();
-    if (saved && saved.dataUrl && saved.dominantColors.length > 0) {
-      // 应用已保存的壁纸
-      this.applyWallpaper(saved.dataUrl, saved.dominantColors);
-    }
+    // 异步加载已保存的壁纸（需要等待图片加载完成以提取颜色）
+    this.loadSavedWallpaper();
 
     // 绑定壁纸选择按钮 - 点击后打开文件选择对话框
     document.getElementById('btn-wallpaper')?.addEventListener('click', async () => {
@@ -206,6 +202,109 @@ export class App {
         }
       });
     }
+  }
+
+  /**
+   * 异步加载已保存的壁纸
+   *
+   * 从 localStorage 读取壁纸数据，
+   * 如果之前保存过壁纸但没有颜色数据（旧版本保存的），
+   * 则重新从图片中异步提取主色调。
+   */
+  private async loadSavedWallpaper(): Promise<void> {
+    const saved = wallpaperService.loadWallpaper();
+    if (saved && saved.dataUrl) {
+      if (saved.dominantColors.length > 0) {
+        // 有颜色数据，直接应用
+        this.applyWallpaper(saved.dataUrl, saved.dominantColors);
+      } else {
+        // 没有颜色数据（可能是旧版本保存的），需要重新提取
+        // 使用壁纸服务的内部异步提取方法
+        const wallpaperLayer = document.getElementById('wallpaper-layer');
+        if (wallpaperLayer) {
+          wallpaperLayer.style.backgroundImage = `url(${saved.dataUrl})`;
+        }
+        this.hasWallpaper = true;
+        // 动态导入并使用异步颜色提取
+        const { wallpaperService: ws } = await import('../services/wallpaper.js');
+        // 重新选择以提取颜色（但不弹出对话框，只是重新处理已有数据）
+        // 实际上直接通过 canvas 异步提取
+        const colors = await this.extractColorsFromDataUrl(saved.dataUrl);
+        if (colors.length > 0) {
+          // 保存提取到的颜色
+          localStorage.setItem('gittimeprism_wallpaper_colors', JSON.stringify(colors));
+          // 应用动态变色
+          themeEngine.applyFromWallpaper(colors);
+        }
+      }
+    }
+  }
+
+  /**
+   * 从数据URL异步提取主色调
+   *
+   * 使用 Canvas 和 Image 对象异步加载图片后提取颜色。
+   *
+   * @param dataUrl - 图片的 base64 数据 URL
+   * @returns 主色调列表
+   */
+  private extractColorsFromDataUrl(dataUrl: string): Promise<import('../services/wallpaper.js').DominantColor[]> {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 50;
+      canvas.height = 50;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve([]); return; }
+
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, 50, 50);
+        const imageData = ctx.getImageData(0, 0, 50, 50);
+        const pixels = imageData.data;
+        const validPixels: [number, number, number][] = [];
+
+        for (let i = 0; i < pixels.length; i += 4) {
+          const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+          if (!(r < 15 && g < 15 && b < 15) && !(r > 240 && g > 240 && b > 240)) {
+            validPixels.push([r, g, b]);
+          }
+        }
+
+        if (validPixels.length === 0) { resolve([]); return; }
+
+        // 简单提取：将像素分成5组取平均
+        const k = 5;
+        const groupSize = Math.floor(validPixels.length / k);
+        const colors: import('../services/wallpaper.js').DominantColor[] = [];
+
+        for (let g = 0; g < k; g++) {
+          const start = g * groupSize;
+          const end = g === k - 1 ? validPixels.length : start + groupSize;
+          let sumR = 0, sumG = 0, sumB = 0, count = 0;
+
+          for (let i = start; i < end; i++) {
+            sumR += validPixels[i][0];
+            sumG += validPixels[i][1];
+            sumB += validPixels[i][2];
+            count++;
+          }
+
+          if (count > 0) {
+            colors.push({
+              r: Math.round(sumR / count),
+              g: Math.round(sumG / count),
+              b: Math.round(sumB / count),
+              weight: count / validPixels.length,
+            });
+          }
+        }
+
+        colors.sort((a, b) => b.weight - a.weight);
+        resolve(colors);
+      };
+      img.onerror = () => resolve([]);
+      img.src = dataUrl;
+    });
   }
 
   /**

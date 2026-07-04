@@ -12,6 +12,7 @@
     "core:window:allow-close",
     "core:window:allow-show",
     "core:window:allow-hide",
+    "core:window:allow-minimize",
     "core:path:default",
     "core:event:default",
     "core:event:allow-listen",
@@ -26,6 +27,10 @@
     "fs:allow-read",
     "fs:allow-write",
     "fs:allow-exists",
-    "fs:allow-mkdir"
+    "fs:allow-mkdir",
+    {
+      "identifier": "fs:allow-read",
+      "allow": [{"path": "**"}]
+    }
   ]
 }
