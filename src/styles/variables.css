@@ -27,8 +27,8 @@
   /* ----- 背景色阶 ----- */
   /* 背景色从浅到深排列，用于不同层级的背景区域 */
   --bg-primary: #1e1e2e;     /* 主背景色 - 整个应用最底层的背景 */
-  --bg-secondary: rgba(24, 24, 37, 0.65);   /* 次级背景色 - 半透明，用于毛玻璃面板（侧边栏、详情面板），降低透明度让效果更明显 */
-  --bg-tertiary: rgba(17, 17, 27, 0.70);    /* 三级背景色 - 半透明，用于毛玻璃栏（状态栏、终端面板） */
+  --bg-secondary: rgba(24, 24, 37, var(--glass-opacity-panel));   /* 次级背景色 - 半透明，用于毛玻璃面板（侧边栏、详情面板），透明度由 --glass-opacity-panel 控制 */
+  --bg-tertiary: rgba(17, 17, 27, var(--glass-opacity-bar));    /* 三级背景色 - 半透明，用于毛玻璃栏（状态栏、终端面板），透明度由 --glass-opacity-bar 控制 */
   --bg-surface: #313244;     /* 表面色 - 按钮、输入框、卡片等控件表面的背景 */
   --bg-hover: #45475a;        /* 悬停背景色 - 鼠标移到元素上时显示的背景 */
   --bg-active: #585b70;       /* 激活背景色 - 元素被点击或选中时的背景 */
@@ -139,16 +139,16 @@
   /* 这些参数控制面板的毛玻璃半透明效果 */
   --glass-blur: 20px;               /* 模糊半径 - 控制毛玻璃的模糊程度，值越大越模糊 */
   --glass-saturate: 180%;            /* 饱和度增强 - 让透出的颜色更加鲜艳 */
-  --glass-opacity-panel: 0.72;       /* 面板透明度 - 侧边栏、详情面板等面板的背景不透明度 */
-  --glass-opacity-bar: 0.78;         /* 栏透明度 - 状态栏、终端面板等栏的背景不透明度 */
+  --glass-opacity-panel: 0.40;       /* 面板透明度 - 侧边栏、详情面板等面板的背景不透明度（值越小越透明，毛玻璃效果越明显） */
+  --glass-opacity-bar: 0.50;         /* 栏透明度 - 状态栏、终端面板等栏的背景不透明度 */
 
   /* ----- 底层渐变背景 ----- */
   /* 毛玻璃效果需要一个底层背景来"透视"，这个渐变就是那个底层 */
   /* 使用 Catppuccin 强调色的微弱光斑 + 基础色渐变，让毛玻璃效果可见 */
   --app-bg:
-    radial-gradient(ellipse at 20% 50%, rgba(137, 180, 250, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(250, 179, 135, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 80%, rgba(203, 166, 247, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 50%, rgba(137, 180, 250, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(250, 179, 135, 0.18) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(203, 166, 247, 0.15) 0%, transparent 50%),
     linear-gradient(135deg, #1e1e2e 0%, #181825 50%, #11111b 100%);
 
   /* ----- 滚动条半透明色 ----- */
@@ -164,8 +164,8 @@
 [data-theme="light"] {
   /* ----- 背景色阶 ----- */
   --bg-primary: #eff1f5;     /* 主背景色 - 浅灰色 */
-  --bg-secondary: rgba(230, 233, 239, 0.65);   /* 次级背景色 - 半透明毛玻璃面板 */
-  --bg-tertiary: rgba(220, 224, 232, 0.70);    /* 三级背景色 - 半透明毛玻璃栏 */
+  --bg-secondary: rgba(230, 233, 239, var(--glass-opacity-panel));   /* 次级背景色 - 半透明毛玻璃面板 */
+  --bg-tertiary: rgba(220, 224, 232, var(--glass-opacity-bar));    /* 三级背景色 - 半透明毛玻璃栏 */
   --bg-surface: #ccd0da;     /* 表面色 - 控件表面的背景 */
   --bg-hover: #bcc0cc;        /* 悬停背景色 */
   --bg-active: #acb0be;       /* 激活背景色 */
@@ -226,9 +226,9 @@
   /* ----- 毛玻璃效果参数（亮色主题） ----- */
   /* 亮色主题下毛玻璃的底层渐变背景（带微弱彩色光斑） */
   --app-bg:
-    radial-gradient(ellipse at 20% 50%, rgba(30, 102, 245, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(223, 142, 29, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 80%, rgba(64, 160, 43, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 50%, rgba(30, 102, 245, 0.20) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(223, 142, 29, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(64, 160, 43, 0.12) 0%, transparent 50%),
     linear-gradient(135deg, #eff1f5 0%, #e6e9ef 50%, #dce0e8 100%);
   /* 滚动条滑块色 - 亮色主题下半透明 */
   --scrollbar-thumb: rgba(188, 192, 204, 0.4);

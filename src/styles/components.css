@@ -35,8 +35,8 @@
   gap: 8px;                                   /* 子元素之间的间距 */
   z-index: 100;                              /* 层级较高，确保在其他元素之上 */
   /* 毛玻璃效果（当前 toolbar 已暂停使用，为将来回归预留） */
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* 工具栏中的分组区域 - 把相关的按钮包在一起 */
@@ -89,8 +89,8 @@
   display: flex;                                    /* 弹性布局 */
   overflow: hidden;                                 /* 隐藏超出部分 */
   /* 毛玻璃效果 - 侧边栏半透明，透出底层渐变背景 */
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* ============================================================
@@ -125,8 +125,8 @@
   flex-direction: column;                           /* 子元素垂直排列 */
   overflow: hidden;                                 /* 隐藏超出部分 */
   /* 毛玻璃效果 - 详情面板半透明 */
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* ============================================================
@@ -191,8 +191,8 @@
   padding: 0 8px;                                  /* 左右内边距 */
   gap: 12px;                                      /* 子元素间距 */
   /* 毛玻璃效果 - 状态栏半透明 */
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* 状态栏中的单个信息项 */
@@ -225,8 +225,8 @@
   flex-direction: column;                          /* 子元素垂直排列 */
   overflow: hidden;                                /* 隐藏超出部分 */
   /* 毛玻璃效果 - 终端面板半透明 */
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* 终端面板的头部 - 包含标题和关闭按钮 */

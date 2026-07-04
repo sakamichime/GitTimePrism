@@ -198,6 +198,6 @@ pre,
  * 使用 -webkit- 前缀兼容 Safari / 旧版 Chromium。
  * ============================================================ */
 .glass {
-  -webkit-backdrop-filter: blur(20px) saturate(180%); /* Safari / 旧版 Chromium 前缀 */
-  backdrop-filter: blur(20px) saturate(180%);         /* 标准属性（Chrome 76+, Edge 79+） */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)); /* Safari / 旧版 Chromium 前缀 */
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));         /* 标准属性（Chrome 76+, Edge 79+） */
 }
