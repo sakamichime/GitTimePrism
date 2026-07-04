@@ -89,7 +89,7 @@ export class App {
         <div class="resize-handle resize-handle-vertical" data-target="sidebar" data-direction="horizontal"></div>
         <main class="center-panel" id="center-panel">
           <div class="panel-body" id="center-body" style="flex:1; display:flex; align-items:center; justify-content:center;">
-            <div style="text-align: center; color: var(--text-muted);">
+            <div style="text-align: center; color: var(--text-primary);">
               <p style="font-size: var(--font-size-2xl); margin-bottom: 8px; font-weight: 600;">GitTimePrism</p>
               <p>${t('center.welcome')}</p>
             </div>

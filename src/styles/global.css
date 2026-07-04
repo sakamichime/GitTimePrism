@@ -27,6 +27,7 @@
   margin: 0;          /* 清除默认外边距 */
   padding: 0;         /* 清除默认内边距 */
   box-sizing: border-box; /* 设置盒模型为 border-box（宽高包含 padding 和 border） */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); /* 文字阴影 - 增强在壁纸上的可读性 */
 }
 
 /* ============================================================

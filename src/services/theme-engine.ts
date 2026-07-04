@@ -250,14 +250,15 @@ class ThemeEngine {
     const accentMuted = `hsla(${pH}, 65%, 65%, 0.2)`;
 
     // ---- 文字色阶 ----
-    // 主文字色：极浅色，与深色背景形成高对比度
+    // 主文字色：浅色，使用壁纸色相 + 中等饱和度，让文字明显跟随壁纸变色
+    // 亮度提高到 90%，确保在深色背景上有足够对比度
     const textPrimary = this.ensureContrast(
-      this.hslToHex(pH, 10, 85), bgPrimary
+      this.hslToHex(pH, 30, 90), bgPrimary
     );
-    // 次要文字色：比主文字色稍暗
-    const textSecondary = this.hslToHex(pH, 8, 70);
-    // 弱化文字色：更暗的文字色，用于提示
-    const textMuted = this.hslToHex(pH, 5, 45);
+    // 次要文字色：比主文字色稍暗，饱和度适中
+    const textSecondary = this.hslToHex(pH, 25, 78);
+    // 弱化文字色：更暗的文字色，用于提示，饱和度较低但仍带壁纸色相
+    const textMuted = this.hslToHex(pH, 15, 58);
     // 反色文字：深色文字，用于强调色按钮上的文字
     const textInverse = bgPrimary;
 
@@ -383,14 +384,15 @@ class ThemeEngine {
     const accentMuted = `hsla(${pH}, 70%, 45%, 0.15)`;
 
     // ---- 文字色阶 ----
-    // 主文字色：深色，与浅色背景形成高对比度
+    // 主文字色：深色，使用壁纸色相 + 中等饱和度，让文字明显跟随壁纸变色
+    // 亮度降低到 18%，确保在浅色背景上有足够对比度
     const textPrimary = this.ensureContrast(
-      this.hslToHex(pH, 15, 20), bgPrimary
+      this.hslToHex(pH, 35, 18), bgPrimary
     );
-    // 次要文字色：比主文字色稍浅
-    const textSecondary = this.hslToHex(pH, 10, 30);
-    // 弱化文字色
-    const textMuted = this.hslToHex(pH, 5, 60);
+    // 次要文字色：比主文字色稍浅，饱和度适中
+    const textSecondary = this.hslToHex(pH, 30, 28);
+    // 弱化文字色：更浅的文字色，用于提示，饱和度较低但仍带壁纸色相
+    const textMuted = this.hslToHex(pH, 20, 48);
     // 反色文字：浅色文字，用于强调色按钮上
     const textInverse = bgPrimary;
 
