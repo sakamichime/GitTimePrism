@@ -108,10 +108,23 @@
   height: 100%;                               /* 高度占满 */
   z-index: -1;                                /* 层级最低，在所有面板之下 */
   background-image: var(--app-bg);            /* 默认渐变背景（无壁纸时） */
-  background-size: cover;                     /* 图片覆盖填满 */
-  background-position: center;                /* 图片居中 */
+  background-size: cover;                     /* 背景覆盖填满 */
+  background-position: center;                /* 背景居中 */
   background-repeat: no-repeat;               /* 不重复 */
   transition: background-image 0.5s ease;     /* 切换壁纸时的淡入淡出动画 */
+}
+
+/* 壁纸层内的 <img> 元素 - 用于显示用户选择的壁纸图片 */
+/* 比 CSS background-image + url(data:...) 更可靠 */
+.wallpaper-layer img {
+  position: absolute;                         /* 绝对定位，覆盖整个壁纸层 */
+  top: 0;
+  left: 0;
+  width: 100%;                                /* 宽度占满壁纸层 */
+  height: 100%;                               /* 高度占满壁纸层 */
+  object-fit: cover;                          /* 图片覆盖填满，保持比例 */
+  display: none;                              /* 默认隐藏，设置壁纸后显示 */
+  pointer-events: none;                       /* 不响应鼠标事件 */
 }
 
 /* ============================================================
@@ -201,9 +214,10 @@
   flex-direction: column;   /* 子元素垂直排列 */
   display: flex;            /* 弹性布局 */
   overflow: hidden;         /* 隐藏超出部分 */
-  background: rgba(30, 30, 46, 0.25); /* 半透明主背景色，增强毛玻璃透视效果 */
-  -webkit-backdrop-filter: blur(12px) saturate(160%); /* 中间面板轻度毛玻璃效果 */
-  backdrop-filter: blur(12px) saturate(160%);
+  background: var(--bg-secondary); /* 使用CSS变量，透明度由 --glass-opacity-panel 控制 */
+  /* 毛玻璃效果 - 与侧边栏和详情面板保持一致 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* ============================================================
@@ -330,7 +344,7 @@
 /* 终端面板的头部 - 包含标题和关闭按钮 */
 .terminal-header {
   height: 30px;                                   /* 头部高度 */
-  background: rgba(24, 24, 37, 0.4);              /* 半透明头部背景，保持毛玻璃风格 */}
+  background: var(--bg-tertiary);              /* 使用CSS变量，透明度由 --glass-opacity-bar 控制 */
   border-bottom: 1px solid var(--border-subtle);   /* 底部弱化边框 */
   display: flex;                                  /* 弹性布局 */
   align-items: center;                            /* 垂直居中 */
@@ -366,7 +380,7 @@
   font-size: var(--font-size-sm);                 /* 小字号 */
   color: var(--text-secondary);                    /* 次要文字色 */
   flex-shrink: 0;                                 /* 不允许被压缩 */
-  background: rgba(24, 24, 37, 0.3);              /* 半透明头部背景，保持毛玻璃风格 */
+  background: var(--bg-secondary);              /* 使用CSS变量，透明度由 --glass-opacity-panel 控制 */
 }
 
 /* ============================================================

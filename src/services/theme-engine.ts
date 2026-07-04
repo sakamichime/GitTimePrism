@@ -222,10 +222,10 @@ class ThemeEngine {
     // ---- 背景色阶 ----
     // 主背景色：壁纸色相 + 低饱和度(15%) + 极低亮度(10%)
     const bgPrimary = this.hslToHex(pH, 15, 10);
-    // 次级背景色：略低于主背景亮度，用于毛玻璃面板
-    const bgSecondary = `hsla(${pH}, 15%, 8%, 0.32)`;
-    // 三级背景色：更暗一点，用于毛玻璃栏
-    const bgTertiary = `hsla(${pH}, 15%, 6%, 0.42)`;
+    // 次级背景色：略低于主背景亮度，用于毛玻璃面板（透明度 0.80 与 variables.css 一致）
+    const bgSecondary = `hsla(${pH}, 15%, 8%, 0.80)`;
+    // 三级背景色：更暗一点，用于毛玻璃栏（透明度 0.80 与 variables.css 一致）
+    const bgTertiary = `hsla(${pH}, 15%, 6%, 0.80)`;
     // 表面色：比主背景亮一些，用于按钮/输入框
     const bgSurface = this.hslToHex(pH, 12, 20);
     // 悬停背景色：比表面色更亮一点
@@ -270,15 +270,16 @@ class ThemeEngine {
 
     // ---- 底层渐变背景（毛玻璃效果的底层） ----
     // 使用壁纸主色调生成彩色光斑，让毛玻璃效果能看到壁纸颜色
+    // 透明度 0.40 与 variables.css 中 --app-bg 一致，60% 透出桌面
     const appBg = [
       // 第一个光斑：主色调，位于左中
-      `radial-gradient(ellipse at 20% 50%, hsla(${pH}, 60%, 50%, 0.25) 0%, transparent 50%)`,
+      `radial-gradient(ellipse at 20% 50%, hsla(${pH}, 60%, 50%, 0.40) 0%, transparent 50%)`,
       // 第二个光斑：次色调，位于右上
-      `radial-gradient(ellipse at 80% 20%, hsla(${sH}, 50%, ${Math.min(sL, 60)}%, 0.18) 0%, transparent 50%)`,
+      `radial-gradient(ellipse at 80% 20%, hsla(${sH}, 50%, ${Math.min(sL, 60)}%, 0.30) 0%, transparent 50%)`,
       // 第三个光斑：第三色调，位于下中
-      `radial-gradient(ellipse at 50% 80%, hsla(${tH}, 45%, ${Math.min(tL, 55)}%, 0.15) 0%, transparent 50%)`,
-      // 基础渐变：从主背景色到更暗的版本
-      `linear-gradient(135deg, ${bgPrimary} 0%, ${this.hslToHex(pH, 15, 7)} 50%, ${this.hslToHex(pH, 15, 4)} 100%)`,
+      `radial-gradient(ellipse at 50% 80%, hsla(${tH}, 45%, ${Math.min(tL, 55)}%, 0.25) 0%, transparent 50%)`,
+      // 基础渐变：从主背景色到更暗的版本（0.40 透明度）
+      `linear-gradient(135deg, hsla(${pH}, 15%, 10%, 0.40) 0%, hsla(${pH}, 15%, 7%, 0.40) 50%, hsla(${pH}, 15%, 4%, 0.40) 100%)`,
     ].join(',\n    ');
 
     // ---- 滚动条 ----
@@ -352,10 +353,10 @@ class ThemeEngine {
     // ---- 背景色阶 ----
     // 主背景色：壁纸色相 + 极低饱和度(8%) + 极高亮度(96%)
     const bgPrimary = this.hslToHex(pH, 8, 96);
-    // 次级背景色：略低亮度，用于毛玻璃面板
-    const bgSecondary = `hsla(${pH}, 8%, 93%, 0.35)`;
-    // 三级背景色：更暗一点，用于毛玻璃栏
-    const bgTertiary = `hsla(${pH}, 8%, 90%, 0.45)`;
+    // 次级背景色：略低亮度，用于毛玻璃面板（透明度 0.80 与 variables.css 一致）
+    const bgSecondary = `hsla(${pH}, 8%, 93%, 0.80)`;
+    // 三级背景色：更暗一点，用于毛玻璃栏（透明度 0.80 与 variables.css 一致）
+    const bgTertiary = `hsla(${pH}, 8%, 90%, 0.80)`;
     // 表面色：比主背景暗一些，用于按钮/输入框
     const bgSurface = this.hslToHex(pH, 6, 85);
     // 悬停背景色
@@ -396,15 +397,16 @@ class ThemeEngine {
     const shadowLg = `0 8px 16px rgba(0, 0, 0, 0.15)`;
 
     // ---- 底层渐变背景（毛玻璃效果的底层） ----
+    // 使用半透明颜色，让桌面能透出，配合面板 0.80 不透明度形成毛玻璃效果
     const appBg = [
-      // 第一个光斑：主色调，位于左中
-      `radial-gradient(ellipse at 20% 50%, hsla(${pH}, 55%, 45%, 0.20) 0%, transparent 50%)`,
-      // 第二个光斑：次色调，位于右上
-      `radial-gradient(ellipse at 80% 20%, hsla(${sH}, 45%, ${Math.max(sL, 40)}%, 0.15) 0%, transparent 50%)`,
-      // 第三个光斑：第三色调，位于下中
-      `radial-gradient(ellipse at 50% 80%, hsla(${tH}, 40%, ${Math.max(tL, 35)}%, 0.12) 0%, transparent 50%)`,
-      // 基础渐变：从主背景色到稍暗的版本
-      `linear-gradient(135deg, ${bgPrimary} 0%, ${this.hslToHex(pH, 8, 93)} 50%, ${this.hslToHex(pH, 8, 90)} 100%)`,
+      // 第一个光斑：主色调，位于左中（透明度 0.40 与暗色主题一致）
+      `radial-gradient(ellipse at 20% 50%, hsla(${pH}, 55%, 45%, 0.40) 0%, transparent 50%)`,
+      // 第二个光斑：次色调，位于右上（透明度 0.30）
+      `radial-gradient(ellipse at 80% 20%, hsla(${sH}, 45%, ${Math.max(sL, 40)}%, 0.30) 0%, transparent 50%)`,
+      // 第三个光斑：第三色调，位于下中（透明度 0.25）
+      `radial-gradient(ellipse at 50% 80%, hsla(${tH}, 40%, ${Math.max(tL, 35)}%, 0.25) 0%, transparent 50%)`,
+      // 基础渐变：从主背景色到稍暗的版本（使用 hsla 半透明，0.40 透明度）
+      `linear-gradient(135deg, hsla(${pH}, 8%, 96%, 0.40) 0%, hsla(${pH}, 8%, 93%, 0.40) 50%, hsla(${pH}, 8%, 90%, 0.40) 100%)`,
     ].join(',\n    ');
 
     // ---- 滚动条 ----

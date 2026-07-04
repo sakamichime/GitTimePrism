@@ -75,7 +75,10 @@ export class App {
         </div>
       </header>
       <!-- 壁纸层 - 显示用户选择的壁纸图片，位于所有面板之下 -->
-      <div class="wallpaper-layer" id="wallpaper-layer"></div>
+      <!-- 内含 <img> 元素用于显示壁纸（比 CSS background-image 更可靠） -->
+      <div class="wallpaper-layer" id="wallpaper-layer">
+        <img id="wallpaper-img" alt="" />
+      </div>
       <div class="main-content">
         <aside class="sidebar" id="sidebar">
           <div class="panel-header"><span>${t('sidebar.repositories')}</span></div>
@@ -175,19 +178,26 @@ export class App {
    * 3. 绑定壁纸选择按钮
    */
   private initWallpaper(): void {
-    // 异步加载已保存的壁纸（需要等待图片加载完成以提取颜色）
+    // 异步加载已保存的壁纸
     this.loadSavedWallpaper();
 
     // 绑定壁纸选择按钮 - 点击后打开文件选择对话框
     document.getElementById('btn-wallpaper')?.addEventListener('click', async () => {
       try {
         const result = await wallpaperService.selectWallpaper();
-        if (result && result.dataUrl && result.dominantColors.length > 0) {
+        if (result && result.dataUrl) {
           // 用户选择了新壁纸，应用它
           this.applyWallpaper(result.dataUrl, result.dominantColors);
+          console.log('[壁纸] 壁纸已成功应用');
+        } else if (result === null) {
+          // selectWallpaper 返回 null 可能是用户取消，也可能是命令调用失败
+          // 如果不是用户主动取消，说明 Rust 命令可能未注册（需要重新编译）
+          console.warn('[壁纸] 壁纸未应用 - 可能用户取消了选择，或 Rust 命令未注册（请重新运行 npm run tauri dev）');
         }
       } catch (err) {
         console.error('设置壁纸失败:', err);
+        // 弹出提示让用户知道出错了
+        alert('设置壁纸失败：' + String(err) + '\n\n请确认已重新运行 npm run tauri dev 来编译新的 Rust 命令。');
       }
     });
 
@@ -207,142 +217,70 @@ export class App {
   /**
    * 异步加载已保存的壁纸
    *
-   * 从 localStorage 读取壁纸数据，
-   * 如果之前保存过壁纸但没有颜色数据（旧版本保存的），
-   * 则重新从图片中异步提取主色调。
+   * 从 localStorage 读取 base64 data URL 后应用。
    */
   private async loadSavedWallpaper(): Promise<void> {
     const saved = wallpaperService.loadWallpaper();
     if (saved && saved.dataUrl) {
-      if (saved.dominantColors.length > 0) {
-        // 有颜色数据，直接应用
-        this.applyWallpaper(saved.dataUrl, saved.dominantColors);
-      } else {
-        // 没有颜色数据（可能是旧版本保存的），需要重新提取
-        // 使用壁纸服务的内部异步提取方法
-        const wallpaperLayer = document.getElementById('wallpaper-layer');
-        if (wallpaperLayer) {
-          wallpaperLayer.style.backgroundImage = `url(${saved.dataUrl})`;
-        }
-        this.hasWallpaper = true;
-        // 动态导入并使用异步颜色提取
-        const { wallpaperService: ws } = await import('../services/wallpaper.js');
-        // 重新选择以提取颜色（但不弹出对话框，只是重新处理已有数据）
-        // 实际上直接通过 canvas 异步提取
-        const colors = await this.extractColorsFromDataUrl(saved.dataUrl);
-        if (colors.length > 0) {
-          // 保存提取到的颜色
-          localStorage.setItem('gittimeprism_wallpaper_colors', JSON.stringify(colors));
-          // 应用动态变色
-          themeEngine.applyFromWallpaper(colors);
-        }
-      }
+      // 直接应用已保存的壁纸（base64 data URL + 颜色数据）
+      this.applyWallpaper(saved.dataUrl, saved.dominantColors);
     }
-  }
-
-  /**
-   * 从数据URL异步提取主色调
-   *
-   * 使用 Canvas 和 Image 对象异步加载图片后提取颜色。
-   *
-   * @param dataUrl - 图片的 base64 数据 URL
-   * @returns 主色调列表
-   */
-  private extractColorsFromDataUrl(dataUrl: string): Promise<import('../services/wallpaper.js').DominantColor[]> {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 50;
-      canvas.height = 50;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve([]); return; }
-
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, 50, 50);
-        const imageData = ctx.getImageData(0, 0, 50, 50);
-        const pixels = imageData.data;
-        const validPixels: [number, number, number][] = [];
-
-        for (let i = 0; i < pixels.length; i += 4) {
-          const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-          if (!(r < 15 && g < 15 && b < 15) && !(r > 240 && g > 240 && b > 240)) {
-            validPixels.push([r, g, b]);
-          }
-        }
-
-        if (validPixels.length === 0) { resolve([]); return; }
-
-        // 简单提取：将像素分成5组取平均
-        const k = 5;
-        const groupSize = Math.floor(validPixels.length / k);
-        const colors: import('../services/wallpaper.js').DominantColor[] = [];
-
-        for (let g = 0; g < k; g++) {
-          const start = g * groupSize;
-          const end = g === k - 1 ? validPixels.length : start + groupSize;
-          let sumR = 0, sumG = 0, sumB = 0, count = 0;
-
-          for (let i = start; i < end; i++) {
-            sumR += validPixels[i][0];
-            sumG += validPixels[i][1];
-            sumB += validPixels[i][2];
-            count++;
-          }
-
-          if (count > 0) {
-            colors.push({
-              r: Math.round(sumR / count),
-              g: Math.round(sumG / count),
-              b: Math.round(sumB / count),
-              weight: count / validPixels.length,
-            });
-          }
-        }
-
-        colors.sort((a, b) => b.weight - a.weight);
-        resolve(colors);
-      };
-      img.onerror = () => resolve([]);
-      img.src = dataUrl;
-    });
   }
 
   /**
    * 应用壁纸到界面
    *
-   * 将壁纸图片设置为壁纸层的背景，
+   * 使用 <img> 元素显示壁纸（比 CSS background-image 更可靠），
    * 并使用动态变色引擎根据壁纸主色调更新所有UI组件的颜色。
    *
-   * @param dataUrl - 壁纸图片的 base64 数据 URL
+   * 为什么用 <img> 而不是 CSS background-image？
+   * - <img> 元素原生支持 data URL，不会出现 CSS url() 解析问题
+   * - 没有内联 style 长度限制
+   * - 加载成功/失败可以通过 onload/onerror 事件检测
+   * - 壁纸层 div 保留 CSS 中的 var(--app-bg) 渐变背景作为底层
+   *
+   * @param dataUrl - 壁纸图片的 base64 data URL
    * @param colors - 从壁纸中提取的主色调列表
    */
   private applyWallpaper(dataUrl: string, colors: import('../services/wallpaper.js').DominantColor[]): void {
-    // 将壁纸图片应用到壁纸层
-    const wallpaperLayer = document.getElementById('wallpaper-layer');
-    if (wallpaperLayer) {
-      wallpaperLayer.style.backgroundImage = `url(${dataUrl})`;
+    // 使用 <img> 元素显示壁纸图片（最可靠的方式）
+    const img = document.getElementById('wallpaper-img') as HTMLImageElement | null;
+    if (img) {
+      // 监听加载成功事件
+      img.onload = () => {
+        console.log('[壁纸] 图片加载成功，尺寸:', img.naturalWidth, 'x', img.naturalHeight);
+      };
+      // 监听加载失败事件
+      img.onerror = (e) => {
+        console.error('[壁纸] 图片加载失败:', e);
+        alert('壁纸图片加载失败！可能是图片格式不支持或文件已损坏。');
+      };
+      // 设置图片源，触发加载
+      img.src = dataUrl;
+      // 显示图片元素
+      img.style.display = 'block';
     }
     // 标记当前有壁纸
     this.hasWallpaper = true;
-    // 使用动态变色引擎根据壁纸主色调生成并应用主题
-    themeEngine.applyFromWallpaper(colors);
+    // 如果有颜色数据，应用动态变色
+    if (colors.length > 0) {
+      themeEngine.applyFromWallpaper(colors);
+    }
   }
 
   /**
    * 移除壁纸，恢复默认渐变背景
-   *
-   * 清除壁纸层的背景图片，
-   * 并重置动态变色引擎恢复默认配色方案。
    */
   private removeWallpaper(): void {
-    // 清除壁纸层的背景图片
-    const wallpaperLayer = document.getElementById('wallpaper-layer');
-    if (wallpaperLayer) {
-      wallpaperLayer.style.backgroundImage = '';
+    // 隐藏并清除 <img> 元素
+    const img = document.getElementById('wallpaper-img') as HTMLImageElement | null;
+    if (img) {
+      img.style.display = 'none';
+      img.src = '';
+      img.onload = null;
+      img.onerror = null;
     }
-    // 标记当前没有壁纸
     this.hasWallpaper = false;
-    // 重置动态变色引擎，恢复默认配色
     themeEngine.resetToDefault();
   }
 

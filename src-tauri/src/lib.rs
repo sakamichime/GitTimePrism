@@ -58,6 +58,8 @@ pub fn run() {
             commands::repo::get_repo_status,
             commands::repo::get_branches,
             commands::repo::get_commit_log,
+            // 壁纸命令（读取图片为 base64 data URL）
+            commands::wallpaper::read_image_as_data_url,
         ])
         
         // 注册终端 PTY 管理器为全局状态（所有命令都可以访问）

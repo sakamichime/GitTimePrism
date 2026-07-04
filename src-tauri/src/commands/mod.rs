@@ -4,6 +4,7 @@
  * 此文件将不同功能的命令分组到子模块中：
  * - system：系统级命令（Git 检测、打开外部链接等）
  * - terminal：终端相关命令（PTY 创建、写入、调整大小等）
+ * - wallpaper：壁纸相关命令（读取图片为 base64 data URL）
  * 
  * 每个 Tauri 命令使用 #[tauri::command] 属性标记，
  * 前端通过 `invoke('命令名', { 参数 })` 来调用。
@@ -15,3 +16,5 @@ pub mod system;
 pub mod terminal;
 // 导出仓库管理命令模块（打开/克隆/初始化/状态/分支/提交历史）
 pub mod repo;
+// 导出壁纸命令模块（读取图片为 base64 data URL）
+pub mod wallpaper;

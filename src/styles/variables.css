@@ -139,17 +139,18 @@
   /* 这些参数控制面板的毛玻璃半透明效果 */
   --glass-blur: 24px;               /* 模糊半径 - 控制毛玻璃的模糊程度，值越大越模糊（从20px提升到24px，效果更明显） */
   --glass-saturate: 190%;            /* 饱和度增强 - 让透出的颜色更加鲜艳 */
-  --glass-opacity-panel: 0.32;       /* 面板透明度 - 侧边栏、详情面板等面板的背景不透明度（从0.40降到0.32，更透明） */
-  --glass-opacity-bar: 0.42;         /* 栏透明度 - 状态栏、终端面板等栏的背景不透明度 */
+  --glass-opacity-panel: 0.80;       /* 面板不透明度 - 侧边栏、详情面板等，80%不透明（20%透明，能看到壁纸） */
+  --glass-opacity-bar: 0.80;         /* 栏不透明度 - 状态栏、终端面板、标题栏等 */
 
   /* ----- 底层渐变背景 ----- */
   /* 毛玻璃效果需要一个底层背景来"透视"，这个渐变就是那个底层 */
   /* 使用 Catppuccin 强调色的微弱光斑 + 基础色渐变，让毛玻璃效果可见 */
+  /* 透明度 0.40 - 60% 透出桌面，配合面板 0.80 不透明度形成毛玻璃效果 */
   --app-bg:
-    radial-gradient(ellipse at 20% 50%, rgba(137, 180, 250, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(250, 179, 135, 0.18) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 80%, rgba(203, 166, 247, 0.15) 0%, transparent 50%),
-    linear-gradient(135deg, #1e1e2e 0%, #181825 50%, #11111b 100%);
+    radial-gradient(ellipse at 20% 50%, rgba(137, 180, 250, 0.40) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(250, 179, 135, 0.30) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(203, 166, 247, 0.25) 0%, transparent 50%),
+    linear-gradient(135deg, rgba(30, 30, 46, 0.40) 0%, rgba(24, 24, 37, 0.40) 50%, rgba(17, 17, 27, 0.40) 100%);
 
   /* ----- 滚动条半透明色 ----- */
   --scrollbar-thumb: rgba(69, 71, 90, 0.4);  /* 滚动条滑块色 - 半透明，与毛玻璃协调 */
@@ -227,14 +228,15 @@
   /* 亮色主题下毛玻璃效果更明显 */
   --glass-blur: 24px;
   --glass-saturate: 190%;
-  --glass-opacity-panel: 0.35;
-  --glass-opacity-bar: 0.45;
+  --glass-opacity-panel: 0.80;
+  --glass-opacity-bar: 0.80;
   /* 亮色主题下毛玻璃的底层渐变背景（带微弱彩色光斑） */
+  /* 透明度 0.40 - 60% 透出桌面 */
   --app-bg:
-    radial-gradient(ellipse at 20% 50%, rgba(30, 102, 245, 0.20) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(223, 142, 29, 0.15) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 80%, rgba(64, 160, 43, 0.12) 0%, transparent 50%),
-    linear-gradient(135deg, #eff1f5 0%, #e6e9ef 50%, #dce0e8 100%);
+    radial-gradient(ellipse at 20% 50%, rgba(30, 102, 245, 0.30) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(223, 142, 29, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(64, 160, 43, 0.20) 0%, transparent 50%),
+    linear-gradient(135deg, rgba(239, 241, 245, 0.40) 0%, rgba(230, 233, 239, 0.40) 50%, rgba(220, 224, 232, 0.40) 100%);
   /* 滚动条滑块色 - 亮色主题下半透明 */
   --scrollbar-thumb: rgba(188, 192, 204, 0.4);
 }
