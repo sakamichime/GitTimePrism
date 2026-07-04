@@ -262,6 +262,9 @@ export class App {
     }
     // 标记当前有壁纸
     this.hasWallpaper = true;
+    // 有壁纸时：面板透明度改为 50%（让壁纸更明显透出）
+    document.documentElement.style.setProperty('--glass-opacity-panel', '0.5');
+    document.documentElement.style.setProperty('--glass-opacity-bar', '0.5');
     // 如果有颜色数据，应用动态变色
     if (colors.length > 0) {
       themeEngine.applyFromWallpaper(colors);
@@ -281,6 +284,9 @@ export class App {
       img.onerror = null;
     }
     this.hasWallpaper = false;
+    // 无壁纸时：面板透明度恢复为 80%
+    document.documentElement.style.setProperty('--glass-opacity-panel', '0.8');
+    document.documentElement.style.setProperty('--glass-opacity-bar', '0.8');
     themeEngine.resetToDefault();
   }
 

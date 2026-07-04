@@ -123,6 +123,7 @@
   width: 100%;                                /* 宽度占满壁纸层 */
   height: 100%;                               /* 高度占满壁纸层 */
   object-fit: cover;                          /* 图片覆盖填满，保持比例 */
+  opacity: 1;                                 /* 壁纸图片不透明，面板透明度由 CSS 变量控制 */
   display: none;                              /* 默认隐藏，设置壁纸后显示 */
   pointer-events: none;                       /* 不响应鼠标事件 */
 }
