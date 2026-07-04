@@ -38,13 +38,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // 注册日志插件：设置日志级别为 Info，输出到 stdout
-        // .build() 返回 TauriPlugin，直接传给 .plugin() 即可
-        .plugin(
-            tauri_plugin_log::Builder::default()
-                .level(log::LevelFilter::Info)
-                .build(),
-        )
+        // 暂时不注册日志插件，避免沙箱环境下的文件写入权限问题
+        // .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
         
         // 注册所有 IPC 命令（前端通过 invoke('命令名') 调用）
         .invoke_handler(tauri::generate_handler![
@@ -70,8 +65,8 @@ pub fn run() {
         
         // 应用启动时执行的初始化逻辑
         .setup(|app| {
-            // 记录启动日志（需要先注册日志插件才能使用 log::info!）
-            log::info!("GitTimePrism 应用启动完成");
+            // 记录启动信息到控制台（不使用日志插件，避免沙箱权限问题）
+            eprintln!("[GitTimePrism] 应用启动完成");
             
             // 调用文件监听初始化（基础框架版本，暂不监听具体目录）
             // app.handle() 返回 &AppHandle，但 init_file_watcher 需要 AppHandle（所有权）
@@ -82,41 +77,6 @@ pub fn run() {
         })
         
         // 运行应用（加载配置文件中定义的资源）
-        // 使用 match 而非 expect，在启动失败时输出错误信息而非直接 panic
         .run(tauri::generate_context!())
-        .unwrap_or_else(|e| {
-            eprintln!("[GitTimePrism] 应用启动失败: {}", e);
-            // 在某些环境（如沙箱）下，log 插件可能因权限不足而初始化失败
-            // 此时尝试不使用 log 插件重新启动
-            eprintln!("[GitTimePrism] 尝试跳过日志插件重新启动...");
-            
-            // 重新构建不带日志插件的 Tauri 应用
-            tauri::Builder::default()
-                .plugin(tauri_plugin_shell::init())
-                .plugin(tauri_plugin_dialog::init())
-                .plugin(tauri_plugin_fs::init())
-                .invoke_handler(tauri::generate_handler![
-                    commands::system::check_git_installed,
-                    commands::system::open_external_url,
-                    commands::terminal::start_pty,
-                    commands::terminal::write_to_pty,
-                    commands::terminal::resize_pty,
-                    commands::terminal::kill_pty,
-                    // 仓库管理命令（第二阶段核心功能）
-                    commands::repo::open_repo,
-                    commands::repo::init_repo,
-                    commands::repo::clone_repo,
-                    commands::repo::get_repo_status,
-                    commands::repo::get_branches,
-                    commands::repo::get_commit_log,
-                ])
-                .manage(commands::terminal::PtyManager::new())
-                .setup(|app| {
-                    eprintln!("[GitTimePrism] 应用启动完成（无日志功能）");
-                    let _ = utils::watcher::init_file_watcher(app.handle().clone());
-                    Ok(())
-                })
-                .run(tauri::generate_context!())
-                .expect("启动 GitTimePrism 应用时发生错误（无日志模式）");
-        })
+        .expect("启动 GitTimePrism 应用时发生错误");
 }
