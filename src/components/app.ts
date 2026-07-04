@@ -4,20 +4,28 @@
  * 负责创建整体的三栏布局结构并协调各子组件。
  * 包含自定义标题栏（窗口拖拽、最小化/最大化/关闭）、
  * 壁纸功能（选择壁纸后动态变色）、暗色/亮色主题切换等。
+ *
+ * 三栏布局：
+ * - 左侧面板：文件变更列表 + 提交输入
+ * - 中间面板：提交节点图 + 提交历史
+ * - 右侧面板：文件 diff 对比视图 / 提交详情
  */
 
-import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { t } from '../services/i18n.js';
 import { GitInstaller } from './git-installer.js';
 import { TerminalPanel } from './terminal.js';
-import { repoService } from '../services/repo-service.js';
+import { repoService, type RepoInfo, type GraphCommit } from '../services/repo-service.js';
 import { wallpaperService } from '../services/wallpaper.js';
 import { themeEngine } from '../services/theme-engine.js';
+import { FileList } from './file-list.js';
+import { CommitInput } from './commit-input.js';
+import { DiffViewer } from './diff-viewer.js';
+import { CommitGraph } from './commit-graph.js';
+import { CommitDetail } from './commit-detail.js';
+import { BranchList } from './branch-list.js';
 
 export class App {
-  /** 工具栏 DOM 元素引用 */
-  private toolbar: HTMLElement | null = null;
   /** 左侧面板引用 */
   private sidebar: HTMLElement | null = null;
   /** 右侧详情面板引用 */
@@ -34,6 +42,20 @@ export class App {
   private terminalInstance: TerminalPanel | null = null;
   /** 当前是否已设置壁纸 */
   private hasWallpaper: boolean = false;
+  /** 当前打开的仓库路径 */
+  private currentRepoPath: string | null = null;
+  /** 文件变更列表组件实例 */
+  private fileList: FileList | null = null;
+  /** 提交输入组件实例 */
+  private commitInput: CommitInput | null = null;
+  /** diff 视图组件实例 */
+  private diffViewer: DiffViewer | null = null;
+  /** 提交节点图组件实例 */
+  private commitGraph: CommitGraph | null = null;
+  /** 提交详情组件实例 */
+  private commitDetail: CommitDetail | null = null;
+  /** 分支列表组件实例 */
+  private branchList: BranchList | null = null;
 
   /** 初始化应用 */
   init(): void {
@@ -42,7 +64,7 @@ export class App {
     this.initResizeHandles();
     this.initKeyboardShortcuts();
     this.initThemeToggle();
-    this.initWallpaper(); // 壁纸初始化（内部异步处理）
+    this.initWallpaper();
     this.checkGitInstallation();
   }
 
@@ -59,7 +81,7 @@ export class App {
         <div class="titlebar-controls">
           <button class="titlebar-btn titlebar-btn-minimize" id="btn-minimize" title="最小化">─</button>
           <button class="titlebar-btn titlebar-btn-maximize" id="btn-maximize" title="最大化">□</button>
-          <button class="titlebar-btn titlebar-btn-close" id="btn-close" title="关闭">✕</button>
+          <button class="titlebar-btn titlebar-btn-close" id="btn-close" title="关闭"></button>
         </div>
       </div>
       <header class="toolbar" id="toolbar">
@@ -75,19 +97,26 @@ export class App {
         </div>
       </header>
       <!-- 壁纸层 - 显示用户选择的壁纸图片，位于所有面板之下 -->
-      <!-- 内含 <img> 元素用于显示壁纸（比 CSS background-image 更可靠） -->
       <div class="wallpaper-layer" id="wallpaper-layer">
         <img id="wallpaper-img" alt="" />
       </div>
       <div class="main-content">
+        <!-- 左侧面板：文件变更列表 + 提交输入 -->
         <aside class="sidebar" id="sidebar">
-          <div class="panel-header"><span>${t('sidebar.repositories')}</span></div>
+          <div class="panel-header"><span>文件变更</span></div>
           <div class="panel-body" id="sidebar-body">
             <p style="color: var(--text-muted); padding: 16px; text-align: center;">${t('sidebar.noRepoOpen')}</p>
           </div>
+          <!-- 提交输入区域 -->
+          <div class="commit-input-area" id="commit-input-area" style="display: none;">
+            <div class="panel-header"><span>提交</span></div>
+            <div class="panel-body" id="commit-input-body"></div>
+          </div>
         </aside>
         <div class="resize-handle resize-handle-vertical" data-target="sidebar" data-direction="horizontal"></div>
+        <!-- 中间面板：提交节点图 + 提交历史 -->
         <main class="center-panel" id="center-panel">
+          <div class="panel-header"><span>提交历史</span></div>
           <div class="panel-body" id="center-body" style="flex:1; display:flex; align-items:center; justify-content:center;">
             <div style="text-align: center; color: var(--text-primary);">
               <p style="font-size: var(--font-size-2xl); margin-bottom: 8px; font-weight: 600;">GitTimePrism</p>
@@ -96,6 +125,7 @@ export class App {
           </div>
         </main>
         <div class="resize-handle resize-handle-vertical" data-target="detail-panel" data-direction="horizontal"></div>
+        <!-- 右侧面板：文件 diff 对比视图 / 提交详情 -->
         <aside class="detail-panel" id="detail-panel">
           <div class="panel-header"><span>${t('detail.title')}</span></div>
           <div class="panel-body" id="detail-body">
@@ -115,7 +145,6 @@ export class App {
         <div class="statusbar-item" id="statusbar-git-version">Git: ${t('statusbar.checking')}</div>
         <div class="statusbar-item" id="statusbar-repo-path"></div>
         <div class="statusbar-spacer"></div>
-        <!-- 切换终端按钮 -->
         <div class="statusbar-item" id="statusbar-terminal">
           <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('toolbar.toggleTerminal')}</button>
         </div>
@@ -134,37 +163,29 @@ export class App {
    * 使用 Tauri 的 window API 来控制窗口行为。
    */
   private initTitlebar(): void {
-    // 获取当前 Tauri 窗口实例
     const appWindow = getCurrentWindow();
 
-    // 标题栏拖拽区域 - 按住拖拽可移动窗口
     const dragArea = document.getElementById('titlebar-drag');
     if (dragArea) {
       dragArea.addEventListener('mousedown', (e) => {
-        // 只响应左键（button === 0）
         if (e.button === 0) {
-          // 开始拖拽窗口
           appWindow.startDragging();
         }
       });
 
-      // 双击标题栏切换最大化/还原
       dragArea.addEventListener('dblclick', () => {
         appWindow.toggleMaximize();
       });
     }
 
-    // 最小化按钮
     document.getElementById('btn-minimize')?.addEventListener('click', () => {
       appWindow.minimize();
     });
 
-    // 最大化/还原按钮
     document.getElementById('btn-maximize')?.addEventListener('click', () => {
       appWindow.toggleMaximize();
     });
 
-    // 关闭按钮
     document.getElementById('btn-close')?.addEventListener('click', () => {
       appWindow.close();
     });
@@ -178,34 +199,25 @@ export class App {
    * 3. 绑定壁纸选择按钮
    */
   private initWallpaper(): void {
-    // 异步加载已保存的壁纸
     this.loadSavedWallpaper();
 
-    // 绑定壁纸选择按钮 - 点击后打开文件选择对话框
     document.getElementById('btn-wallpaper')?.addEventListener('click', async () => {
       try {
         const result = await wallpaperService.selectWallpaper();
         if (result && result.dataUrl) {
-          // 用户选择了新壁纸，应用它
           this.applyWallpaper(result.dataUrl, result.dominantColors);
           console.log('[壁纸] 壁纸已成功应用');
-        } else if (result === null) {
-          // selectWallpaper 返回 null 可能是用户取消，也可能是命令调用失败
-          // 如果不是用户主动取消，说明 Rust 命令可能未注册（需要重新编译）
-          console.warn('[壁纸] 壁纸未应用 - 可能用户取消了选择，或 Rust 命令未注册（请重新运行 npm run tauri dev）');
         }
       } catch (err) {
         console.error('设置壁纸失败:', err);
-        // 弹出提示让用户知道出错了
-        alert('设置壁纸失败：' + String(err) + '\n\n请确认已重新运行 npm run tauri dev 来编译新的 Rust 命令。');
+        alert('设置壁纸失败：' + String(err));
       }
     });
 
-    // 绑定壁纸清除功能 - 右键壁纸按钮可清除壁纸
     const btnWallpaper = document.getElementById('btn-wallpaper');
     if (btnWallpaper) {
       btnWallpaper.addEventListener('contextmenu', (e) => {
-        e.preventDefault(); // 阻止默认右键菜单
+        e.preventDefault();
         if (this.hasWallpaper) {
           wallpaperService.clearWallpaper();
           this.removeWallpaper();
@@ -222,7 +234,6 @@ export class App {
   private async loadSavedWallpaper(): Promise<void> {
     const saved = wallpaperService.loadWallpaper();
     if (saved && saved.dataUrl) {
-      // 直接应用已保存的壁纸（base64 data URL + 颜色数据）
       this.applyWallpaper(saved.dataUrl, saved.dominantColors);
     }
   }
@@ -230,42 +241,29 @@ export class App {
   /**
    * 应用壁纸到界面
    *
-   * 使用 <img> 元素显示壁纸（比 CSS background-image 更可靠），
+   * 使用 <img> 元素显示壁纸图片，
    * 并使用动态变色引擎根据壁纸主色调更新所有UI组件的颜色。
-   *
-   * 为什么用 <img> 而不是 CSS background-image？
-   * - <img> 元素原生支持 data URL，不会出现 CSS url() 解析问题
-   * - 没有内联 style 长度限制
-   * - 加载成功/失败可以通过 onload/onerror 事件检测
-   * - 壁纸层 div 保留 CSS 中的 var(--app-bg) 渐变背景作为底层
    *
    * @param dataUrl - 壁纸图片的 base64 data URL
    * @param colors - 从壁纸中提取的主色调列表
    */
   private applyWallpaper(dataUrl: string, colors: import('../services/wallpaper.js').DominantColor[]): void {
-    // 使用 <img> 元素显示壁纸图片（最可靠的方式）
     const img = document.getElementById('wallpaper-img') as HTMLImageElement | null;
     if (img) {
-      // 监听加载成功事件
       img.onload = () => {
         console.log('[壁纸] 图片加载成功，尺寸:', img.naturalWidth, 'x', img.naturalHeight);
       };
-      // 监听加载失败事件
       img.onerror = (e) => {
         console.error('[壁纸] 图片加载失败:', e);
-        alert('壁纸图片加载失败！可能是图片格式不支持或文件已损坏。');
+        alert('壁纸图片加载失败！');
       };
-      // 设置图片源，触发加载
       img.src = dataUrl;
-      // 显示图片元素
       img.style.display = 'block';
     }
-    // 标记当前有壁纸
     this.hasWallpaper = true;
-    // 有壁纸时：面板透明度改为 50%（让壁纸更明显透出）
+    // 有壁纸时：面板透明度改为 50%
     document.documentElement.style.setProperty('--glass-opacity-panel', '0.5');
     document.documentElement.style.setProperty('--glass-opacity-bar', '0.5');
-    // 如果有颜色数据，应用动态变色
     if (colors.length > 0) {
       themeEngine.applyFromWallpaper(colors);
     }
@@ -275,7 +273,6 @@ export class App {
    * 移除壁纸，恢复默认渐变背景
    */
   private removeWallpaper(): void {
-    // 隐藏并清除 <img> 元素
     const img = document.getElementById('wallpaper-img') as HTMLImageElement | null;
     if (img) {
       img.style.display = 'none';
@@ -297,7 +294,6 @@ export class App {
       handle.addEventListener('mousedown', (e) => this.startResize(e, handle));
     });
 
-    // 鼠标移动和松开事件绑定到 document 上
     document.addEventListener('mousemove', (e) => this.onResize(e));
     document.addEventListener('mouseup', () => this.stopResize());
   }
@@ -377,14 +373,12 @@ export class App {
   /** 初始化全局快捷键 */
   private initKeyboardShortcuts(): void {
     document.addEventListener('keydown', (e) => {
-      // Ctrl+` 切换终端面板
       if (e.ctrlKey && e.key === '`') {
         e.preventDefault();
         this.toggleTerminal();
       }
     });
 
-    // 绑定终端按钮
     document.getElementById('btn-toggle-terminal')?.addEventListener('click', () => this.toggleTerminal());
     document.getElementById('btn-close-terminal')?.addEventListener('click', () => this.toggleTerminal());
 
@@ -474,71 +468,134 @@ export class App {
   /**
    * 仓库打开后的 UI 更新回调
    * 
+   * 初始化所有 Git 可视化组件并加载数据。
+   * 
    * @param info - 从后端获取的仓库基本信息
    */
-  private async onRepoOpened(info: import('../services/repo-service.js').RepoInfo): Promise<void> {
+  private async onRepoOpened(info: RepoInfo): Promise<void> {
+    // 保存当前仓库路径
+    this.currentRepoPath = info.path;
+
+    // 更新状态栏
     const repoPathEl = document.getElementById('statusbar-repo-path');
     if (repoPathEl) {
       repoPathEl.textContent = info.path;
     }
 
-    try {
-      const branches = await repoService.getBranches(info.path);
-      const sidebarBody = document.getElementById('sidebar-body');
-      if (sidebarBody) {
-        if (branches.local.length === 0) {
-          sidebarBody.innerHTML = `<p style="color: var(--text-muted); padding: 16px; text-align: center;">${t('sidebar.noRepoOpen')}</p>`;
-        } else {
-          sidebarBody.innerHTML = branches.local.map((b) => {
-            const current = b.is_current ? 'style="color: var(--accent-color); font-weight: 600;"' : '';
-            const icon = b.is_current ? '&#9654;' : '&#9655;';
-            const aheadBehind = (b.ahead > 0 || b.behind > 0) ? ` <span style="color: var(--text-muted); font-size: var(--font-size-xs);">↑${b.ahead} ↓${b.behind}</span>` : '';
-            return `<div ${current} style="padding: 6px 16px; cursor: pointer; border-bottom: 1px solid var(--divider);">${icon} ${b.name}${aheadBehind}</div>`;
-          }).join('');
-        }
-      }
-    } catch (err) {
-      console.error('获取分支列表失败:', err);
+    // 显示提交输入区域
+    const commitInputArea = document.getElementById('commit-input-area');
+    if (commitInputArea) {
+      commitInputArea.style.display = 'block';
     }
 
-    try {
-      const status = await repoService.getRepoStatus(info.path);
-      const centerBody = document.getElementById('center-body');
-      if (centerBody) {
-        if (status.entries.length === 0) {
-          centerBody.innerHTML = `
-            <div style="text-align: center; color: var(--text-muted); padding: 40px;">
-              <p style="font-size: var(--font-size-lg); margin-bottom: 8px;">✓ ${t('repo.cleanWorkingTree')}</p>
-              <p>${t('center.welcome')}</p>
-            </div>`;
-        } else {
-          centerBody.innerHTML = `
-            <div style="padding: 8px 16px; border-bottom: 1px solid var(--divider); color: var(--text-muted);">
-              ${t('repo.changesCount', { count: status.entries.length })}
-            </div>
-            ${status.entries.map((e) => {
-              const icon = this.getStatusIcon(e.status);
-              const staged = e.staged ? `<span style="color: var(--green); font-size: var(--font-size-xs);">S</span>` : `<span style="color: var(--text-muted); font-size: var(--font-size-xs);">W</span>`;
-              return `<div style="padding: 4px 16px; border-bottom: 1px solid var(--divider); display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm);">${staged} ${icon} <span style="flex: 1; overflow: hidden; text-overflow: ellipsis;">${e.path}</span></div>`;
-            }).join('')}`;
-        }
-      }
-    } catch (err) {
-      console.error('获取仓库状态失败:', err);
+    // 初始化文件列表组件（左侧面板）
+    const fileListBody = document.getElementById('sidebar-body');
+    if (fileListBody) {
+      this.fileList = new FileList('sidebar-body', info.path, (filePath) => {
+        // 点击文件时显示 diff
+        this.showFileDiff(filePath);
+      });
+      await this.fileList.refresh();
+    }
+
+    // 初始化提交输入组件（左侧面板底部）
+    const commitInputBody = document.getElementById('commit-input-body');
+    if (commitInputBody) {
+      this.commitInput = new CommitInput('commit-input-body', info.path, () => {
+        // 提交成功后刷新所有组件
+        this.refreshAllComponents();
+      });
+      this.commitInput.enable();
+    }
+
+    // 初始化 diff 视图组件（右侧面板）
+    const detailBody = document.getElementById('detail-body');
+    if (detailBody) {
+      this.diffViewer = new DiffViewer('detail-body');
+      this.commitDetail = new CommitDetail('detail-body');
+    }
+
+    // 初始化提交节点图组件（中间面板）
+    const centerBody = document.getElementById('center-body');
+    if (centerBody) {
+      this.commitGraph = new CommitGraph('center-body', info.path, (commit) => {
+        // 点击节点时显示提交详情
+        this.showCommitDetail(commit);
+      });
+      await this.commitGraph.refresh();
+    }
+
+    // 初始化分支列表组件（工具栏）
+    const toolbar = document.getElementById('toolbar');
+    if (toolbar) {
+      this.branchList = new BranchList('toolbar', info.path, () => {
+        // 分支切换成功后刷新所有组件
+        this.refreshAllComponents();
+      });
+      await this.branchList.refresh();
     }
   }
 
-  /** 根据文件状态返回对应的图标字符 */
-  private getStatusIcon(status: string): string {
-    switch (status) {
-      case 'Modified': return '✎';
-      case 'Added': return '+';
-      case 'Deleted': return '✕';
-      case 'Untracked': return '?';
-      case 'Renamed': return '→';
-      case 'Copied': return '⧉';
-      case 'Unmerged': return '⚠';
-      default: return '?';
+  /**
+   * 显示文件的 diff
+   * 
+   * @param filePath - 文件路径（相对于仓库根目录）
+   */
+  private async showFileDiff(filePath: string): Promise<void> {
+    if (!this.currentRepoPath || !this.diffViewer) return;
+
+    try {
+      await this.diffViewer.showWorkdirDiff(this.currentRepoPath, filePath);
+    } catch (err) {
+      console.error('显示文件 diff 失败:', err);
+    }
+  }
+
+  /**
+   * 显示提交详情
+   * 
+   * @param commit - 提交节点数据
+   */
+  private async showCommitDetail(commit: GraphCommit): Promise<void> {
+    if (!this.currentRepoPath || !this.commitDetail) return;
+
+    try {
+      await this.commitDetail.showCommit(this.currentRepoPath, commit.hash);
+    } catch (err) {
+      console.error('显示提交详情失败:', err);
+    }
+  }
+
+  /**
+   * 刷新所有组件
+   * 
+   * 在提交、切换分支等操作后调用，重新加载所有数据。
+   */
+  private async refreshAllComponents(): Promise<void> {
+    if (!this.currentRepoPath) return;
+
+    try {
+      // 刷新文件列表
+      if (this.fileList) {
+        await this.fileList.refresh();
+      }
+
+      // 刷新节点图
+      if (this.commitGraph) {
+        await this.commitGraph.refresh();
+      }
+
+      // 刷新分支列表
+      if (this.branchList) {
+        await this.branchList.refresh();
+      }
+
+      // 刷新提交输入组件状态
+      if (this.commitInput) {
+        this.commitInput.enable();
+      }
+    } catch (err) {
+      console.error('刷新组件失败:', err);
     }
   }
 }

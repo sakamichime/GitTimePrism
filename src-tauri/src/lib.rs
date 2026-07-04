@@ -60,6 +60,20 @@ pub fn run() {
             commands::repo::get_commit_log,
             // 壁纸命令（读取图片为 base64 data URL）
             commands::wallpaper::read_image_as_data_url,
+            // 暂存/提交命令
+            commands::stage::stage_file,
+            commands::stage::unstage_file,
+            commands::stage::stage_all,
+            commands::stage::commit_changes,
+            // 文件差异对比命令
+            commands::diff::get_workdir_diff,
+            commands::diff::get_staged_diff,
+            commands::diff::get_commit_diff,
+            // 提交节点图命令
+            commands::graph::get_commit_graph,
+            // 分支切换命令
+            commands::checkout::checkout_branch,
+            commands::checkout::create_and_checkout,
         ])
         
         // 注册终端 PTY 管理器为全局状态（所有命令都可以访问）

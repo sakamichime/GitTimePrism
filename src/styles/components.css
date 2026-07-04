@@ -412,3 +412,702 @@
   overflow: hidden;         /* 隐藏折叠后的内容 */
   border: none !important;  /* 折叠时去掉边框 */
 }
+
+/* ============================================================
+ * 文件差异对比组件 (.diff-*)
+ * ============================================================
+ * 用于显示 Git diff 内容的样式，包括：
+ * - 文件标签栏：多文件切换的标签按钮
+ * - 文件头信息：显示文件路径和变更统计
+ * - diff 内容：新增行（绿色）、删除行（红色）、上下文行（灰色）
+ * - 行号显示：旧文件行号和新文件行号
+ * ============================================================ */
+
+/* 文件标签栏容器 - 水平排列所有文件标签 */
+.diff-file-tabs {
+  display: flex;                              /* 弹性布局，标签水平排列 */
+  gap: 4px;                                   /* 标签之间的间距 */
+  padding: 8px 12px;                          /* 内边距 */
+  border-bottom: 1px solid var(--border);     /* 底部边框，与内容区分隔 */
+  overflow-x: auto;                           /* 文件过多时允许横向滚动 */
+  background: var(--bg-tertiary);             /* 背景色 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* 单个文件标签 - 可点击切换文件 */
+.diff-file-tab {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  gap: 6px;                                   /* 图标、文件名、统计之间的间距 */
+  padding: 6px 12px;                          /* 内边距 */
+  border-radius: 6px;                         /* 圆角 */
+  cursor: pointer;                            /* 鼠标变为手型，提示可点击 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-secondary);               /* 次要文字色 */
+  background: transparent;                    /* 默认透明背景 */
+  border: 1px solid transparent;              /* 默认透明边框 */
+  transition: all var(--transition-fast);     /* 平滑过渡动画 */
+  white-space: nowrap;                        /* 不允许换行 */
+  user-select: none;                          /* 禁止选中文本 */
+}
+
+/* 文件标签悬停效果 */
+.diff-file-tab:hover {
+  background: rgba(255, 255, 255, 0.05);      /* 半透明白色背景 */
+  color: var(--text-primary);                 /* 文字变亮 */
+  border-color: var(--border);                /* 显示边框 */
+}
+
+/* 当前选中的文件标签 - 高亮显示 */
+.diff-file-tab-active {
+  background: var(--bg-secondary);            /* 使用次要背景色 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  border-color: var(--accent);                /* 使用强调色边框 */
+  font-weight: 500;                           /* 中等字重，更突出 */
+}
+
+/* 文件标签中的状态图标 */
+.diff-file-tab-icon {
+  font-size: 12px;                            /* 图标大小 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* 文件标签中的文件名 */
+.diff-file-tab-name {
+  max-width: 200px;                           /* 最大宽度，防止过长 */
+  overflow: hidden;                           /* 超出部分隐藏 */
+  text-overflow: ellipsis;                    /* 显示省略号 */
+}
+
+/* 文件标签中的统计信息容器 */
+.diff-file-tab-stats {
+  display: flex;                              /* 弹性布局 */
+  gap: 4px;                                   /* 新增和删除之间的间距 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  margin-left: 4px;                           /* 与文件名之间的间距 */
+}
+
+/* 文件标签中的新增行数 - 绿色 */
+.diff-file-tab-additions {
+  color: var(--success);                      /* 使用成功色（绿色） */
+  font-weight: 500;                           /* 中等字重 */
+}
+
+/* 文件标签中的删除行数 - 红色 */
+.diff-file-tab-deletions {
+  color: var(--error);                        /* 使用错误色（红色） */
+  font-weight: 500;                           /* 中等字重 */
+}
+
+/* diff 文件头信息 - 显示文件路径和统计 */
+.diff-header {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  justify-content: space-between;             /* 文件路径在左，统计在右 */
+  padding: 8px 12px;                          /* 内边距 */
+  background: var(--bg-tertiary);             /* 背景色 */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+}
+
+/* diff 文件路径容器 */
+.diff-file-path {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  gap: 6px;                                   /* 图标和文件名之间的间距 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  font-weight: 500;                           /* 中等字重 */
+}
+
+/* diff 文件图标 */
+.diff-file-icon {
+  font-size: 14px;                            /* 图标大小 */
+}
+
+/* diff 文件名 */
+.diff-file-name {
+  font-family: var(--font-mono);              /* 等宽字体 */
+}
+
+/* diff 统计信息容器 */
+.diff-stats {
+  display: flex;                              /* 弹性布局 */
+  gap: 8px;                                   /* 新增和删除之间的间距 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  font-weight: 500;                           /* 中等字重 */
+}
+
+/* diff 新增行数 - 绿色 */
+.diff-additions {
+  color: var(--success);                      /* 使用成功色 */
+}
+
+/* diff 删除行数 - 红色 */
+.diff-deletions {
+  color: var(--error);                        /* 使用错误色 */
+}
+
+/* diff 重命名信息 */
+.diff-rename-info {
+  padding: 6px 12px;                          /* 内边距 */
+  background: rgba(255, 255, 255, 0.05);      /* 半透明白色背景 */
+  color: var(--text-secondary);               /* 次要文字色 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+}
+
+/* diff hunk 头信息 */
+.diff-hunk-header {
+  padding: 6px 12px;                          /* 内边距 */
+  background: var(--bg-tertiary);             /* 背景色 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  font-family: var(--font-mono);              /* 等宽字体 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+  border-top: 1px solid var(--border);        /* 顶部边框 */
+}
+
+/* diff hunk 内容区域 */
+.diff-hunk-content {
+  background: var(--bg-primary);              /* 主要背景色 */
+}
+
+/* diff 行 - 基础样式 */
+.diff-line {
+  display: flex;                              /* 弹性布局 */
+  font-family: var(--font-mono);              /* 等宽字体 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  line-height: 1.5;                           /* 行高 */
+}
+
+/* diff 新增行 - 绿色背景 */
+.diff-line-add {
+  background: rgba(46, 160, 67, 0.15);        /* 半透明绿色背景 */
+}
+
+/* diff 删除行 - 红色背景 */
+.diff-line-remove {
+  background: rgba(248, 81, 73, 0.15);        /* 半透明红色背景 */
+}
+
+/* diff 上下文行 - 无特殊背景 */
+.diff-line-context {
+  background: transparent;                    /* 透明背景 */
+}
+
+/* diff 行号 - 基础样式 */
+.diff-line-num {
+  width: 50px;                                /* 固定宽度 */
+  min-width: 50px;                            /* 最小宽度 */
+  padding: 0 8px;                             /* 左右内边距 */
+  text-align: right;                          /* 右对齐 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  user-select: none;                          /* 禁止选中 */
+  border-right: 1px solid var(--border);      /* 右侧边框 */
+}
+
+/* diff 行内容 */
+.diff-line-content {
+  flex: 1;                                    /* 占据剩余空间 */
+  padding: 0 12px;                            /* 左右内边距 */
+  white-space: pre;                           /* 保持空格和换行 */
+  overflow-x: auto;                           /* 超出时允许横向滚动 */
+}
+
+/* ============================================================
+ * 文件变更列表组件 (.file-*)
+ * ============================================================
+ * 用于显示仓库中变更的文件列表，分为已暂存和未暂存两组。
+ * 每个文件项显示状态图标、文件路径和暂存/取消暂存按钮。
+ * ============================================================ */
+
+/* 文件分组容器 */
+.file-group {
+  margin-bottom: 12px;                        /* 分组之间的间距 */
+}
+
+/* 文件分组头部 */
+.file-group-header {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  justify-content: space-between;             /* 标题在左，按钮在右 */
+  padding: 6px 8px;                           /* 内边距 */
+  background: var(--bg-tertiary);             /* 背景色 */
+  border-radius: var(--radius-sm);            /* 小圆角 */
+  margin-bottom: 4px;                         /* 与文件列表的间距 */
+}
+
+/* 文件分组标题 */
+.file-group-title {
+  font-size: var(--font-size-sm);             /* 小字号 */
+  font-weight: 600;                           /* 加粗 */
+  color: var(--text-primary);                 /* 主要文字色 */
+}
+
+/* 文件列表容器 */
+.file-list {
+  display: flex;                              /* 弹性布局 */
+  flex-direction: column;                     /* 垂直排列 */
+  gap: 2px;                                   /* 文件项之间的间距 */
+}
+
+/* 单个文件项 */
+.file-item {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  padding: 6px 8px;                           /* 内边距 */
+  border-radius: var(--radius-sm);            /* 小圆角 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+  cursor: pointer;                            /* 鼠标变为手型 */
+}
+
+/* 文件项悬停效果 */
+.file-item:hover {
+  background: rgba(255, 255, 255, 0.05);      /* 半透明白色背景 */
+}
+
+/* 文件信息区域（图标+路径+状态） */
+.file-info {
+  flex: 1;                                    /* 占据剩余空间 */
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  gap: 8px;                                   /* 图标、路径、状态之间的间距 */
+  min-width: 0;                               /* 允许收缩，防止溢出 */
+}
+
+/* 文件状态图标 */
+.file-icon {
+  font-size: 14px;                            /* 图标大小 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* 文件路径 */
+.file-path {
+  flex: 1;                                    /* 占据剩余空间 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  overflow: hidden;                           /* 超出部分隐藏 */
+  text-overflow: ellipsis;                    /* 显示省略号 */
+  white-space: nowrap;                        /* 不允许换行 */
+  font-family: var(--font-mono);              /* 等宽字体 */
+}
+
+/* 文件状态文字 */
+.file-status {
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* ============================================================
+ * 提交输入组件 (.commit-*)
+ * ============================================================
+ * 用于输入提交消息和创建提交的组件。
+ * 包含多行文本输入框和提交按钮。
+ * ============================================================ */
+
+/* 提交输入容器 */
+.commit-input-container {
+  display: flex;                              /* 弹性布局 */
+  flex-direction: column;                     /* 垂直排列 */
+  gap: 8px;                                   /* 输入框和按钮之间的间距 */
+  padding: 8px;                               /* 内边距 */
+}
+
+/* 提交消息输入框 */
+.commit-message-input {
+  width: 100%;                                /* 宽度占满 */
+  min-height: 60px;                           /* 最小高度 */
+  padding: 8px;                               /* 内边距 */
+  background: var(--bg-primary);              /* 主要背景色 */
+  border: 1px solid var(--border);            /* 边框 */
+  border-radius: var(--radius-sm);            /* 小圆角 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  font-family: var(--font-ui);                /* UI 字体 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  resize: vertical;                           /* 允许垂直调整大小 */
+  transition: border-color var(--transition-fast); /* 边框色过渡动画 */
+}
+
+/* 输入框获得焦点时 */
+.commit-message-input:focus {
+  outline: none;                              /* 去除默认轮廓 */
+  border-color: var(--accent);                /* 边框变为强调色 */
+}
+
+/* 输入框禁用状态 */
+.commit-message-input:disabled {
+  opacity: 0.5;                               /* 半透明 */
+  cursor: not-allowed;                        /* 禁止图标 */
+}
+
+/* 提交按钮 */
+.commit-submit-btn {
+  width: 100%;                                /* 宽度占满 */
+  padding: 8px;                               /* 内边距 */
+  font-weight: 500;                           /* 中等字重 */
+}
+
+/* ============================================================
+ * 提交节点图组件 (.commit-graph-*, .commit-node)
+ * ============================================================
+ * 用于可视化显示提交历史的节点图，展示分支和合并关系。
+ * 每个节点显示 ASCII 图形线、提交哈希、作者和消息。
+ * ============================================================ */
+
+/* 节点图容器 */
+.commit-graph-container {
+  display: flex;                              /* 弹性布局 */
+  flex-direction: column;                     /* 垂直排列 */
+  height: 100%;                               /* 高度占满 */
+}
+
+/* 节点图头部 */
+.commit-graph-header {
+  padding: 8px 12px;                          /* 内边距 */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* 节点图标题 */
+.commit-graph-title {
+  font-size: var(--font-size-sm);             /* 小字号 */
+  font-weight: 600;                           /* 加粗 */
+  color: var(--text-primary);                 /* 主要文字色 */
+}
+
+/* 节点列表容器 */
+.commit-graph-list {
+  flex: 1;                                    /* 占据剩余空间 */
+  overflow-y: auto;                           /* 允许纵向滚动 */
+}
+
+/* 单个提交节点 */
+.commit-node {
+  display: flex;                              /* 弹性布局 */
+  align-items: flex-start;                    /* 顶部对齐 */
+  padding: 8px 12px;                          /* 内边距 */
+  border-bottom: 1px solid var(--border-subtle); /* 底部弱化边框 */
+  cursor: pointer;                            /* 鼠标变为手型 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+}
+
+/* 节点悬停效果 */
+.commit-node:hover {
+  background: rgba(255, 255, 255, 0.05);      /* 半透明白色背景 */
+}
+
+/* 节点图形线区域 */
+.commit-graph-line {
+  flex-shrink: 0;                             /* 不允许被压缩 */
+  margin-right: 12px;                         /* 与信息的间距 */
+}
+
+/* ASCII 图形线条 */
+.graph-ascii {
+  font-family: var(--font-mono);              /* 等宽字体 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--accent);                       /* 强调色 */
+  margin: 0;                                  /* 去除默认外边距 */
+  line-height: 1.2;                           /* 行高 */
+}
+
+/* 提交信息区域 */
+.commit-info {
+  flex: 1;                                    /* 占据剩余空间 */
+  min-width: 0;                               /* 允许收缩 */
+}
+
+/* 提交头部（哈希+作者+日期） */
+.commit-header {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  gap: 8px;                                   /* 元素之间的间距 */
+  margin-bottom: 4px;                         /* 与消息的间距 */
+}
+
+/* 提交哈希 */
+.commit-hash {
+  font-family: var(--font-mono);              /* 等宽字体 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  color: var(--accent);                       /* 强调色 */
+  cursor: pointer;                            /* 鼠标变为手型 */
+}
+
+/* 提交作者 */
+.commit-author {
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  color: var(--text-secondary);               /* 次要文字色 */
+}
+
+/* 提交日期 */
+.commit-date {
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  margin-left: auto;                          /* 推到右边 */
+}
+
+/* 提交消息 */
+.commit-message {
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  line-height: 1.4;                           /* 行高 */
+  overflow: hidden;                           /* 超出部分隐藏 */
+  text-overflow: ellipsis;                    /* 显示省略号 */
+  display: -webkit-box;                       /* WebKit 多行省略 */
+  -webkit-line-clamp: 2;                      /* 最多显示 2 行 */
+  -webkit-box-orient: vertical;               /* 垂直方向 */
+}
+
+/* ============================================================
+ * 提交详情组件 (.commit-detail-*)
+ * ============================================================
+ * 用于显示单个提交的完整详细信息，包括哈希、作者、日期、
+ * 提交消息和涉及的文件列表。
+ * ============================================================ */
+
+/* 提交详情容器 */
+.commit-detail-container {
+  display: flex;                              /* 弹性布局 */
+  flex-direction: column;                     /* 垂直排列 */
+  height: 100%;                               /* 高度占满 */
+  overflow-y: auto;                           /* 允许纵向滚动 */
+}
+
+/* 提交详情头部 */
+.commit-detail-header {
+  padding: 12px;                              /* 内边距 */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* 提交详情标题 */
+.commit-detail-title {
+  font-size: var(--font-size-lg);             /* 大字号 */
+  font-weight: 600;                           /* 加粗 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  margin: 0;                                  /* 去除默认外边距 */
+}
+
+/* 提交详情信息区域 */
+.commit-detail-info {
+  padding: 12px;                              /* 内边距 */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+}
+
+/* 详情信息行 */
+.commit-detail-row {
+  display: flex;                              /* 弹性布局 */
+  align-items: flex-start;                    /* 顶部对齐 */
+  margin-bottom: 8px;                         /* 行之间的间距 */
+}
+
+/* 详情信息标签 */
+.commit-detail-label {
+  width: 80px;                                /* 固定宽度 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* 详情信息值 */
+.commit-detail-value {
+  flex: 1;                                    /* 占据剩余空间 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  word-break: break-all;                      /* 长文本换行 */
+}
+
+/* 完整哈希（特殊样式） */
+.commit-hash-full {
+  font-family: var(--font-mono);              /* 等宽字体 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+}
+
+/* 提交消息正文区域 */
+.commit-detail-message-body {
+  margin-top: 12px;                           /* 与上方信息的间距 */
+}
+
+/* 提交消息预格式化文本 */
+.commit-message-pre {
+  font-family: var(--font-mono);              /* 等宽字体 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  white-space: pre-wrap;                      /* 保持换行和空格 */
+  word-break: break-word;                     /* 长单词换行 */
+  margin: 0;                                  /* 去除默认外边距 */
+  line-height: 1.5;                           /* 行高 */
+}
+
+/* 提交详情文件区域 */
+.commit-detail-files {
+  padding: 12px;                              /* 内边距 */
+}
+
+/* 文件区域副标题 */
+.commit-detail-subtitle {
+  font-size: var(--font-size-sm);             /* 小字号 */
+  font-weight: 600;                           /* 加粗 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  margin: 0 0 12px 0;                         /* 底部间距 */
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  gap: 8px;                                   /* 标题和统计之间的间距 */
+}
+
+/* 文件变更统计 */
+.commit-detail-stats {
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  font-weight: 400;                           /* 正常字重 */
+  display: flex;                              /* 弹性布局 */
+  gap: 8px;                                   /* 新增和删除之间的间距 */
+}
+
+/* 文件列表容器 */
+.commit-file-list {
+  display: flex;                              /* 弹性布局 */
+  flex-direction: column;                     /* 垂直排列 */
+  gap: 4px;                                   /* 文件项之间的间距 */
+}
+
+/* 单个文件项 */
+.commit-file-item {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  padding: 6px 8px;                           /* 内边距 */
+  border-radius: var(--radius-sm);            /* 小圆角 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+}
+
+/* 文件项悬停效果 */
+.commit-file-item:hover {
+  background: rgba(255, 255, 255, 0.05);      /* 半透明白色背景 */
+}
+
+/* 文件图标 */
+.commit-file-icon {
+  font-size: 14px;                            /* 图标大小 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+  margin-right: 8px;                          /* 与路径的间距 */
+}
+
+/* 文件路径 */
+.commit-file-path {
+  flex: 1;                                    /* 占据剩余空间 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  font-family: var(--font-mono);              /* 等宽字体 */
+  overflow: hidden;                           /* 超出部分隐藏 */
+  text-overflow: ellipsis;                    /* 显示省略号 */
+  white-space: nowrap;                        /* 不允许换行 */
+}
+
+/* 文件状态 */
+.commit-file-status {
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  margin: 0 8px;                              /* 左右间距 */
+}
+
+/* 文件统计 */
+.commit-file-stats {
+  display: flex;                              /* 弹性布局 */
+  gap: 8px;                                   /* 新增和删除之间的间距 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  font-weight: 500;                           /* 中等字重 */
+}
+
+/* ============================================================
+ * 分支列表组件 (.branch-*)
+ * ============================================================
+ * 用于显示分支列表和切换分支的下拉菜单。
+ * 在工具栏中显示当前分支名，点击后弹出分支列表。
+ * ============================================================ */
+
+/* 分支按钮（在工具栏中） */
+.branch-button {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  gap: 6px;                                   /* 图标和文字之间的间距 */
+}
+
+/* 分支下拉菜单 */
+.branch-dropdown {
+  background: var(--bg-secondary);            /* 次要背景色 */
+  border: 1px solid var(--border);            /* 边框 */
+  border-radius: var(--radius-md);            /* 中等圆角 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); /* 阴影 */
+  min-width: 200px;                           /* 最小宽度 */
+  max-height: 400px;                          /* 最大高度 */
+  overflow-y: auto;                           /* 允许纵向滚动 */
+  z-index: 1000;                              /* 高层级 */
+  /* 毛玻璃效果 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* 分支分组 */
+.branch-section {
+  padding: 8px 0;                             /* 上下内边距 */
+}
+
+/* 分支分组标题 */
+.branch-section-title {
+  padding: 4px 12px;                          /* 内边距 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  font-weight: 600;                           /* 加粗 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  text-transform: uppercase;                  /* 大写 */
+  letter-spacing: 0.5px;                      /* 字间距 */
+}
+
+/* 分支列表容器 */
+.branch-list {
+  display: flex;                              /* 弹性布局 */
+  flex-direction: column;                     /* 垂直排列 */
+}
+
+/* 单个分支项 */
+.branch-item {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  padding: 8px 12px;                          /* 内边距 */
+  cursor: pointer;                            /* 鼠标变为手型 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+}
+
+/* 分支项悬停效果 */
+.branch-item:hover {
+  background: rgba(255, 255, 255, 0.05);      /* 半透明白色背景 */
+}
+
+/* 当前分支项 */
+.branch-item-current {
+  background: rgba(137, 180, 250, 0.1);       /* 半透明强调色背景 */
+}
+
+/* 分支名称 */
+.branch-item-name {
+  flex: 1;                                    /* 占据剩余空间 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  font-family: var(--font-mono);              /* 等宽字体 */
+}
+
+/* 分支领先/落后信息容器 */
+.branch-ahead-behind {
+  display: flex;                              /* 弹性布局 */
+  gap: 6px;                                   /* 领先和落后之间的间距 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+}
+
+/* 分支领先提交数 */
+.branch-ahead {
+  color: var(--success);                      /* 成功色（绿色） */
+}
+
+/* 分支落后提交数 */
+.branch-behind {
+  color: var(--error);                        /* 错误色（红色） */
+}

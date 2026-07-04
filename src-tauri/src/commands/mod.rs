@@ -18,3 +18,11 @@ pub mod terminal;
 pub mod repo;
 // 导出壁纸命令模块（读取图片为 base64 data URL）
 pub mod wallpaper;
+// 导出暂存/提交命令模块（暂存/取消暂存/提交）
+pub mod stage;
+// 导出文件差异对比命令模块（工作区 diff、暂存区 diff、提交 diff）
+pub mod diff;
+// 导出提交节点图命令模块（git log --graph）
+pub mod graph;
+// 导出分支切换命令模块（git checkout）
+pub mod checkout;

@@ -43,3 +43,19 @@ pub mod branch;
 // 提交历史查询模块
 // 获取提交日志记录，包含作者、日期、消息等信息
 pub mod log;
+
+// 暂存/提交操作模块
+// 提供 git add、git reset、git commit 等写入操作
+pub mod stage;
+
+// 文件差异对比模块
+// 解析 git diff 和 git show 的输出，返回结构化的 diff 信息
+pub mod diff;
+
+// 提交节点图模块
+// 解析 git log --graph 的输出，返回带图形线的提交节点列表
+pub mod graph;
+
+// 分支切换模块
+// 提供 git checkout 分支切换操作
+pub mod checkout;

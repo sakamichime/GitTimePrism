@@ -129,6 +129,93 @@ export interface CommitList {
 }
 
 /**
+ * 单个 diff hunk（变更块）的信息
+ * 对应 Rust 后端的 DiffHunk 结构体
+ */
+export interface DiffHunk {
+  /** 旧文件中的起始行号 */
+  old_start: number;
+  /** 旧文件中的行数 */
+  old_count: number;
+  /** 新文件中的起始行号 */
+  new_start: number;
+  /** 新文件中的行数 */
+  new_count: number;
+  /** hunk 的所有行内容（包含前缀：+ 新增，- 删除，空格 上下文） */
+  lines: string[];
+}
+
+/**
+ * 单个文件的 diff 信息
+ * 对应 Rust 后端的 FileDiff 结构体
+ */
+export interface FileDiff {
+  /** 文件路径（相对于仓库根目录） */
+  path: string;
+  /** 旧文件路径（仅重命名文件有值） */
+  old_path: string | null;
+  /** 新增行数 */
+  additions: number;
+  /** 删除行数 */
+  deletions: number;
+  /** 是否是新增文件 */
+  is_new: boolean;
+  /** 是否是删除文件 */
+  is_deleted: boolean;
+  /** 是否是重命名文件 */
+  is_renamed: boolean;
+  /** diff hunks 列表 */
+  hunks: DiffHunk[];
+  /** 原始 diff 文本 */
+  raw_diff: string;
+}
+
+/**
+ * 整个 diff 的结果
+ * 对应 Rust 后端的 DiffResult 结构体
+ */
+export interface DiffResult {
+  /** 涉及的文件列表 */
+  files: FileDiff[];
+  /** 总新增行数 */
+  total_additions: number;
+  /** 总删除行数 */
+  total_deletions: number;
+}
+
+/**
+ * 提交节点图中的单个提交节点
+ * 对应 Rust 后端的 GraphCommit 结构体
+ */
+export interface GraphCommit {
+  /** 节点图的 ASCII 线条（如 "* ", "| ", "|\\", "|/" 等） */
+  graph_line: string;
+  /** 提交的完整哈希值 */
+  hash: string;
+  /** 提交的短哈希值 */
+  short_hash: string;
+  /** 父提交的哈希列表 */
+  parents: string[];
+  /** 作者名字 */
+  author: string;
+  /** 提交日期（ISO 8601 格式） */
+  date: string;
+  /** 提交消息（第一行） */
+  message: string;
+}
+
+/**
+ * 完整的提交节点图数据
+ * 对应 Rust 后端的 CommitGraph 结构体
+ */
+export interface CommitGraph {
+  /** 所有提交节点列表（按时间倒序，最新的在前） */
+  commits: GraphCommit[];
+  /** 提交总数 */
+  total_count: number;
+}
+
+/**
  * 仓库管理服务
  * 
  * 提供仓库操作的统一接口，所有方法返回 Promise。
@@ -214,5 +301,120 @@ export const repoService = {
     if (!result) return null;
     // Tauri dialog 的 open 返回 string | string[]
     return typeof result === 'string' ? result : result[0] ?? null;
+  },
+
+  /**
+   * 暂存单个文件
+   * 执行 git add <file>，将指定文件添加到暂存区
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 要暂存的文件路径（相对于仓库根目录）
+   */
+  async stageFile(repoPath: string, filePath: string): Promise<void> {
+    await invoke<void>('stage_file', { repoPath, filePath });
+  },
+
+  /**
+   * 取消暂存单个文件
+   * 执行 git reset HEAD -- <file>，将文件从暂存区移回工作区
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 要取消暂存的文件路径（相对于仓库根目录）
+   */
+  async unstageFile(repoPath: string, filePath: string): Promise<void> {
+    await invoke<void>('unstage_file', { repoPath, filePath });
+  },
+
+  /**
+   * 暂存所有变更文件
+   * 执行 git add -A，将所有工作区和暂存区的变更一次性添加到暂存区
+   * 
+   * @param repoPath - 仓库路径
+   */
+  async stageAll(repoPath: string): Promise<void> {
+    await invoke<void>('stage_all', { repoPath });
+  },
+
+  /**
+   * 创建提交
+   * 执行 git commit -m "message"，将暂存区的变更提交到仓库
+   * 
+   * @param repoPath - 仓库路径
+   * @param message - 提交消息
+   * @returns 新提交的完整哈希值
+   */
+  async commitChanges(repoPath: string, message: string): Promise<string> {
+    return await invoke<string>('commit_changes', { repoPath, message });
+  },
+
+  /**
+   * 获取工作区与暂存区之间的差异
+   * 返回工作区中尚未暂存的变更
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 可选，指定单个文件路径；不传则获取所有文件的 diff
+   * @returns diff 结果（包含文件列表和变更统计）
+   */
+  async getWorkdirDiff(repoPath: string, filePath?: string): Promise<DiffResult> {
+    return await invoke<DiffResult>('get_workdir_diff', { repoPath, filePath: filePath || null });
+  },
+
+  /**
+   * 获取暂存区与 HEAD 之间的差异
+   * 返回已暂存但尚未提交的变更
+   * 
+   * @param repoPath - 仓库路径
+   * @returns diff 结果（包含文件列表和变更统计）
+   */
+  async getStagedDiff(repoPath: string): Promise<DiffResult> {
+    return await invoke<DiffResult>('get_staged_diff', { repoPath });
+  },
+
+  /**
+   * 获取指定提交的差异
+   * 返回该提交引入的所有文件变更
+   * 
+   * @param repoPath - 仓库路径
+   * @param commitHash - 提交的哈希值
+   * @returns diff 结果（包含文件列表和变更统计）
+   */
+  async getCommitDiff(repoPath: string, commitHash: string): Promise<DiffResult> {
+    return await invoke<DiffResult>('get_commit_diff', { repoPath, commitHash });
+  },
+
+  /**
+   * 获取提交节点图
+   * 返回带有 ASCII 图形线的提交历史，用于可视化展示分支和合并关系
+   * 
+   * @param repoPath - 仓库路径
+   * @param count - 要获取的提交数量（0 表示全部，默认 50）
+   * @returns 节点图数据（包含提交节点列表和总数）
+   */
+  async getCommitGraph(repoPath: string, count: number = 50): Promise<CommitGraph> {
+    return await invoke<CommitGraph>('get_commit_graph', { repoPath, count });
+  },
+
+  /**
+   * 切换到指定分支
+   * 执行 git checkout <branchName>，将 HEAD 指向目标分支并更新工作区文件。
+   * 如果工作区有未提交的变更且与目标分支冲突，后端会抛出错误。
+   *
+   * @param repoPath - 仓库路径
+   * @param branchName - 要切换到的目标分支名称（必须是已存在的分支）
+   */
+  async checkoutBranch(repoPath: string, branchName: string): Promise<void> {
+    await invoke<void>('checkout_branch', { repoPath, branchName });
+  },
+
+  /**
+   * 创建新分支并立即切换过去
+   * 执行 git checkout -b <branchName>，基于当前 HEAD 创建一个新分支，
+   * 然后自动切换到该新分支。适合在开始新功能或修复 bug 时使用。
+   *
+   * @param repoPath - 仓库路径
+   * @param branchName - 要创建的新分支名称（不能与已有分支重名）
+   */
+  async createAndCheckout(repoPath: string, branchName: string): Promise<void> {
+    await invoke<void>('create_and_checkout', { repoPath, branchName });
   },
 };
