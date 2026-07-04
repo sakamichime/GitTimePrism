@@ -630,6 +630,9 @@ export class App {
       }, (filePath) => {
         // 右键菜单点击"查看文件历史"时，调用文件历史组件显示该文件的提交历史
         this.showFileHistory(filePath);
+      }, () => {
+        // 暂存状态变化时，更新提交按钮状态
+        this.updateCommitButtonState();
       });
       await this.fileList.refresh();
     }
@@ -731,6 +734,25 @@ export class App {
       await this.commitDetail.showCommit(this.currentRepoPath, commit.hash);
     } catch (err) {
       console.error('显示提交详情失败:', err);
+    }
+  }
+
+  /**
+   * 更新提交按钮状态
+   *
+   * 检查是否有暂存文件，并更新提交按钮的启用/禁用状态。
+   * 在暂存/取消暂存操作后调用。
+   */
+  private async updateCommitButtonState(): Promise<void> {
+    if (!this.commitInput || !this.currentRepoPath) return;
+
+    try {
+      const status = await repoService.getRepoStatus(this.currentRepoPath);
+      const hasStaged = status.entries.some(entry => entry.staged);
+      this.commitInput.setHasStagedFiles(hasStaged);
+    } catch (err) {
+      console.error('获取仓库状态失败:', err);
+      this.commitInput.setHasStagedFiles(false);
     }
   }
 

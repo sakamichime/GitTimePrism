@@ -57,6 +57,8 @@ export class FileList {
   private onFileSelect: (path: string, isStaged: boolean) => void;
   /** 文件历史查看回调函数，参数为文件路径 */
   private onFileHistory: ((path: string) => void) | null;
+  /** 暂存状态变化回调函数，用于通知父组件更新提交按钮状态 */
+  private onStagingChange: (() => void) | null;
   /** 当前仓库状态 */
   private status: StatusEntry[] = [];
   /** 容器 DOM 元素引用 */
@@ -76,12 +78,14 @@ export class FileList {
     containerId: string, 
     repoPath: string, 
     onFileSelect: (path: string, isStaged: boolean) => void,
-    onFileHistory?: (path: string) => void
+    onFileHistory?: (path: string) => void,
+    onStagingChange?: () => void
   ) {
     this.containerId = containerId;
     this.repoPath = repoPath;
     this.onFileSelect = onFileSelect;
     this.onFileHistory = onFileHistory || null;
+    this.onStagingChange = onStagingChange || null;
     this.container = document.getElementById(containerId);
     // 初始化右键菜单
     this.initContextMenu();
@@ -347,6 +351,8 @@ export class FileList {
     try {
       await repoService.stageFile(this.repoPath, filePath);
       await this.refresh(); // 刷新列表
+      // 通知父组件暂存状态变化，更新提交按钮状态
+      if (this.onStagingChange) this.onStagingChange();
     } catch (err) {
       console.error('暂存文件失败:', err);
       alert(`暂存文件失败: ${err}`);
@@ -362,6 +368,8 @@ export class FileList {
     try {
       await repoService.unstageFile(this.repoPath, filePath);
       await this.refresh(); // 刷新列表
+      // 通知父组件暂存状态变化，更新提交按钮状态
+      if (this.onStagingChange) this.onStagingChange();
     } catch (err) {
       console.error('取消暂存失败:', err);
       alert(`取消暂存失败: ${err}`);
@@ -377,6 +385,8 @@ export class FileList {
     try {
       await repoService.stageAll(this.repoPath);
       await this.refresh(); // 刷新列表
+      // 通知父组件暂存状态变化，更新提交按钮状态
+      if (this.onStagingChange) this.onStagingChange();
     } catch (err) {
       console.error('全部暂存失败:', err);
       alert(`全部暂存失败: ${err}`);
