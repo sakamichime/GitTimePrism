@@ -36,6 +36,8 @@ export class CommitInput {
   private submitBtn: HTMLButtonElement | null = null;
   /** 是否正在提交中 */
   private isCommitting: boolean = false;
+  /** 是否有暂存文件（只有暂存了才能提交） */
+  private hasStagedFiles: boolean = false;
 
   /**
    * 创建提交输入组件
@@ -91,25 +93,46 @@ export class CommitInput {
   /**
    * 处理文本输入
    * 
-   * 根据文本框内容启用或禁用提交按钮。
+   * 根据文本框内容、暂存文件状态和提交状态启用或禁用提交按钮。
+   * 按钮启用条件：有文本内容 AND 有暂存文件 AND 不在提交中。
    */
   private handleInput(): void {
     if (!this.submitBtn || !this.textarea) return;
 
+    // 检查是否有文本内容
     const hasContent = this.textarea.value.trim().length > 0;
-    this.submitBtn.disabled = !hasContent || this.isCommitting;
+    
+    // 按钮启用条件：有文本内容 AND 有暂存文件 AND 不在提交中
+    this.submitBtn.disabled = !hasContent || !this.hasStagedFiles || this.isCommitting;
   }
 
   /**
    * 启用输入组件
    * 
    * 当有暂存文件时调用，允许用户输入提交消息。
+   * 在重新检查按钮状态前先检查是否有暂存文件。
    */
   enable(): void {
     if (this.textarea) {
       this.textarea.disabled = false;
     }
-    this.handleInput(); // 重新检查按钮状态
+    // 只有在有暂存文件时才重新检查按钮状态
+    if (this.hasStagedFiles) {
+      this.handleInput(); // 重新检查按钮状态
+    }
+  }
+
+  /**
+   * 设置是否有暂存文件
+   * 
+   * 由外部调用，用于更新暂存文件状态。当状态改变时重新检查按钮状态。
+   * 
+   * @param has - 是否有暂存文件
+   */
+  setHasStagedFiles(has: boolean): void {
+    this.hasStagedFiles = has;
+    // 重新检查按钮状态
+    this.handleInput();
   }
 
   /**

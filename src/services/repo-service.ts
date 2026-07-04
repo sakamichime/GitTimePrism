@@ -216,6 +216,21 @@ export interface CommitGraph {
 }
 
 /**
+ * 标签信息结构
+ * 与 Rust 后端的 TagInfo 结构体字段一一对应
+ */
+export interface TagInfo {
+  /** 标签名称 */
+  name: string;
+  /** 标签指向的提交哈希值 */
+  commit: string;
+  /** 是否是附注标签（annotated 标签包含作者、日期、消息等元数据；lightweight 标签只是一个指针） */
+  is_annotated: boolean;
+  /** 附注标签的消息内容（仅 annotated 标签有值，lightweight 标签为 null） */
+  message: string | null;
+}
+
+/**
  * 仓库管理服务
  * 
  * 提供仓库操作的统一接口，所有方法返回 Promise。
@@ -416,5 +431,108 @@ export const repoService = {
    */
   async createAndCheckout(repoPath: string, branchName: string): Promise<void> {
     await invoke<void>('create_and_checkout', { repoPath, branchName });
+  },
+
+  /**
+   * 撤销提交
+   * 执行 git reset，支持三种模式：
+   * - soft: 保留更改在暂存区（最安全，只是撤销了 commit，文件修改还在暂存区）
+   * - mixed: 保留更改在工作区（撤销 commit 和暂存，文件修改还在工作区但未暂存）
+   * - hard: 完全撤销（危险操作，会丢失所有更改，文件恢复到提交前的状态）
+   * 
+   * @param repoPath - 仓库路径
+   * @param mode - 撤销模式（"soft" | "mixed" | "hard"）
+   */
+  async resetCommit(repoPath: string, mode: string): Promise<void> {
+    await invoke<void>('reset_commit', { repoPath, mode });
+  },
+
+  /**
+   * 获取单个文件的提交历史
+   * 执行 git log --follow <file_path>，返回该文件的所有提交记录
+   * --follow 选项可以跟踪文件重命名，即使文件被重命名过也能找到所有历史
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 文件路径（相对于仓库根目录）
+   * @returns 该文件的提交历史列表
+   */
+  async getFileHistory(repoPath: string, filePath: string): Promise<CommitInfo[]> {
+    return await invoke<CommitInfo[]>('get_file_history', { repoPath, filePath });
+  },
+
+  /**
+   * 获取仓库的所有标签列表
+   * 返回仓库中全部标签的信息，包括标签名、对应提交、类型和消息
+   * 
+   * @param repoPath - 仓库路径
+   * @returns 标签信息数组
+   */
+  async getTags(repoPath: string): Promise<TagInfo[]> {
+    return await invoke<TagInfo[]>('get_tags', { repoPath });
+  },
+
+  /**
+   * 创建标签
+   * 支持两种模式：
+   * - lightweight: 轻量标签，只是一个指向提交的指针，不包含额外信息
+   * - annotated: 附注标签，包含标签创建者、日期、消息等完整元数据
+   * 
+   * @param repoPath - 仓库路径
+   * @param tagName - 标签名称（不能与已有标签重名）
+   * @param commit - 要打标签的提交哈希值
+   * @param mode - 标签类型（"lightweight" 或 "annotated"）
+   * @param message - 附注标签的消息（仅 annotated 模式需要，lightweight 模式忽略）
+   */
+  async createTag(repoPath: string, tagName: string, commit: string, mode: string, message?: string): Promise<void> {
+    await invoke<void>('create_tag', { repoPath, tagName, commit, mode, message: message || null });
+  },
+
+  /**
+   * 删除标签
+   * 从仓库中移除指定的标签，不会影响对应的提交
+   * 
+   * @param repoPath - 仓库路径
+   * @param tagName - 要删除的标签名称
+   */
+  async deleteTag(repoPath: string, tagName: string): Promise<void> {
+    await invoke<void>('delete_tag', { repoPath, tagName });
+  },
+
+  /**
+   * 切换到标签
+   * 执行 git checkout，将工作区切换到指定标签对应的提交
+   * 切换后进入 detached HEAD 状态（因为没有分支关联）
+   * 
+   * @param repoPath - 仓库路径
+   * @param tagName - 要切换到的标签名称
+   */
+  async checkoutTag(repoPath: string, tagName: string): Promise<void> {
+    await invoke<void>('checkout_tag', { repoPath, tagName });
+  },
+
+  /**
+   * 从远程仓库拉取更新
+   * 执行 git pull <remote> <branch>，获取远程仓库的最新提交并合并到当前分支
+   * 
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（通常为 "origin"）
+   * @param branch - 分支名
+   * @returns 拉取操作的输出信息
+   */
+  async pull(repoPath: string, remote: string, branch: string): Promise<string> {
+    return await invoke<string>('pull_changes', { repoPath, remote, branch });
+  },
+
+  /**
+   * 推送本地提交到远程仓库
+   * 执行 git push <remote> <branch>，将本地分支的提交推送到远程
+   * 
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（通常为 "origin"）
+   * @param branch - 分支名
+   * @returns 推送操作的输出信息
+   */
+  async push(repoPath: string, remote: string, branch: string): Promise<string> {
+    return await invoke<string>('push_changes', { repoPath, remote, branch });
   },
 };

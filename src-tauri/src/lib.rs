@@ -58,6 +58,7 @@ pub fn run() {
             commands::repo::get_repo_status,
             commands::repo::get_branches,
             commands::repo::get_commit_log,
+            commands::repo::get_file_history,
             // 壁纸命令（读取图片为 base64 data URL）
             commands::wallpaper::read_image_as_data_url,
             // 暂存/提交命令
@@ -74,6 +75,16 @@ pub fn run() {
             // 分支切换命令
             commands::checkout::checkout_branch,
             commands::checkout::create_and_checkout,
+            // 撤销提交命令（git reset soft/mixed/hard）
+            commands::reset::reset_commit,
+            // 标签管理命令（获取标签列表、创建/删除/切换标签）
+            commands::tag::get_tags,
+            commands::tag::create_tag,
+            commands::tag::delete_tag,
+            commands::tag::checkout_tag,
+            // 远程操作命令（git pull 拉取更新、git push 推送提交）
+            commands::remote::pull_changes,
+            commands::remote::push_changes,
         ])
         
         // 注册终端 PTY 管理器为全局状态（所有命令都可以访问）

@@ -326,6 +326,17 @@ export class BranchList {
   }
 
   /**
+   * 获取当前分支名称
+   *
+   * 供外部组件（如 app.ts）调用，用于获取当前检出的分支名。
+   *
+   * @returns 当前分支名，如果没有则返回 null
+   */
+  getCurrentBranchName(): string | null {
+    return this.currentBranch?.name ?? null;
+  }
+
+  /**
    * 处理分支切换
    * 
    * 调用后端执行分支切换操作，处理成功和失败情况。

@@ -26,3 +26,9 @@ pub mod diff;
 pub mod graph;
 // 导出分支切换命令模块（git checkout）
 pub mod checkout;
+// 导出撤销提交命令模块（git reset soft/mixed/hard）
+pub mod reset;
+// 导出标签管理命令模块（获取标签列表、创建/删除/切换标签）
+pub mod tag;
+// 导出远程操作命令模块（git pull 拉取更新、git push 推送提交）
+pub mod remote;

@@ -46,6 +46,7 @@ const STATUS_NAMES: Record<FileStatus, string> = {
  * - 获取并显示仓库状态
  * - 暂存/取消暂存文件
  * - 点击文件触发回调（用于显示 diff）
+ * - 右键菜单触发回调（用于查看文件历史）
  */
 export class FileList {
   /** 容器 DOM 元素的 ID */
@@ -54,10 +55,14 @@ export class FileList {
   private repoPath: string;
   /** 文件选择回调函数，参数为文件路径和是否已暂存 */
   private onFileSelect: (path: string, isStaged: boolean) => void;
+  /** 文件历史查看回调函数，参数为文件路径 */
+  private onFileHistory: ((path: string) => void) | null;
   /** 当前仓库状态 */
   private status: StatusEntry[] = [];
   /** 容器 DOM 元素引用 */
   private container: HTMLElement | null = null;
+  /** 右键菜单 DOM 元素 */
+  private contextMenu: HTMLElement | null = null;
 
   /**
    * 创建文件列表组件
@@ -65,12 +70,21 @@ export class FileList {
    * @param containerId - 容器 DOM 元素的 ID
    * @param repoPath - 仓库路径
    * @param onFileSelect - 文件选择回调函数，参数为文件路径和是否已暂存
+   * @param onFileHistory - 文件历史查看回调函数（可选），参数为文件路径
    */
-  constructor(containerId: string, repoPath: string, onFileSelect: (path: string, isStaged: boolean) => void) {
+  constructor(
+    containerId: string, 
+    repoPath: string, 
+    onFileSelect: (path: string, isStaged: boolean) => void,
+    onFileHistory?: (path: string) => void
+  ) {
     this.containerId = containerId;
     this.repoPath = repoPath;
     this.onFileSelect = onFileSelect;
+    this.onFileHistory = onFileHistory || null;
     this.container = document.getElementById(containerId);
+    // 初始化右键菜单
+    this.initContextMenu();
   }
 
   /**
@@ -188,6 +202,7 @@ export class FileList {
    * 绑定事件监听器
    * 
    * 为文件列表中的按钮和文件项绑定点击事件。
+   * 同时为文件项绑定右键菜单事件，用于查看文件历史。
    */
   private bindEvents(): void {
     if (!this.container) return;
@@ -223,7 +238,103 @@ export class FileList {
         fileInfo.addEventListener('click', () => {
           this.onFileSelect(path, isStaged);
         });
+
+        // 右键菜单事件 - 显示"查看文件历史"选项
+        // 将 Element 转换为 HTMLElement，以便使用 contextmenu 事件和 MouseEvent 类型
+        (fileInfo as HTMLElement).addEventListener('contextmenu', ((e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.showContextMenu(e.clientX, e.clientY, path);
+        }) as EventListener);
       }
+    }
+  }
+
+  /**
+   * 初始化右键菜单 DOM 元素
+   * 
+   * 创建一个隐藏的右键菜单元素，添加到 document.body 中。
+   * 菜单包含"查看文件历史"选项。
+   */
+  private initContextMenu(): void {
+    // 如果已经创建过菜单，先移除旧的
+    if (this.contextMenu) {
+      this.contextMenu.remove();
+    }
+
+    // 创建菜单容器
+    this.contextMenu = document.createElement('div');
+    this.contextMenu.className = 'file-context-menu';
+    this.contextMenu.style.display = 'none';
+    this.contextMenu.innerHTML = `
+      <div class="file-context-menu-item" data-action="view-history">
+        <span class="file-context-menu-icon">📜</span>
+        <span class="file-context-menu-text">查看文件历史</span>
+      </div>
+    `;
+    document.body.appendChild(this.contextMenu);
+
+    // 为菜单项绑定点击事件
+    const historyItem = this.contextMenu.querySelector('[data-action="view-history"]');
+    if (historyItem) {
+      historyItem.addEventListener('click', () => {
+        const filePath = this.contextMenu?.getAttribute('data-file-path') || '';
+        this.hideContextMenu();
+        if (this.onFileHistory && filePath) {
+          this.onFileHistory(filePath);
+        }
+      });
+    }
+
+    // 点击页面其他地方时隐藏菜单
+    document.addEventListener('click', () => {
+      this.hideContextMenu();
+    });
+
+    // 按 ESC 键时隐藏菜单
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.hideContextMenu();
+      }
+    });
+  }
+
+  /**
+   * 显示右键菜单
+   * 
+   * 在指定位置显示右键菜单，并设置当前操作的文件路径。
+   * 
+   * @param x - 菜单显示的 X 坐标（鼠标位置）
+   * @param y - 菜单显示的 Y 坐标（鼠标位置）
+   * @param filePath - 当前右键点击的文件路径
+   */
+  private showContextMenu(x: number, y: number, filePath: string): void {
+    if (!this.contextMenu) return;
+
+    // 保存当前操作的文件路径
+    this.contextMenu.setAttribute('data-file-path', filePath);
+
+    // 设置菜单位置
+    this.contextMenu.style.left = `${x}px`;
+    this.contextMenu.style.top = `${y}px`;
+    this.contextMenu.style.display = 'block';
+
+    // 检查菜单是否超出视口，如果超出则调整位置
+    const rect = this.contextMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      this.contextMenu.style.left = `${x - rect.width}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+      this.contextMenu.style.top = `${y - rect.height}px`;
+    }
+  }
+
+  /**
+   * 隐藏右键菜单
+   */
+  private hideContextMenu(): void {
+    if (this.contextMenu) {
+      this.contextMenu.style.display = 'none';
     }
   }
 

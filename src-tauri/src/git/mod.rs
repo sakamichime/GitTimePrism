@@ -59,3 +59,19 @@ pub mod graph;
 // 分支切换模块
 // 提供 git checkout 分支切换操作
 pub mod checkout;
+
+// 撤销提交模块
+// 提供 git reset 操作（soft/mixed/hard 三种模式）
+pub mod reset;
+
+// 标签管理模块
+// 提供 Git 标签的增删查切换操作（轻量标签与附注标签）
+pub mod tag;
+
+// 拉取模块
+// 提供 git pull 远程更新功能
+pub mod pull;
+
+// 推送模块
+// 提供 git push 推送本地提交功能
+pub mod push;

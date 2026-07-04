@@ -225,3 +225,38 @@ pub fn get_commit_log(
     // 调用 git::log::get_log 执行实际的提交历史查询操作
     crate::git::log::get_log(&repo_path, count).map_err(|e| e.to_string())
 }
+
+/**
+ * 获取单个文件的提交历史
+ * 
+ * 执行 `git log --follow` 命令，获取指定文件的所有提交记录。
+ * --follow 选项可以跟踪文件重命名，即使文件被改名，也能看到完整历史。
+ * 
+ * 前端调用方式：
+ * ```javascript
+ * const history = await invoke('get_file_history', {
+ *   repoPath: 'C:\\Projects\\my-repo',
+ *   filePath: 'src/main.rs'
+ * });
+ * history.forEach(c => {
+ *   console.log(`${c.short_hash} ${c.author}: ${c.message}`);
+ * });
+ * ```
+ * 
+ * 参数：
+ * - repo_path: 仓库根目录的路径字符串
+ * - file_path: 文件路径（相对于仓库根目录），例如 "src/main.rs"
+ * 
+ * 返回值：
+ * - Ok(Vec<CommitInfo>) - 该文件的所有提交记录（按时间倒序排列）
+ * - Err(String) - 查询失败
+ */
+#[command]
+pub fn get_file_history(
+    repo_path: String,
+    file_path: String,
+) -> Result<Vec<crate::git::log::CommitInfo>, String> {
+    // 调用 git::log::get_file_history 执行实际的文件历史查询操作
+    // 将 GitError 转换为 String 以满足 Tauri 命令的返回类型要求
+    crate::git::log::get_file_history(&repo_path, &file_path).map_err(|e| e.to_string())
+}

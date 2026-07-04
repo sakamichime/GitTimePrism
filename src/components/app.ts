@@ -24,6 +24,9 @@ import { DiffViewer } from './diff-viewer.js';
 import { CommitGraph } from './commit-graph.js';
 import { CommitDetail } from './commit-detail.js';
 import { BranchList } from './branch-list.js';
+import { ResetDialog } from './reset-dialog.js';
+import { TagManager } from './tag-manager.js';
+import { FileHistory } from './file-history.js';
 
 export class App {
   /** 左侧面板引用 */
@@ -56,6 +59,8 @@ export class App {
   private commitDetail: CommitDetail | null = null;
   /** 分支列表组件实例 */
   private branchList: BranchList | null = null;
+  /** 文件历史查看组件实例 */
+  private fileHistory: FileHistory | null = null;
 
   /** 初始化应用 */
   init(): void {
@@ -92,6 +97,10 @@ export class App {
         </div>
         <div class="toolbar-spacer"></div>
         <div class="toolbar-section" id="toolbar-right">
+          <button class="btn" id="btn-tag-manager" title="标签管理">🏷 标签</button>
+          <button class="btn" id="btn-reset-commit" title="撤销提交">↩ 撤销</button>
+          <button class="btn" id="btn-pull" title="从远程仓库拉取更新">↓ 拉取</button>
+          <button class="btn" id="btn-push" title="推送本地提交到远程仓库">↑ 推送</button>
           <button class="btn" id="btn-wallpaper" title="设置壁纸">🖼</button>
           <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`">${t('toolbar.toggleTerminal')}</button>
         </div>
@@ -146,10 +155,10 @@ export class App {
         <div class="statusbar-item" id="statusbar-repo-path"></div>
         <div class="statusbar-spacer"></div>
         <div class="statusbar-item" id="statusbar-terminal">
-          <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('toolbar.toggleTerminal')}</button>
+          <button class="btn" id="btn-toggle-terminal-status" title="Ctrl+\`" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('toolbar.toggleTerminal')}</button>
         </div>
         <div class="statusbar-item" id="statusbar-theme">
-          <button class="btn" id="btn-toggle-theme" title="${t('theme.toggle')}" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('theme.toggle')}</button>
+          <button class="btn" id="btn-toggle-theme-status" title="${t('theme.toggle')}" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('theme.toggle')}</button>
         </div>
       </footer>
     `;
@@ -380,6 +389,7 @@ export class App {
     });
 
     document.getElementById('btn-toggle-terminal')?.addEventListener('click', () => this.toggleTerminal());
+    document.getElementById('btn-toggle-terminal-status')?.addEventListener('click', () => this.toggleTerminal());
     document.getElementById('btn-close-terminal')?.addEventListener('click', () => this.toggleTerminal());
 
     // ---- 绑定仓库操作按钮 ----
@@ -418,6 +428,114 @@ export class App {
         console.error('初始化仓库失败:', err);
       }
     });
+
+    // 撤销提交按钮 - 点击后弹出撤销对话框
+    // 只有在已打开仓库的情况下才能撤销，否则提示用户先打开仓库
+    document.getElementById('btn-reset-commit')?.addEventListener('click', () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行撤销操作');
+        return;
+      }
+      // 创建撤销对话框并显示
+      // 传入当前仓库路径和成功回调（撤销成功后刷新所有组件）
+      const dialog = new ResetDialog(this.currentRepoPath, () => {
+        this.refreshAllComponents();
+      });
+      dialog.show();
+    });
+
+    // 标签管理按钮 - 点击后弹出标签管理对话框
+    // 只有在已打开仓库的情况下才能管理标签，否则提示用户先打开仓库
+    document.getElementById('btn-tag-manager')?.addEventListener('click', () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行标签管理');
+        return;
+      }
+      // 创建标签管理对话框并显示
+      // 传入当前仓库路径和成功回调（标签操作成功后刷新所有组件）
+      const tagManager = new TagManager(this.currentRepoPath, () => {
+        this.refreshAllComponents();
+      });
+      tagManager.show();
+    });
+
+    // 拉取按钮 - 从远程仓库拉取最新提交并合并到当前分支
+    // 只有在已打开仓库的情况下才能拉取，否则提示用户先打开仓库
+    document.getElementById('btn-pull')?.addEventListener('click', async () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行拉取操作');
+        return;
+      }
+
+      // 获取当前分支名（从 branchList 组件获取）
+      const currentBranch = this.branchList ? this.getCurrentBranchName() : null;
+      if (!currentBranch) {
+        alert('无法获取当前分支名，请确保已打开仓库');
+        return;
+      }
+
+      try {
+        // 调用后端执行 git pull origin <branch>
+        // remote 通常为 "origin"，branch 为当前分支名
+        const result = await repoService.pull(this.currentRepoPath, 'origin', currentBranch);
+        // 显示成功信息
+        alert(`拉取成功！\n\n${result}`);
+        // 拉取成功后刷新所有组件（更新提交历史、文件列表等）
+        await this.refreshAllComponents();
+      } catch (err) {
+        // 显示错误信息
+        console.error('拉取失败:', err);
+        alert(`拉取失败：${err}`);
+      }
+    });
+
+    // 推送按钮 - 将本地分支的提交推送到远程仓库
+    // 只有在已打开仓库的情况下才能推送，否则提示用户先打开仓库
+    document.getElementById('btn-push')?.addEventListener('click', async () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行推送操作');
+        return;
+      }
+
+      // 获取当前分支名（从 branchList 组件获取）
+      const currentBranch = this.branchList ? this.getCurrentBranchName() : null;
+      if (!currentBranch) {
+        alert('无法获取当前分支名，请确保已打开仓库');
+        return;
+      }
+
+      try {
+        // 调用后端执行 git push origin <branch>
+        // remote 通常为 "origin"，branch 为当前分支名
+        const result = await repoService.push(this.currentRepoPath, 'origin', currentBranch);
+        // 显示成功信息
+        alert(`推送成功！\n\n${result}`);
+        // 推送成功后刷新所有组件（更新分支信息、提交历史等）
+        await this.refreshAllComponents();
+      } catch (err) {
+        // 显示错误信息
+        console.error('推送失败:', err);
+        alert(`推送失败：${err}`);
+      }
+    });
+  }
+
+  /**
+   * 获取当前分支名
+   * 
+   * 从 branchList 组件中获取当前检出的分支名称。
+   * 如果没有打开仓库或没有分支信息，返回 null。
+   * 
+   * @returns 当前分支名，如果没有则返回 null
+   */
+  private getCurrentBranchName(): string | null {
+    if (!this.branchList) return null;
+    // 使用 branchList 组件提供的公共方法获取当前分支名
+    return this.branchList.getCurrentBranchName();
   }
 
   /** 切换终端面板的显示/隐藏 */
@@ -488,12 +606,30 @@ export class App {
       commitInputArea.style.display = 'block';
     }
 
+    // 初始化 diff 视图组件（右侧面板）
+    // 必须在 FileList 和 FileHistory 之前初始化，因为它们需要引用 diffViewer
+    const detailBody = document.getElementById('detail-body');
+    if (detailBody) {
+      this.diffViewer = new DiffViewer('detail-body');
+      this.commitDetail = new CommitDetail('detail-body');
+    }
+
+    // 初始化文件历史查看组件（右侧面板）
+    // 复用 diffViewer 实例，点击历史中的提交时在该面板中显示 diff
+    if (this.diffViewer) {
+      this.fileHistory = new FileHistory('detail-body', this.diffViewer);
+    }
+
     // 初始化文件列表组件（左侧面板）
+    // 传入文件历史回调：右键菜单点击"查看文件历史"时触发
     const fileListBody = document.getElementById('sidebar-body');
     if (fileListBody) {
-      this.fileList = new FileList('sidebar-body', info.path, (filePath) => {
-        // 点击文件时显示 diff
-        this.showFileDiff(filePath);
+      this.fileList = new FileList('sidebar-body', info.path, (filePath, isStaged) => {
+        // 点击文件时显示 diff，传递 isStaged 参数以区分暂存区/工作区 diff
+        this.showFileDiff(filePath, isStaged);
+      }, (filePath) => {
+        // 右键菜单点击"查看文件历史"时，调用文件历史组件显示该文件的提交历史
+        this.showFileHistory(filePath);
       });
       await this.fileList.refresh();
     }
@@ -506,13 +642,16 @@ export class App {
         this.refreshAllComponents();
       });
       this.commitInput.enable();
-    }
 
-    // 初始化 diff 视图组件（右侧面板）
-    const detailBody = document.getElementById('detail-body');
-    if (detailBody) {
-      this.diffViewer = new DiffViewer('detail-body');
-      this.commitDetail = new CommitDetail('detail-body');
+      // 检查是否有暂存文件，更新提交按钮状态
+      try {
+        const status = await repoService.getRepoStatus(info.path);
+        const hasStaged = status.entries.some(entry => entry.staged);
+        this.commitInput.setHasStagedFiles(hasStaged);
+      } catch (err) {
+        console.error('获取仓库状态失败:', err);
+        this.commitInput.setHasStagedFiles(false);
+      }
     }
 
     // 初始化提交节点图组件（中间面板）
@@ -533,6 +672,24 @@ export class App {
         this.refreshAllComponents();
       });
       await this.branchList.refresh();
+    }
+  }
+
+  /**
+   * 显示文件历史
+   * 
+   * 在右侧面板中显示指定文件的提交历史列表。
+   * 点击历史中的提交可以查看该提交的 diff。
+   * 
+   * @param filePath - 文件路径（相对于仓库根目录）
+   */
+  private async showFileHistory(filePath: string): Promise<void> {
+    if (!this.currentRepoPath || !this.fileHistory) return;
+
+    try {
+      await this.fileHistory.showHistory(this.currentRepoPath, filePath);
+    } catch (err) {
+      console.error('显示文件历史失败:', err);
     }
   }
 
@@ -579,8 +736,9 @@ export class App {
 
   /**
    * 刷新所有组件
-   * 
+   *
    * 在提交、切换分支等操作后调用，重新加载所有数据。
+   * 同时检查暂存文件状态并更新提交按钮。
    */
   private async refreshAllComponents(): Promise<void> {
     if (!this.currentRepoPath) return;
@@ -604,6 +762,16 @@ export class App {
       // 刷新提交输入组件状态
       if (this.commitInput) {
         this.commitInput.enable();
+
+        // 检查是否有暂存文件，更新提交按钮状态
+        try {
+          const status = await repoService.getRepoStatus(this.currentRepoPath);
+          const hasStaged = status.entries.some(entry => entry.staged);
+          this.commitInput.setHasStagedFiles(hasStaged);
+        } catch (err) {
+          console.error('获取仓库状态失败:', err);
+          this.commitInput.setHasStagedFiles(false);
+        }
       }
     } catch (err) {
       console.error('刷新组件失败:', err);

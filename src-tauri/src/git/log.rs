@@ -6,7 +6,7 @@
  * 构建结构化的提交记录列表。
  * 
  * 使用自定义的 format 字符串来精确控制输出格式，
- * 每个字段使用特殊分隔符 `|x|` 分隔，便于程序化解析。
+ * 每个字段使用特殊分隔符 `|||SEP|||` 分隔，便于程序化解析。
  * 
  * format 字符串说明：
  * %H  - 完整提交哈希（40 位十六进制）
@@ -17,7 +17,7 @@
  * %s  - 提交消息的第一行（标题）
  * 
  * 输出格式示例（每行一个提交）：
- * a1b2c3d4e5f6...|x|a1b2c3d|x|张三|x|zhangsan@email.com|x|2024-01-15T10:30:00+08:00|x|修复登录bug
+ * a1b2c3d4e5f6...|||SEP|||a1b2c3d|||SEP|||张三|||SEP|||zhangsan@email.com|||SEP|||2024-01-15T10:30:00+08:00|||SEP|||修复登录bug
  */
 
 use super::commands::{run_git, GitError};
@@ -87,11 +87,11 @@ pub struct CommitList {
 /**
  * 解析 git log 的单行输出为 CommitInfo 结构体
  * 
- * git log 的每行输出格式为（使用 |x| 作为字段分隔符）：
- * <完整哈希>|x|<短哈希>|x|<作者>|x|<邮箱>|x|<日期>|x|<消息>
+ * git log 的每行输出格式为（使用 |||SEP||| 作为字段分隔符）：
+ * <完整哈希>|||SEP|||<短哈希>|||SEP|||<作者>|||SEP|||<邮箱>|||SEP|||<日期>|||SEP|||<消息>
  * 
  * 例如：
- * a1b2c3d4...|x|a1b2c3d|x|张三|x|zhangsan@email.com|x|2024-01-15T10:30:00+08:00|x|修复登录bug
+ * a1b2c3d4...|||SEP|||a1b2c3d|||SEP|||张三|||SEP|||zhangsan@email.com|||SEP|||2024-01-15T10:30:00+08:00|||SEP|||修复登录bug
  * 
  * 参数：
  * - line: git log 输出的一行文本
@@ -101,9 +101,10 @@ pub struct CommitList {
  * - None - 行格式不正确（理论上不应出现）
  */
 fn parse_commit_line(line: &str) -> Option<CommitInfo> {
-    // 使用 |x| 作为分隔符分割行
+    // 使用 |||SEP||| 作为分隔符分割行（与 graph.rs 保持一致）
+    // 这个分隔符极不可能出现在提交消息或作者名中，比单字符 | 更安全
     // 分割为 6 个字段：hash, short_hash, author, email, date, message
-    let parts: Vec<&str> = line.split("|x|").collect();
+    let parts: Vec<&str> = line.split("|||SEP|||").collect();
 
     // 验证字段数量是否正确（必须恰好 6 个字段）
     if parts.len() != 6 {
@@ -151,7 +152,7 @@ fn parse_commit_line(line: &str) -> Option<CommitInfo> {
  */
 pub fn get_log(repo_path: &str, count: u32) -> Result<CommitList, GitError> {
     // 定义 git log 的输出格式
-    // 使用 |x| 作为字段分隔符（选择不常见的字符串以避免与提交内容冲突）
+    // 使用 |||SEP||| 作为字段分隔符（与 graph.rs 保持一致，极不可能出现在提交内容中）
     // 格式字段说明：
     //   %H  = 完整提交哈希（40位）
     //   %h  = 短提交哈希（通常7位）
@@ -159,8 +160,7 @@ pub fn get_log(repo_path: &str, count: u32) -> Result<CommitList, GitError> {
     //   %ae = 作者邮箱
     //   %aI = 作者日期（ISO 8601 格式，包含时区信息）
     //   %s  = 提交消息标题（第一行）
-    // %x| 是 git format 中的字面量字符，输出竖线分隔符 "|"
-    let format_str = "%H%x|%h%x|%an%x|%ae%x|%aI%x|%s";
+    let format_str = "%H|||SEP|||%h|||SEP|||%an|||SEP|||%ae|||SEP|||%aI|||SEP|||%s";
 
     // 构建完整的 --pretty=format 参数
     // --pretty=format:<格式字符串> 告诉 git 按照指定格式输出每条提交记录
@@ -207,4 +207,81 @@ pub fn get_log(repo_path: &str, count: u32) -> Result<CommitList, GitError> {
         commits,
         total_count,
     })
+}
+
+/**
+ * 获取单个文件的提交历史
+ * 
+ * 执行 `git log --follow --pretty=format:<format> -- <file_path>` 命令，
+ * 获取指定文件的所有提交记录。
+ * 
+ * --follow 选项的作用：
+ *   当文件被重命名时（例如 `git mv old_name new_name`），
+ *   --follow 会追踪文件的重命名历史，把旧文件名下的提交也一并返回。
+ *   如果不加 --follow，则只能看到重命名之后的提交记录。
+ * 
+ * 命令格式说明：
+ *   git log --follow --pretty=format:<格式> -- <文件路径>
+ *   其中 `--` 用于分隔 git 选项和文件路径，避免路径被误解析为选项参数。
+ * 
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ * - file_path: 文件路径（相对于仓库根目录），例如 "src/main.rs"
+ * 
+ * 返回值：
+ * - Ok(Vec<CommitInfo>) - 该文件的所有提交记录（按时间倒序排列）
+ * - Err(GitError) - 查询失败（路径无效、不是 Git 仓库等）
+ * 
+ * 使用示例：
+ *   let history = get_file_history("/path/to/repo", "src/main.rs")?;
+ *   // history 是一个 Vec<CommitInfo>，包含该文件的所有提交
+ */
+pub fn get_file_history(repo_path: &str, file_path: &str) -> Result<Vec<CommitInfo>, GitError> {
+    // 定义 git log 的输出格式（与 get_log 函数完全相同）
+    // 使用 |||SEP||| 作为字段分隔符（与 graph.rs 保持一致），各字段含义：
+    //   %H  = 完整提交哈希（40位）
+    //   %h  = 短提交哈希（通常7位）
+    //   %an = 作者名字
+    //   %ae = 作者邮箱
+    //   %aI = 作者日期（ISO 8601 格式，包含时区信息）
+    //   %s  = 提交消息标题（第一行）
+    let format_str = "%H|||SEP|||%h|||SEP|||%an|||SEP|||%ae|||SEP|||%aI|||SEP|||%s";
+
+    // 构建完整的 --pretty=format 参数
+    let full_format = format!("--pretty=format:{}", format_str);
+
+    // 构建命令参数列表（使用 Vec<String> 而非 Vec<&str>，与 get_log 保持一致）
+    // 包含以下关键部分：
+    //   1. "log"       - git 子命令，查看提交历史
+    //   2. "--follow"  - 跟踪文件重命名，确保能看到文件改名前的提交
+    //   3. full_format - 自定义输出格式
+    //   4. "--"        - 分隔符，告诉 git 后面的内容是文件路径而非选项
+    //   5. file_path   - 要查询历史的文件路径
+    let full_args: Vec<String> = vec![
+        "log".to_string(),      // git log 子命令
+        "--follow".to_string(), // 跟踪文件重命名历史
+        full_format,            // 自定义输出格式
+        "--".to_string(),       // 分隔符：分隔选项和文件路径
+        file_path.to_string(),  // 目标文件路径（相对于仓库根目录）
+    ];
+
+    // 将 Vec<String> 转换为 Vec<&str> 以传递给 run_git 函数
+    // 因为 run_git 的参数类型是 &[&str]，所以需要转换
+    let args_refs: Vec<&str> = full_args.iter().map(|s| s.as_str()).collect();
+
+    // 执行 git log 命令并获取输出
+    // run_git 会在指定的仓库路径下执行 git 命令
+    let output = run_git(repo_path, &args_refs)?;
+
+    // 解析输出为 CommitInfo 列表
+    // 每一行输出对应一个提交记录，使用 parse_commit_line 函数解析
+    // filter_map 会自动过滤掉无法解析的行（理论上不应出现无效行）
+    let commits: Vec<CommitInfo> = output
+        .stdout
+        .lines()                              // 按行分割输出（每行一个提交）
+        .filter_map(|line| parse_commit_line(line))  // 解析每行，过滤无效行
+        .collect();                           // 收集为 Vec<CommitInfo>
+
+    // 返回该文件的所有提交记录列表
+    Ok(commits)
 }
