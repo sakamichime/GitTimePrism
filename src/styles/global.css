@@ -43,8 +43,7 @@ body {
   font-family: var(--font-ui); /* 使用 variables.css 中定义的 UI 字体 */
   font-size: var(--font-size-base); /* 使用基础字号 */
   color: var(--text-primary); /* 使用主文字色 */
-  background-color: var(--bg-primary); /* 主背景色（纯色兜底） */
-  background-image: var(--app-bg);      /* 渐变底图，用于毛玻璃透视效果 */
+  background-color: transparent; /* 透明背景 - 窗口 transparent:true 时需要 */
   -webkit-user-select: none; /* 禁止用户选中文字（WebKit 内核浏览器） */
   user-select: none;     /* 禁止用户选中文字（标准属性） */
   line-height: 1.5;      /* 行高为字号的 1.5 倍，让文字有舒适的间距 */
@@ -116,9 +115,11 @@ pre,
   align-items: center;      /* 垂直居中对齐 */
   gap: 6px;                 /* 按钮内图标和文字之间的间距 */
   padding: 6px 12px;        /* 内边距：上下 6px，左右 12px */
-  border: 1px solid var(--border); /* 1px 实线边框 */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* 半透明白色边框，增强毛玻璃质感 */
   border-radius: var(--radius-md); /* 中等圆角 */
-  background: var(--bg-surface); /* 表面色背景 */
+  background: rgba(49, 50, 68, 0.45); /* 半透明表面色背景，实现毛玻璃效果 */
+  -webkit-backdrop-filter: blur(16px) saturate(180%); /* 按钮毛玻璃滤镜 */
+  backdrop-filter: blur(16px) saturate(180%);         /* 按钮毛玻璃滤镜 */
   color: var(--text-primary);   /* 主文字色 */
   cursor: pointer;          /* 鼠标变为手型（表示可以点击） */
   font-size: var(--font-size-sm); /* 小字号 */
@@ -127,25 +128,33 @@ pre,
   white-space: nowrap;      /* 不允许换行（防止按钮文字折行） */
   transition: background var(--transition-fast),
               border-color var(--transition-fast),
-              color var(--transition-fast); /* 背景色、边框色、文字色的过渡动画 */
+              color var(--transition-fast),
+              backdrop-filter var(--transition-fast); /* 背景色、边框色、文字色、毛玻璃的过渡动画 */
   outline: none;            /* 去除默认的焦点轮廓（我们用自定义的焦点样式） */
 }
 
 /* 按钮悬停效果 */
 .btn:hover {
-  background: var(--bg-hover);    /* 悬停时背景变亮 */
-  border-color: var(--accent);    /* 悬停时边框变为强调色 */
+  background: rgba(69, 71, 90, 0.55);    /* 悬停时背景变亮且保持半透明毛玻璃效果 */
+  border-color: rgba(137, 180, 250, 0.4); /* 悬停时边框变为半透明的强调色 */
+  -webkit-backdrop-filter: blur(20px) saturate(200%); /* 悬停时毛玻璃效果增强 */
+  backdrop-filter: blur(20px) saturate(200%);
 }
 
 /* 按钮按下效果 */
 .btn:active {
-  background: var(--bg-active);   /* 按下时背景更深 */
+  background: rgba(88, 91, 112, 0.6);   /* 按下时背景更深且保持半透明 */
+  -webkit-backdrop-filter: blur(12px) saturate(160%); /* 按下时毛玻璃效果减弱 */
+  backdrop-filter: blur(12px) saturate(160%);
 }
 
 /* 按钮获得焦点时的样式（键盘导航时显示，提升可访问性） */
 .btn:focus-visible {
-  border-color: var(--accent);    /* 焦点时边框变为强调色 */
-  box-shadow: 0 0 0 2px var(--accent-muted); /* 外围加一圈强调色的光晕 */
+  border-color: rgba(137, 180, 250, 0.5);    /* 焦点时边框变为半透明强调色 */
+  box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.25); /* 外围加一圈半强调色的光晕 */
+  background: rgba(69, 71, 90, 0.5);    /* 焦点时背景变亮 */
+  -webkit-backdrop-filter: blur(18px) saturate(190%);
+  backdrop-filter: blur(18px) saturate(190%);
 }
 
 /* 按钮禁用状态 */
@@ -159,19 +168,23 @@ pre,
  * 主要按钮样式 (.btn-primary)
  * ============================================================
  * 主要按钮用于最重要的操作（如"提交"、"保存"等）。
- * 使用强调色作为背景，让用户一眼就能注意到。
-* ============================================================ */
+ * 使用强调色作为半透明背景，实现毛玻璃质感。
+ * ============================================================ */
 .btn-primary {
-  background: var(--accent);        /* 背景色为强调色 */
-  color: var(--text-inverse);        /* 文字使用反色（在蓝色背景上用深色文字更清晰） */
-  border-color: var(--accent);       /* 边框也用强调色，与背景融为一体 */
+  background: rgba(137, 180, 250, 0.4);        /* 半透明强调色背景，实现毛玻璃效果 */
+  color: var(--text-primary);        /* 主文字色 */
+  border-color: rgba(137, 180, 250, 0.3);       /* 半透明强调色边框 */
+  -webkit-backdrop-filter: blur(20px) saturate(180%); /* 主要按钮毛玻璃滤镜 */
+  backdrop-filter: blur(20px) saturate(180%);
 }
 
 /* 主要按钮悬停效果 */
 .btn-primary:hover {
-  background: var(--accent-hover);  /* 悬停时背景色变为强调悬停色 */
-  border-color: var(--accent-hover); /* 边框也跟着变 */
-  color: var(--text-inverse);        /* 保持反色文字 */
+  background: rgba(137, 180, 250, 0.55);  /* 悬停时强调色更明显 */
+  border-color: rgba(137, 180, 250, 0.5); /* 边框也跟着变 */
+  color: var(--text-primary);        /* 保持主文字色 */
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  backdrop-filter: blur(24px) saturate(200%);
 }
 
 /* ============================================================
@@ -186,8 +199,8 @@ pre,
   display: flex;         /* 弹性布局 */
   flex-direction: column; /* 列方向（从上到下排列子元素） */
   overflow: hidden;      /* 隐藏超出部分 */
-  background-image: var(--app-bg); /* 渐变底图，各面板的毛玻璃效果透出此背景 */
-  background-size: cover;      /* 渐变覆盖整个容器 */
+  background-color: transparent; /* 透明背景 - 壁纸层在下面，此处不需要背景 */
+  position: relative;    /* 相对定位，作为壁纸层的定位参考 */
 }
 
 /* ============================================================

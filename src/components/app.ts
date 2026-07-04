@@ -1,13 +1,19 @@
 /**
  * GitTimePrism 应用主框架组件
- * 负责创建整体的三栏布局结构并协调各子组件
+ *
+ * 负责创建整体的三栏布局结构并协调各子组件。
+ * 包含自定义标题栏（窗口拖拽、最小化/最大化/关闭）、
+ * 壁纸功能（选择壁纸后动态变色）、暗色/亮色主题切换等。
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { t } from '../services/i18n.js';
 import { GitInstaller } from './git-installer.js';
 import { TerminalPanel } from './terminal.js';
 import { repoService } from '../services/repo-service.js';
+import { wallpaperService } from '../services/wallpaper.js';
+import { themeEngine } from '../services/theme-engine.js';
 
 export class App {
   /** 工具栏 DOM 元素引用 */
@@ -26,13 +32,17 @@ export class App {
   private currentTheme: string = 'dark';
   /** 终端面板实例（xterm.js + PTY 交互） */
   private terminalInstance: TerminalPanel | null = null;
+  /** 当前是否已设置壁纸 */
+  private hasWallpaper: boolean = false;
 
   /** 初始化应用 */
   init(): void {
     this.render();
+    this.initTitlebar();
     this.initResizeHandles();
     this.initKeyboardShortcuts();
     this.initThemeToggle();
+    this.initWallpaper();
     this.checkGitInstallation();
   }
 
@@ -41,6 +51,17 @@ export class App {
     const app = document.getElementById('app');
     if (!app) return;
     app.innerHTML = `
+      <!-- 自定义标题栏 - 替代系统窗口边框，支持拖拽移动窗口 -->
+      <div class="titlebar" id="titlebar">
+        <div class="titlebar-drag" id="titlebar-drag">
+          <span class="titlebar-title">GitTimePrism</span>
+        </div>
+        <div class="titlebar-controls">
+          <button class="titlebar-btn titlebar-btn-minimize" id="btn-minimize" title="最小化">─</button>
+          <button class="titlebar-btn titlebar-btn-maximize" id="btn-maximize" title="最大化">□</button>
+          <button class="titlebar-btn titlebar-btn-close" id="btn-close" title="关闭">✕</button>
+        </div>
+      </div>
       <header class="toolbar" id="toolbar">
         <div class="toolbar-section" id="toolbar-left">
           <button class="btn" id="btn-open-repo">${t('toolbar.openRepo')}</button>
@@ -49,9 +70,12 @@ export class App {
         </div>
         <div class="toolbar-spacer"></div>
         <div class="toolbar-section" id="toolbar-right">
+          <button class="btn" id="btn-wallpaper" title="设置壁纸">🖼</button>
           <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`">${t('toolbar.toggleTerminal')}</button>
         </div>
       </header>
+      <!-- 壁纸层 - 显示用户选择的壁纸图片，位于所有面板之下 -->
+      <div class="wallpaper-layer" id="wallpaper-layer"></div>
       <div class="main-content">
         <aside class="sidebar" id="sidebar">
           <div class="panel-header"><span>${t('sidebar.repositories')}</span></div>
@@ -88,7 +112,7 @@ export class App {
         <div class="statusbar-item" id="statusbar-git-version">Git: ${t('statusbar.checking')}</div>
         <div class="statusbar-item" id="statusbar-repo-path"></div>
         <div class="statusbar-spacer"></div>
-        <!-- 切换终端按钮（从顶部 toolbar 迁移至此） -->
+        <!-- 切换终端按钮 -->
         <div class="statusbar-item" id="statusbar-terminal">
           <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('toolbar.toggleTerminal')}</button>
         </div>
@@ -97,6 +121,130 @@ export class App {
         </div>
       </footer>
     `;
+  }
+
+  /**
+   * 初始化自定义标题栏
+   *
+   * 因为设置了 decorations: false（无边框窗口），
+   * 需要自定义标题栏来提供窗口拖拽、最小化/最大化/关闭功能。
+   * 使用 Tauri 的 window API 来控制窗口行为。
+   */
+  private initTitlebar(): void {
+    // 获取当前 Tauri 窗口实例
+    const appWindow = getCurrentWindow();
+
+    // 标题栏拖拽区域 - 按住拖拽可移动窗口
+    const dragArea = document.getElementById('titlebar-drag');
+    if (dragArea) {
+      dragArea.addEventListener('mousedown', (e) => {
+        // 只响应左键（button === 0）
+        if (e.button === 0) {
+          // 开始拖拽窗口
+          appWindow.startDragging();
+        }
+      });
+
+      // 双击标题栏切换最大化/还原
+      dragArea.addEventListener('dblclick', () => {
+        appWindow.toggleMaximize();
+      });
+    }
+
+    // 最小化按钮
+    document.getElementById('btn-minimize')?.addEventListener('click', () => {
+      appWindow.minimize();
+    });
+
+    // 最大化/还原按钮
+    document.getElementById('btn-maximize')?.addEventListener('click', () => {
+      appWindow.toggleMaximize();
+    });
+
+    // 关闭按钮
+    document.getElementById('btn-close')?.addEventListener('click', () => {
+      appWindow.close();
+    });
+  }
+
+  /**
+   * 初始化壁纸功能
+   *
+   * 1. 尝试从 localStorage 加载之前保存的壁纸
+   * 2. 如果有壁纸，应用到壁纸层并启动动态变色
+   * 3. 绑定壁纸选择按钮
+   */
+  private initWallpaper(): void {
+    // 尝试加载已保存的壁纸
+    const saved = wallpaperService.loadWallpaper();
+    if (saved && saved.dataUrl && saved.dominantColors.length > 0) {
+      // 应用已保存的壁纸
+      this.applyWallpaper(saved.dataUrl, saved.dominantColors);
+    }
+
+    // 绑定壁纸选择按钮 - 点击后打开文件选择对话框
+    document.getElementById('btn-wallpaper')?.addEventListener('click', async () => {
+      try {
+        const result = await wallpaperService.selectWallpaper();
+        if (result && result.dataUrl && result.dominantColors.length > 0) {
+          // 用户选择了新壁纸，应用它
+          this.applyWallpaper(result.dataUrl, result.dominantColors);
+        }
+      } catch (err) {
+        console.error('设置壁纸失败:', err);
+      }
+    });
+
+    // 绑定壁纸清除功能 - 右键壁纸按钮可清除壁纸
+    const btnWallpaper = document.getElementById('btn-wallpaper');
+    if (btnWallpaper) {
+      btnWallpaper.addEventListener('contextmenu', (e) => {
+        e.preventDefault(); // 阻止默认右键菜单
+        if (this.hasWallpaper) {
+          wallpaperService.clearWallpaper();
+          this.removeWallpaper();
+        }
+      });
+    }
+  }
+
+  /**
+   * 应用壁纸到界面
+   *
+   * 将壁纸图片设置为壁纸层的背景，
+   * 并使用动态变色引擎根据壁纸主色调更新所有UI组件的颜色。
+   *
+   * @param dataUrl - 壁纸图片的 base64 数据 URL
+   * @param colors - 从壁纸中提取的主色调列表
+   */
+  private applyWallpaper(dataUrl: string, colors: import('../services/wallpaper.js').DominantColor[]): void {
+    // 将壁纸图片应用到壁纸层
+    const wallpaperLayer = document.getElementById('wallpaper-layer');
+    if (wallpaperLayer) {
+      wallpaperLayer.style.backgroundImage = `url(${dataUrl})`;
+    }
+    // 标记当前有壁纸
+    this.hasWallpaper = true;
+    // 使用动态变色引擎根据壁纸主色调生成并应用主题
+    themeEngine.applyFromWallpaper(colors);
+  }
+
+  /**
+   * 移除壁纸，恢复默认渐变背景
+   *
+   * 清除壁纸层的背景图片，
+   * 并重置动态变色引擎恢复默认配色方案。
+   */
+  private removeWallpaper(): void {
+    // 清除壁纸层的背景图片
+    const wallpaperLayer = document.getElementById('wallpaper-layer');
+    if (wallpaperLayer) {
+      wallpaperLayer.style.backgroundImage = '';
+    }
+    // 标记当前没有壁纸
+    this.hasWallpaper = false;
+    // 重置动态变色引擎，恢复默认配色
+    themeEngine.resetToDefault();
   }
 
   /** 初始化面板拖拽调整大小功能 */
@@ -127,7 +275,6 @@ export class App {
     this.resizeHandle = handle;
     this.resizeDirection = handle.dataset.direction || 'horizontal';
     
-    // 找到要调整的目标面板
     const targetId = handle.dataset.target || '';
     if (targetId === 'terminal') {
       this.resizeTarget = document.getElementById('terminal-panel');
@@ -137,7 +284,6 @@ export class App {
 
     if (!this.resizeTarget) return;
 
-    // 记录起始位置
     this.resizeStartX = e.clientX;
     this.resizeStartY = e.clientY;
     this.resizeInitialSize = this.resizeDirection === 'horizontal'
@@ -155,7 +301,6 @@ export class App {
       ? e.clientX - this.resizeStartX
       : e.clientY - this.resizeStartY;
 
-    // 计算新尺寸（拖拽水平分割条时，向左拖表示减小宽度）
     let newSize: number;
     if (this.resizeDirection === 'horizontal') {
       newSize = this.resizeInitialSize - diff;
@@ -163,12 +308,10 @@ export class App {
       newSize = this.resizeInitialSize + diff;
     }
 
-    // 获取 min/max 限制
     const computedStyle = getComputedStyle(this.resizeTarget);
     const minSize = parseInt(computedStyle.getPropertyValue('min-width') || computedStyle.getPropertyValue('min-height') || '0');
     const maxSize = parseInt(computedStyle.getPropertyValue('max-width') || computedStyle.getPropertyValue('max-height') || '9999');
 
-    // 应用限制
     newSize = Math.max(minSize, Math.min(maxSize, newSize));
 
     if (this.resizeDirection === 'horizontal') {
@@ -203,11 +346,10 @@ export class App {
     document.getElementById('btn-close-terminal')?.addEventListener('click', () => this.toggleTerminal());
 
     // ---- 绑定仓库操作按钮 ----
-    // 打开仓库按钮：弹出文件选择对话框，选择一个目录后加载该 Git 仓库
     document.getElementById('btn-open-repo')?.addEventListener('click', async () => {
       try {
         const dir = await repoService.selectDirectory();
-        if (!dir) return; // 用户取消了选择
+        if (!dir) return;
         const info = await repoService.openRepo(dir);
         this.onRepoOpened(info);
       } catch (err) {
@@ -215,16 +357,13 @@ export class App {
       }
     });
 
-    // 克隆仓库按钮：弹出提示让用户输入 URL，然后选择保存目录
     document.getElementById('btn-clone-repo')?.addEventListener('click', async () => {
       try {
-        // 使用简单的 prompt 获取仓库 URL
         const url = prompt(t('repo.cloneUrlPrompt'));
-        if (!url) return; // 用户取消了输入
+        if (!url) return;
         const dir = await repoService.selectDirectory();
-        if (!dir) return; // 用户取消了选择
+        if (!dir) return;
         await repoService.cloneRepo(url, dir);
-        // 克隆完成后自动打开该仓库
         const info = await repoService.openRepo(dir);
         this.onRepoOpened(info);
       } catch (err) {
@@ -232,11 +371,10 @@ export class App {
       }
     });
 
-    // 初始化仓库按钮：选择一个目录，在该目录下执行 git init
     document.getElementById('btn-init-repo')?.addEventListener('click', async () => {
       try {
         const dir = await repoService.selectDirectory();
-        if (!dir) return; // 用户取消了选择
+        if (!dir) return;
         const info = await repoService.initRepo(dir);
         this.onRepoOpened(info);
       } catch (err) {
@@ -252,10 +390,8 @@ export class App {
     
     this.terminalVisible = !this.terminalVisible;
     if (this.terminalVisible) {
-      // 展开终端面板
       panel.classList.remove('hidden');
       panel.classList.remove('collapsed');
-      // 首次展开时初始化终端
       if (!this.terminalInstance) {
         const terminalBody = document.getElementById('terminal-body');
         if (terminalBody) {
@@ -264,21 +400,18 @@ export class App {
         }
       }
     } else {
-      // 折叠终端面板
       panel.classList.add('hidden');
     }
   }
 
   /** 初始化主题切换 */
   private initThemeToggle(): void {
-    // 从 localStorage 读取保存的主题偏好
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'light') {
       this.currentTheme = 'light';
       document.documentElement.setAttribute('data-theme', 'light');
     }
 
-    // 绑定切换按钮
     document.getElementById('btn-toggle-theme')?.addEventListener('click', () => {
       this.currentTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', this.currentTheme);
@@ -297,18 +430,15 @@ export class App {
 
   /**
    * 仓库打开后的 UI 更新回调
-   * 当用户打开/克隆/初始化仓库后，更新各个面板显示仓库信息
    * 
    * @param info - 从后端获取的仓库基本信息
    */
   private async onRepoOpened(info: import('../services/repo-service.js').RepoInfo): Promise<void> {
-    // 更新状态栏显示当前仓库路径
     const repoPathEl = document.getElementById('statusbar-repo-path');
     if (repoPathEl) {
       repoPathEl.textContent = info.path;
     }
 
-    // 更新 sidebar 显示分支列表
     try {
       const branches = await repoService.getBranches(info.path);
       const sidebarBody = document.getElementById('sidebar-body');
@@ -316,10 +446,9 @@ export class App {
         if (branches.local.length === 0) {
           sidebarBody.innerHTML = `<p style="color: var(--text-muted); padding: 16px; text-align: center;">${t('sidebar.noRepoOpen')}</p>`;
         } else {
-          // 显示分支列表
           sidebarBody.innerHTML = branches.local.map((b) => {
             const current = b.is_current ? 'style="color: var(--accent-color); font-weight: 600;"' : '';
-            const icon = b.is_current ? '&#9654;' : '&#9655;'; // 实心三角/空心三角
+            const icon = b.is_current ? '&#9654;' : '&#9655;';
             const aheadBehind = (b.ahead > 0 || b.behind > 0) ? ` <span style="color: var(--text-muted); font-size: var(--font-size-xs);">↑${b.ahead} ↓${b.behind}</span>` : '';
             return `<div ${current} style="padding: 6px 16px; cursor: pointer; border-bottom: 1px solid var(--divider);">${icon} ${b.name}${aheadBehind}</div>`;
           }).join('');
@@ -329,7 +458,6 @@ export class App {
       console.error('获取分支列表失败:', err);
     }
 
-    // 更新 center-panel 显示文件状态
     try {
       const status = await repoService.getRepoStatus(info.path);
       const centerBody = document.getElementById('center-body');
@@ -357,10 +485,7 @@ export class App {
     }
   }
 
-  /**
-   * 根据文件状态返回对应的图标字符
-   * 用于在文件列表中显示变更类型的直观标识
-   */
+  /** 根据文件状态返回对应的图标字符 */
   private getStatusIcon(status: string): string {
     switch (status) {
       case 'Modified': return '✎';

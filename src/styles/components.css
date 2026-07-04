@@ -19,6 +19,102 @@
  */
 
 /* ============================================================
+ * 自定义标题栏 (.titlebar)
+ * ============================================================
+ * 因为窗口设置了 decorations: false（无边框窗口），
+ * 需要自定义标题栏来提供窗口拖拽、最小化/最大化/关闭功能。
+ * 标题栏位于最顶部，包含应用名称和窗口控制按钮。
+ * 拖拽区域可以让用户移动窗口，双击可以切换最大化。
+ * ============================================================ */
+.titlebar {
+  display: flex;                              /* 弹性布局，子元素水平排列 */
+  align-items: center;                        /* 垂直居中 */
+  height: 32px;                               /* 标题栏高度 */
+  min-height: 32px;                           /* 最小高度，防止被压缩 */
+  background: var(--bg-tertiary);             /* 背景色（半透明） */
+  border-bottom: 1px solid var(--border);     /* 底部边框 */
+  padding: 0;                                 /* 无内边距 */
+  z-index: 200;                              /* 层级最高，确保在所有元素之上 */
+  /* 毛玻璃效果 - 标题栏半透明，透出壁纸 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* 标题栏拖拽区域 - 按住此区域可以拖动窗口 */
+.titlebar-drag {
+  flex: 1;                                    /* 占据所有剩余空间 */
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  padding: 0 12px;                            /* 左右内边距 */
+  cursor: default;                            /* 默认鼠标样式 */
+  -webkit-app-region: drag;                   /* 标记为窗口拖拽区域（Tauri/Chromium 专用） */
+}
+
+/* 标题栏中的应用名称 */
+.titlebar-title {
+  font-size: var(--font-size-sm);             /* 小字号 */
+  color: var(--text-secondary);               /* 次要文字色 */
+  font-weight: 500;                           /* 中等字重 */
+  pointer-events: none;                       /* 不响应鼠标事件，让拖拽区域正常工作 */
+}
+
+/* 标题栏右侧的窗口控制按钮容器 */
+.titlebar-controls {
+  display: flex;                              /* 弹性布局，按钮水平排列 */
+  align-items: center;                        /* 垂直居中 */
+  -webkit-app-region: no-drag;               /* 排除拖拽区域，确保按钮可点击 */
+}
+
+/* 标题栏控制按钮的基础样式（最小化/最大化/关闭） */
+.titlebar-btn {
+  width: 46px;                                /* 按钮宽度，与 Windows 标准一致 */
+  height: 32px;                               /* 按钮高度与标题栏同高 */
+  border: none;                               /* 无边框 */
+  background: transparent;                    /* 透明背景 */
+  color: var(--text-secondary);               /* 次要文字色 */
+  cursor: pointer;                            /* 鼠标变手型 */
+  font-size: 12px;                            /* 图标字号 */
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  justify-content: center;                    /* 水平居中 */
+  transition: background var(--transition-fast),
+              color var(--transition-fast);   /* 背景和文字色的过渡动画 */
+}
+
+/* 控制按钮悬停效果 */
+.titlebar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);      /* 半透明白色背景 */
+  color: var(--text-primary);                 /* 变亮文字色 */
+}
+
+/* 关闭按钮悬停 - 使用红色，这是 Windows 的标准行为 */
+.titlebar-btn-close:hover {
+  background: #e81123;                        /* 红色背景（Windows 关闭按钮标准色） */
+  color: #ffffff;                             /* 白色文字 */
+}
+
+/* ============================================================
+ * 壁纸层 (.wallpaper-layer)
+ * ============================================================
+ * 壁纸层位于所有面板之下，用于显示用户选择的壁纸图片。
+ * 当没有壁纸时，底层使用 CSS 变量 --app-bg 定义的渐变背景。
+ * 壁纸图片以覆盖方式（cover）填满整个窗口。
+ * ============================================================ */
+.wallpaper-layer {
+  position: fixed;                            /* 固定定位，覆盖整个窗口 */
+  top: 0;                                     /* 距顶部 0 */
+  left: 0;                                    /* 距左侧 0 */
+  width: 100%;                                /* 宽度占满 */
+  height: 100%;                               /* 高度占满 */
+  z-index: -1;                                /* 层级最低，在所有面板之下 */
+  background-image: var(--app-bg);            /* 默认渐变背景（无壁纸时） */
+  background-size: cover;                     /* 图片覆盖填满 */
+  background-position: center;                /* 图片居中 */
+  background-repeat: no-repeat;               /* 不重复 */
+  transition: background-image 0.5s ease;     /* 切换壁纸时的淡入淡出动画 */
+}
+
+/* ============================================================
  * 工具栏 (.toolbar)
  * ============================================================
  * 工具栏位于应用最顶部，包含各种操作按钮（如打开仓库、拉取、推送等）。
@@ -105,7 +201,9 @@
   flex-direction: column;   /* 子元素垂直排列 */
   display: flex;            /* 弹性布局 */
   overflow: hidden;         /* 隐藏超出部分 */
-  background: var(--bg-primary); /* 不透明主背景色，作为毛玻璃面板的透视底图 */
+  background: rgba(30, 30, 46, 0.25); /* 半透明主背景色，增强毛玻璃透视效果 */
+  -webkit-backdrop-filter: blur(12px) saturate(160%); /* 中间面板轻度毛玻璃效果 */
+  backdrop-filter: blur(12px) saturate(160%);
 }
 
 /* ============================================================
@@ -232,7 +330,7 @@
 /* 终端面板的头部 - 包含标题和关闭按钮 */
 .terminal-header {
   height: 30px;                                   /* 头部高度 */
-  background: var(--bg-secondary);                /* 背景色 */
+  background: rgba(24, 24, 37, 0.4);              /* 半透明头部背景，保持毛玻璃风格 */}
   border-bottom: 1px solid var(--border-subtle);   /* 底部弱化边框 */
   display: flex;                                  /* 弹性布局 */
   align-items: center;                            /* 垂直居中 */
@@ -256,17 +354,19 @@
  * 通用面板头部 (.panel-header)
  * ============================================================
  * 各个面板（侧边栏、详情面板等）的头部区域，包含标题和操作按钮。
-* ============================================================ */
+ * 使用半透明背景保持毛玻璃风格。
+ * ============================================================ */
 .panel-header {
   height: 32px;                                   /* 头部高度 */
   display: flex;                                  /* 弹性布局 */
   align-items: center;                            /* 垂直居中 */
   justify-content: space-between;                 /* 子元素两端对齐（标题在左，按钮在右） */
   padding: 0 12px;                                 /* 左右内边距 */
-  border-bottom: 1px solid var(--border-subtle);   /* 底部弱化边框 */
+  border-bottom: 1px solid rgba(69, 71, 90, 0.3);   /* 底部弱化边框 - 半透明 */
   font-size: var(--font-size-sm);                 /* 小字号 */
   color: var(--text-secondary);                    /* 次要文字色 */
   flex-shrink: 0;                                 /* 不允许被压缩 */
+  background: rgba(24, 24, 37, 0.3);              /* 半透明头部背景，保持毛玻璃风格 */
 }
 
 /* ============================================================
