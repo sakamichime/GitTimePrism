@@ -110,6 +110,7 @@ class ThemeEngine {
    * 2. 将两套变量写入 <style> 标签并添加到 <head> 中
    * 3. 暗色变量写在 :root 选择器中（默认生效）
    * 4. 亮色变量写在 [data-theme="light"] 选择器中（亮色模式切换时生效）
+   * 5. 有壁纸时，面板透明度设为 0.5（50%）
    *
    * @param colors - 壁纸的主色调列表（按权重降序排列）
    */
@@ -119,8 +120,8 @@ class ThemeEngine {
       return;
     }
 
-    // 生成动态主题变量（包含暗色和亮色两套）
-    const theme = this.generateTheme(colors);
+    // 生成动态主题变量（包含暗色和亮色两套，透明度 0.5）
+    const theme = this.generateTheme(colors, 0.5);
 
     // 将生成的 CSS 变量应用到页面
     this.applyThemeToDOM(theme);
@@ -155,9 +156,10 @@ class ThemeEngine {
    * - 边框色：背景色的略微变体
    *
    * @param colors - 壁纸的主色调列表
+   * @param panelOpacity - 面板透明度（0-1），有壁纸时 0.5，无壁纸时 0.8
    * @returns 动态主题变量集合（暗色 + 亮色）
    */
-  private generateTheme(colors: DominantColor[]): DynamicTheme {
+  private generateTheme(colors: DominantColor[], panelOpacity: number = 0.8): DynamicTheme {
     // 取权重最高的颜色作为强调色的来源
     const primaryColor = colors[0];
     // 将 RGB 转为 HSL，方便调整色相、饱和度、亮度
@@ -181,14 +183,16 @@ class ThemeEngine {
     const darkVars = this.generateDarkTheme(
       primaryH, primaryS, primaryL,
       secondaryH, secondaryS, secondaryL,
-      tertiaryH, tertiaryS, tertiaryL
+      tertiaryH, tertiaryS, tertiaryL,
+      panelOpacity
     );
 
     // ---- 生成亮色主题变量 ----
     const lightVars = this.generateLightTheme(
       primaryH, primaryS, primaryL,
       secondaryH, secondaryS, secondaryL,
-      tertiaryH, tertiaryS, tertiaryL
+      tertiaryH, tertiaryS, tertiaryL,
+      panelOpacity
     );
 
     return { dark: darkVars, light: lightVars };
@@ -212,20 +216,22 @@ class ThemeEngine {
    * @param tH - 第三色调色相
    * @param tS - 第三色调饱和度
    * @param tL - 第三色调亮度
+   * @param panelOpacity - 面板透明度（0-1），有壁纸时 0.5，无壁纸时 0.8
    * @returns 暗色主题的 CSS 变量键值对
    */
   private generateDarkTheme(
     pH: number, pS: number, pL: number,
     sH: number, sS: number, sL: number,
-    tH: number, tS: number, tL: number
+    tH: number, tS: number, tL: number,
+    panelOpacity: number = 0.8
   ): Record<string, string> {
     // ---- 背景色阶 ----
     // 主背景色：壁纸色相 + 低饱和度(15%) + 极低亮度(10%)
     const bgPrimary = this.hslToHex(pH, 15, 10);
-    // 次级背景色：略低于主背景亮度，用于毛玻璃面板（透明度 0.80 与 variables.css 一致）
-    const bgSecondary = `hsla(${pH}, 15%, 8%, 0.80)`;
-    // 三级背景色：更暗一点，用于毛玻璃栏（透明度 0.80 与 variables.css 一致）
-    const bgTertiary = `hsla(${pH}, 15%, 6%, 0.80)`;
+    // 次级背景色：略低于主背景亮度，用于毛玻璃面板（透明度由 panelOpacity 控制）
+    const bgSecondary = `hsla(${pH}, 15%, 8%, ${panelOpacity})`;
+    // 三级背景色：更暗一点，用于毛玻璃栏（透明度由 panelOpacity 控制）
+    const bgTertiary = `hsla(${pH}, 15%, 6%, ${panelOpacity})`;
     // 表面色：比主背景亮一些，用于按钮/输入框
     const bgSurface = this.hslToHex(pH, 12, 20);
     // 悬停背景色：比表面色更亮一点
@@ -343,20 +349,22 @@ class ThemeEngine {
    * @param tH - 第三色调色相
    * @param tS - 第三色调饱和度
    * @param tL - 第三色调亮度
+   * @param panelOpacity - 面板透明度（0-1），有壁纸时 0.5，无壁纸时 0.8
    * @returns 亮色主题的 CSS 变量键值对
    */
   private generateLightTheme(
     pH: number, pS: number, pL: number,
     sH: number, sS: number, sL: number,
-    tH: number, tS: number, tL: number
+    tH: number, tS: number, tL: number,
+    panelOpacity: number = 0.8
   ): Record<string, string> {
     // ---- 背景色阶 ----
     // 主背景色：壁纸色相 + 极低饱和度(8%) + 极高亮度(96%)
     const bgPrimary = this.hslToHex(pH, 8, 96);
-    // 次级背景色：略低亮度，用于毛玻璃面板（透明度 0.80 与 variables.css 一致）
-    const bgSecondary = `hsla(${pH}, 8%, 93%, 0.80)`;
-    // 三级背景色：更暗一点，用于毛玻璃栏（透明度 0.80 与 variables.css 一致）
-    const bgTertiary = `hsla(${pH}, 8%, 90%, 0.80)`;
+    // 次级背景色：略低亮度，用于毛玻璃面板（透明度由 panelOpacity 控制）
+    const bgSecondary = `hsla(${pH}, 8%, 93%, ${panelOpacity})`;
+    // 三级背景色：更暗一点，用于毛玻璃栏（透明度由 panelOpacity 控制）
+    const bgTertiary = `hsla(${pH}, 8%, 90%, ${panelOpacity})`;
     // 表面色：比主背景暗一些，用于按钮/输入框
     const bgSurface = this.hslToHex(pH, 6, 85);
     // 悬停背景色
