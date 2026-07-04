@@ -74,6 +74,37 @@ export class DiffViewer {
   }
 
   /**
+   * 显示暂存区文件的 diff
+   * 
+   * 获取暂存区与 HEAD 之间的差异，并显示指定文件的 diff。
+   * 用于查看已暂存但未提交的变更。
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 要查看的文件路径（相对于仓库根目录）
+   */
+  async showStagedDiff(repoPath: string, filePath: string): Promise<void> {
+    if (!this.container) return;
+
+    try {
+      // 获取暂存区 diff（包含所有暂存文件）
+      const diffResult = await repoService.getStagedDiff(repoPath);
+
+      // 查找指定文件的 diff
+      const fileDiff = diffResult.files.find(f => f.path === filePath);
+      if (!fileDiff) {
+        this.container.innerHTML = `<p style="color: var(--text-muted); padding: 16px;">该文件没有暂存的变更</p>`;
+        return;
+      }
+
+      // 渲染 diff
+      this.renderFileDiff(fileDiff);
+    } catch (err) {
+      console.error('获取暂存区 diff 失败:', err);
+      this.container.innerHTML = `<p style="color: var(--error); padding: 16px;">获取 diff 失败: ${err}</p>`;
+    }
+  }
+
+  /**
    * 显示提交的 diff
    *
    * 获取指定提交引入的所有文件变更，支持多文件标签栏切换。

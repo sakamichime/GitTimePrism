@@ -52,8 +52,8 @@ export class FileList {
   private containerId: string;
   /** 仓库路径 */
   private repoPath: string;
-  /** 文件选择回调函数 */
-  private onFileSelect: (path: string) => void;
+  /** 文件选择回调函数，参数为文件路径和是否已暂存 */
+  private onFileSelect: (path: string, isStaged: boolean) => void;
   /** 当前仓库状态 */
   private status: StatusEntry[] = [];
   /** 容器 DOM 元素引用 */
@@ -64,9 +64,9 @@ export class FileList {
    * 
    * @param containerId - 容器 DOM 元素的 ID
    * @param repoPath - 仓库路径
-   * @param onFileSelect - 文件选择回调函数，参数为文件路径
+   * @param onFileSelect - 文件选择回调函数，参数为文件路径和是否已暂存
    */
-  constructor(containerId: string, repoPath: string, onFileSelect: (path: string) => void) {
+  constructor(containerId: string, repoPath: string, onFileSelect: (path: string, isStaged: boolean) => void) {
     this.containerId = containerId;
     this.repoPath = repoPath;
     this.onFileSelect = onFileSelect;
@@ -217,11 +217,11 @@ export class FileList {
         });
       }
 
-      // 点击文件查看 diff
+      // 点击文件查看 diff - 传递文件路径和暂存状态，让 app.ts 决定调用哪种 diff 方法
       const fileInfo = item.querySelector('[data-action="view-diff"]');
       if (fileInfo) {
         fileInfo.addEventListener('click', () => {
-          this.onFileSelect(path);
+          this.onFileSelect(path, isStaged);
         });
       }
     }

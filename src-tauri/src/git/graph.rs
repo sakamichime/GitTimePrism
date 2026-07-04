@@ -146,7 +146,7 @@ fn parse_graph_output(output: &str) -> Vec<GraphCommit> {
             
             // 解析剩余字段
             let data_part = &trimmed[sep_pos..];
-            if let Some(commit) = parse_commit_data(graph_part, data_part) {
+            if let Some(commit) = parse_commit_data(&graph_part, data_part) {
                 commits.push(commit);
             }
         }

@@ -537,15 +537,26 @@ export class App {
   }
 
   /**
-   * 显示文件的 diff
+   * 显示文件 diff
+   * 
+   * 根据文件是否已暂存，调用不同的 diff 方法：
+   * - 已暂存文件：显示暂存区与 HEAD 之间的差异
+   * - 未暂存文件：显示工作区与暂存区之间的差异
    * 
    * @param filePath - 文件路径（相对于仓库根目录）
+   * @param isStaged - 文件是否已暂存
    */
-  private async showFileDiff(filePath: string): Promise<void> {
+  private async showFileDiff(filePath: string, isStaged: boolean): Promise<void> {
     if (!this.currentRepoPath || !this.diffViewer) return;
 
     try {
-      await this.diffViewer.showWorkdirDiff(this.currentRepoPath, filePath);
+      if (isStaged) {
+        // 已暂存文件：显示暂存区 diff
+        await this.diffViewer.showStagedDiff(this.currentRepoPath, filePath);
+      } else {
+        // 未暂存文件：显示工作区 diff
+        await this.diffViewer.showWorkdirDiff(this.currentRepoPath, filePath);
+      }
     } catch (err) {
       console.error('显示文件 diff 失败:', err);
     }
