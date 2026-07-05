@@ -348,13 +348,15 @@ export class FileList {
    * @param filePath - 要暂存的文件路径
    */
   private async handleStage(filePath: string): Promise<void> {
+    console.log('[FileList] 暂存文件:', filePath);
     try {
       await repoService.stageFile(this.repoPath, filePath);
       await this.refresh(); // 刷新列表
+      console.log('[FileList] 暂存成功，调用 onStagingChange 回调');
       // 通知父组件暂存状态变化，更新提交按钮状态
       if (this.onStagingChange) this.onStagingChange();
     } catch (err) {
-      console.error('暂存文件失败:', err);
+      console.error('[FileList] 暂存文件失败:', err);
       alert(`暂存文件失败: ${err}`);
     }
   }
@@ -365,13 +367,15 @@ export class FileList {
    * @param filePath - 要取消暂存的文件路径
    */
   private async handleUnstage(filePath: string): Promise<void> {
+    console.log('[FileList] 取消暂存文件:', filePath);
     try {
       await repoService.unstageFile(this.repoPath, filePath);
       await this.refresh(); // 刷新列表
+      console.log('[FileList] 取消暂存成功，调用 onStagingChange 回调');
       // 通知父组件暂存状态变化，更新提交按钮状态
       if (this.onStagingChange) this.onStagingChange();
     } catch (err) {
-      console.error('取消暂存失败:', err);
+      console.error('[FileList] 取消暂存失败:', err);
       alert(`取消暂存失败: ${err}`);
     }
   }
@@ -382,13 +386,15 @@ export class FileList {
    * 将所有未暂存的文件一次性添加到暂存区。
    */
   private async handleStageAll(): Promise<void> {
+    console.log('[FileList] 全部暂存');
     try {
       await repoService.stageAll(this.repoPath);
       await this.refresh(); // 刷新列表
+      console.log('[FileList] 全部暂存成功，调用 onStagingChange 回调');
       // 通知父组件暂存状态变化，更新提交按钮状态
       if (this.onStagingChange) this.onStagingChange();
     } catch (err) {
-      console.error('全部暂存失败:', err);
+      console.error('[FileList] 全部暂存失败:', err);
       alert(`全部暂存失败: ${err}`);
     }
   }

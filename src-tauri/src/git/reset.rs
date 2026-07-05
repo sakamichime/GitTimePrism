@@ -105,6 +105,28 @@ pub fn reset_hard(repo_path: &str, commit: &str) -> Result<(), GitError> {
 }
 
 /**
+ * 检查仓库是否有足够的提交可以撤销
+ *
+ * 执行 `git rev-parse --verify HEAD~1` 来验证 HEAD~1 是否存在。
+ * 如果仓库只有 1 个提交（或没有提交），HEAD~1 不存在，无法撤销。
+ *
+ * 参数：
+ * - repo_path: Git 仓库的根目录路径
+ *
+ * 返回：
+ * - Ok(true)：有足够的提交可以撤销（HEAD~1 存在）
+ * - Ok(false)：没有足够的提交（仓库为空或只有 1 个提交）
+ * - Err(GitError)：执行检查时出错
+ */
+fn can_reset(repo_path: &str) -> Result<bool, GitError> {
+    let result = run_git(repo_path, &["rev-parse", "--verify", "HEAD~1"]);
+    match result {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
+/**
  * 统一的 reset 入口函数
  *
  * 根据传入的 mode 字符串，自动调用对应的 reset 函数：
@@ -125,8 +147,17 @@ pub fn reset_hard(repo_path: &str, commit: &str) -> Result<(), GitError> {
  * 错误处理：
  * - 如果 mode 不是上述三个值之一，会返回 GitError::CommandFailed，
  *   错误消息中会提示合法的模式值
+ * - 如果仓库没有足够的提交可以撤销（只有 0 或 1 个提交），也会返回错误
  */
 pub fn reset_commit(repo_path: &str, mode: &str) -> Result<(), GitError> {
+    // 先检查是否有足够的提交可以撤销
+    if !can_reset(repo_path)? {
+        return Err(GitError::CommandFailed {
+            exit_code: -1,
+            message: "无法撤销：仓库中没有足够的提交记录（需要至少 2 个提交才能撤销）".to_string(),
+        });
+    }
+
     // 根据 mode 字符串分发到对应的具体实现函数
     match mode {
         // 软重置：撤销 commit，保留暂存

@@ -34,6 +34,8 @@ export class CommitInput {
   private textarea: HTMLTextAreaElement | null = null;
   /** 提交按钮 DOM 元素引用 */
   private submitBtn: HTMLButtonElement | null = null;
+  /** 提示文字 DOM 元素引用（告诉用户需要先暂存文件） */
+  private hintEl: HTMLElement | null = null;
   /** 是否正在提交中 */
   private isCommitting: boolean = false;
   /** 是否有暂存文件（只有暂存了才能提交） */
@@ -47,10 +49,12 @@ export class CommitInput {
    * @param onCommitSuccess - 提交成功回调函数
    */
   constructor(containerId: string, repoPath: string, onCommitSuccess: () => void) {
+    console.log('[CommitInput] 组件初始化，containerId:', containerId, 'repoPath:', repoPath);
     this.containerId = containerId;
     this.repoPath = repoPath;
     this.onCommitSuccess = onCommitSuccess;
     this.container = document.getElementById(containerId);
+    console.log('[CommitInput] container 元素存在:', !!this.container);
     this.render();
   }
 
@@ -60,7 +64,11 @@ export class CommitInput {
    * 创建多行文本输入框和提交按钮。
    */
   private render(): void {
-    if (!this.container) return;
+    console.log('[CommitInput] 开始渲染 DOM');
+    if (!this.container) {
+      console.error('[CommitInput] container 为 null，无法渲染');
+      return;
+    }
 
     this.container.innerHTML = `
       <div class="commit-input-container">
@@ -69,19 +77,26 @@ export class CommitInput {
           placeholder="输入提交消息..."
           rows="3"
         ></textarea>
-        <button class="btn btn-primary commit-submit-btn" disabled>
+        <button class="btn btn-primary commit-submit-btn" disabled title="请输入提交消息">
           提交
         </button>
+        <div class="commit-hint" style="font-size: var(--font-size-xs); color: var(--text-muted); padding: 4px 0; display: none;">
+          💡 提示：提交时会自动暂存所有修改的文件
+        </div>
       </div>
     `;
 
     // 保存 DOM 引用
     this.textarea = this.container.querySelector('.commit-message-input');
     this.submitBtn = this.container.querySelector('.commit-submit-btn');
+    this.hintEl = this.container.querySelector('.commit-hint');
+    
+    console.log('[CommitInput] DOM 引用检查 - textarea:', !!this.textarea, 'submitBtn:', !!this.submitBtn, 'hintEl:', !!this.hintEl);
 
     // 绑定提交按钮事件
     if (this.submitBtn) {
       this.submitBtn.addEventListener('click', () => this.handleSubmit());
+      console.log('[CommitInput] 提交按钮初始 disabled 状态:', this.submitBtn.disabled);
     }
 
     // 绑定文本框输入事件（启用/禁用按钮）
@@ -93,44 +108,66 @@ export class CommitInput {
   /**
    * 处理文本输入
    * 
-   * 根据文本框内容、暂存文件状态和提交状态启用或禁用提交按钮。
-   * 按钮启用条件：有文本内容 AND 有暂存文件 AND 不在提交中。
+   * 根据文本框内容和提交状态启用或禁用提交按钮。
+   * 按钮启用条件：有文本内容 AND 不在提交中。
+   * 注意：不再强制要求有暂存文件，因为 handleSubmit() 会自动暂存。
    */
   private handleInput(): void {
-    if (!this.submitBtn || !this.textarea) return;
+    console.log('[CommitInput] handleInput 开始执行');
+    if (!this.submitBtn || !this.textarea) {
+      console.error('[CommitInput] submitBtn 或 textarea 为 null');
+      return;
+    }
 
     // 检查是否有文本内容
     const hasContent = this.textarea.value.trim().length > 0;
+    console.log('[CommitInput] 状态检查 - hasContent:', hasContent, 'isCommitting:', this.isCommitting);
     
-    // 按钮启用条件：有文本内容 AND 有暂存文件 AND 不在提交中
-    this.submitBtn.disabled = !hasContent || !this.hasStagedFiles || this.isCommitting;
+    // 按钮启用条件：有文本内容 AND 不在提交中
+    // 不再要求 hasStagedFiles，因为 handleSubmit() 会自动暂存
+    const shouldDisable = !hasContent || this.isCommitting;
+    this.submitBtn.disabled = shouldDisable;
+    
+    // 更新按钮提示文字
+    if (this.submitBtn) {
+      this.submitBtn.title = shouldDisable ? '请输入提交消息' : '点击提交';
+    }
+    
+    console.log('[CommitInput] 按钮应该禁用:', shouldDisable, '实际 disabled:', this.submitBtn.disabled);
   }
 
   /**
    * 启用输入组件
    * 
-   * 当有暂存文件时调用，允许用户输入提交消息。
-   * 在重新检查按钮状态前先检查是否有暂存文件。
+   * 启用文本输入框，并立即检查按钮状态。
+   * 不再依赖 hasStagedFiles，因为提交时会自动暂存。
    */
   enable(): void {
+    console.log('[CommitInput] enable() 被调用');
     if (this.textarea) {
       this.textarea.disabled = false;
     }
-    // 只有在有暂存文件时才重新检查按钮状态
-    if (this.hasStagedFiles) {
-      this.handleInput(); // 重新检查按钮状态
-    }
+    // 立即检查按钮状态，让用户可以直接输入并提交
+    this.handleInput();
+    console.log('[CommitInput] 输入组件已启用，按钮状态已更新');
   }
 
   /**
    * 设置是否有暂存文件
    * 
    * 由外部调用，用于更新暂存文件状态。当状态改变时重新检查按钮状态。
+   * 如果没有暂存文件，显示提示文字告诉用户需要先暂存。
    * 
    * @param has - 是否有暂存文件
    */
   setHasStagedFiles(has: boolean): void {
+    console.log('[CommitInput] setHasStagedFiles 被调用，参数:', has, '当前 hasStagedFiles:', this.hasStagedFiles);
     this.hasStagedFiles = has;
+    // 显示或隐藏提示文字
+    if (this.hintEl) {
+      this.hintEl.style.display = has ? 'none' : 'block';
+      console.log('[CommitInput] 提示文字显示状态:', has ? '隐藏' : '显示');
+    }
     // 重新检查按钮状态
     this.handleInput();
   }
@@ -184,7 +221,8 @@ export class CommitInput {
   /**
    * 处理提交操作
    * 
-   * 验证提交消息，调用后端创建提交，处理成功/失败。
+   * 验证提交消息，如果没有暂存文件则自动暂存所有文件，
+   * 然后调用后端创建提交，处理成功/失败。
    */
   private async handleSubmit(): Promise<void> {
     if (!this.textarea || this.isCommitting) return;
@@ -199,6 +237,18 @@ export class CommitInput {
     this.setLoading(true);
 
     try {
+      // 如果没有暂存文件，自动暂存所有文件（方便用户操作）
+      if (!this.hasStagedFiles) {
+        console.log('[CommitInput] 没有暂存文件，自动暂存所有文件...');
+        await repoService.stageAll(this.repoPath);
+        console.log('[CommitInput] 自动暂存完成');
+        // 更新状态
+        this.hasStagedFiles = true;
+        if (this.hintEl) {
+          this.hintEl.style.display = 'none';
+        }
+      }
+
       // 调用后端创建提交
       const commitHash = await repoService.commitChanges(this.repoPath, message);
       console.log('提交成功:', commitHash);

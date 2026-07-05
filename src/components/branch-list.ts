@@ -214,6 +214,7 @@ export class BranchList {
    * 渲染下拉菜单的内容
    * 
    * 将分支列表数据渲染为 HTML，包括：
+   * - 创建新分支按钮
    * - 本地分支列表（带当前分支标记）
    * - 远程分支列表（如果有）
    * - 每个分支项包含分支名和最新提交信息
@@ -222,6 +223,15 @@ export class BranchList {
     if (!this.dropdown || !this.branchData) return;
 
     let html = '';
+
+    // 创建新分支按钮
+    html += `<div class="branch-section">`;
+    html += `<div class="branch-list">`;
+    html += `<div class="branch-item branch-create-new" data-action="create">`;
+    html += `<span class="branch-item-name">✨ 创建新分支</span>`;
+    html += `</div>`;
+    html += `</div>`;
+    html += `</div>`;
 
     // 本地分支列表
     if (this.branchData.local.length > 0) {
@@ -298,6 +308,7 @@ export class BranchList {
    * 
    * 点击分支项后，执行分支切换操作。
    * 如果点击的是当前分支，则不做任何操作。
+   * 如果点击的是"创建新分支"，则弹出输入框让用户输入分支名。
    */
   private bindBranchClickEvents(): void {
     if (!this.dropdown) return;
@@ -306,6 +317,14 @@ export class BranchList {
     branchItems.forEach((item) => {
       item.addEventListener('click', async (e) => {
         e.stopPropagation();
+
+        // 检查是否是"创建新分支"按钮
+        const action = item.getAttribute('data-action');
+        if (action === 'create') {
+          this.hideDropdown();
+          await this.handleCreateBranch();
+          return;
+        }
 
         // 从 data 属性获取分支名和是否是远程分支
         const branchName = item.getAttribute('data-branch-name');
@@ -323,6 +342,34 @@ export class BranchList {
         await this.handleBranchSwitch(branchName, isRemote);
       });
     });
+  }
+
+  /**
+   * 处理创建新分支
+   * 
+   * 弹出输入框让用户输入新分支名称，
+   * 然后调用后端创建分支并切换到新分支。
+   */
+  private async handleCreateBranch(): Promise<void> {
+    const branchName = prompt('请输入新分支名称：');
+    if (!branchName || !branchName.trim()) return;
+
+    const trimmedName = branchName.trim();
+
+    try {
+      // 调用后端创建分支并切换（git checkout -b）
+      await repoService.createAndCheckout(this.repoPath, trimmedName);
+      console.log('[BranchList] 创建分支成功:', trimmedName);
+
+      // 刷新分支列表
+      await this.refresh();
+
+      // 调用回调函数，刷新所有组件
+      this.onBranchChange();
+    } catch (err) {
+      console.error('[BranchList] 创建分支失败:', err);
+      alert(`创建分支失败: ${err}`);
+    }
   }
 
   /**

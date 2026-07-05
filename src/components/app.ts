@@ -591,6 +591,7 @@ export class App {
    * @param info - 从后端获取的仓库基本信息
    */
   private async onRepoOpened(info: RepoInfo): Promise<void> {
+    console.log('[App] onRepoOpened 开始执行，仓库路径:', info.path);
     // 保存当前仓库路径
     this.currentRepoPath = info.path;
 
@@ -604,6 +605,7 @@ export class App {
     const commitInputArea = document.getElementById('commit-input-area');
     if (commitInputArea) {
       commitInputArea.style.display = 'block';
+      console.log('[App] 提交输入区域已显示');
     }
 
     // 初始化 diff 视图组件（右侧面板）
@@ -612,17 +614,20 @@ export class App {
     if (detailBody) {
       this.diffViewer = new DiffViewer('detail-body');
       this.commitDetail = new CommitDetail('detail-body');
+      console.log('[App] diff 视图组件初始化完成');
     }
 
     // 初始化文件历史查看组件（右侧面板）
     // 复用 diffViewer 实例，点击历史中的提交时在该面板中显示 diff
     if (this.diffViewer) {
       this.fileHistory = new FileHistory('detail-body', this.diffViewer);
+      console.log('[App] 文件历史组件初始化完成');
     }
 
     // 初始化文件列表组件（左侧面板）
     // 传入文件历史回调：右键菜单点击"查看文件历史"时触发
     const fileListBody = document.getElementById('sidebar-body');
+    console.log('[App] sidebar-body 元素存在:', !!fileListBody);
     if (fileListBody) {
       this.fileList = new FileList('sidebar-body', info.path, (filePath, isStaged) => {
         // 点击文件时显示 diff，传递 isStaged 参数以区分暂存区/工作区 diff
@@ -632,39 +637,52 @@ export class App {
         this.showFileHistory(filePath);
       }, () => {
         // 暂存状态变化时，更新提交按钮状态
+        console.log('[App] 收到暂存状态变化通知，调用 updateCommitButtonState');
         this.updateCommitButtonState();
       });
       await this.fileList.refresh();
+      console.log('[App] FileList 组件初始化并刷新完成');
     }
 
     // 初始化提交输入组件（左侧面板底部）
     const commitInputBody = document.getElementById('commit-input-body');
+    console.log('[App] commit-input-body 元素存在:', !!commitInputBody);
     if (commitInputBody) {
       this.commitInput = new CommitInput('commit-input-body', info.path, () => {
         // 提交成功后刷新所有组件
+        console.log('[App] 提交成功回调被调用');
         this.refreshAllComponents();
       });
+      console.log('[App] CommitInput 组件初始化完成');
       this.commitInput.enable();
+      console.log('[App] CommitInput 组件已启用');
 
       // 检查是否有暂存文件，更新提交按钮状态
       try {
+        console.log('[App] 开始检查仓库状态，获取暂存文件信息');
         const status = await repoService.getRepoStatus(info.path);
         const hasStaged = status.entries.some(entry => entry.staged);
+        console.log('[App] 仓库状态检查完成，是否有暂存文件:', hasStaged);
         this.commitInput.setHasStagedFiles(hasStaged);
       } catch (err) {
-        console.error('获取仓库状态失败:', err);
+        console.error('[App] 获取仓库状态失败:', err);
         this.commitInput.setHasStagedFiles(false);
       }
     }
 
     // 初始化提交节点图组件（中间面板）
     const centerBody = document.getElementById('center-body');
+    console.log('[App] center-body 元素存在:', !!centerBody);
     if (centerBody) {
+      console.log('[App] 开始初始化 CommitGraph 组件');
       this.commitGraph = new CommitGraph('center-body', info.path, (commit) => {
         // 点击节点时显示提交详情
+        console.log('[App] 节点图节点被点击，hash:', commit.hash);
         this.showCommitDetail(commit);
       });
+      console.log('[App] CommitGraph 组件初始化完成，开始刷新');
       await this.commitGraph.refresh();
+      console.log('[App] CommitGraph 组件刷新完成');
     }
 
     // 初始化分支列表组件（工具栏）
@@ -676,6 +694,8 @@ export class App {
       });
       await this.branchList.refresh();
     }
+    
+    console.log('[App] onRepoOpened 执行完成');
   }
 
   /**

@@ -94,16 +94,25 @@ pub fn get_commit_graph(repo_path: &str, count: u32) -> Result<CommitGraph, GitE
     }
     
     let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let output = run_git(repo_path, &args_refs)?;
+    let output = run_git(repo_path, &args_refs);
     
-    // 解析输出
-    let commits = parse_graph_output(&output.stdout);
-    let total_count = commits.len() as u32;
-    
-    Ok(CommitGraph {
-        commits,
-        total_count,
-    })
+    // 如果 git log 失败（比如仓库还没有任何提交，或其他原因），
+    // 返回空的节点图而不是报错，避免前端显示"获取节点图失败"
+    // git log 失败的原因可能有很多：空仓库、无效引用、格式错误等
+    // 统一处理：任何 git log 失败都返回空节点图
+    match output {
+        Ok(out) => {
+            let commits = parse_graph_output(&out.stdout);
+            let total_count = commits.len() as u32;
+            Ok(CommitGraph { commits, total_count })
+        }
+        Err(GitError::CommandFailed { .. }) => {
+            // 任何 git log 命令失败（空仓库、无效引用、格式问题等），
+            // 都返回空节点图，让前端显示"暂无提交记录"
+            Ok(CommitGraph { commits: vec![], total_count: 0 })
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /**

@@ -53,16 +53,24 @@ export class CommitGraph {
    * 每次提交或切换分支后应调用此方法刷新显示。
    */
   async refresh(): Promise<void> {
-    if (!this.container) return;
+    console.log('[CommitGraph] refresh() 开始执行');
+    if (!this.container) {
+      console.error('[CommitGraph] container 为 null，无法刷新');
+      return;
+    }
 
     try {
       // 获取节点图数据（最近 50 条提交）
+      console.log('[CommitGraph] 开始获取节点图数据...');
       this.graphData = await repoService.getCommitGraph(this.repoPath, 50);
+      console.log('[CommitGraph] 节点图数据获取成功，提交数:', this.graphData.commits.length);
 
       // 渲染节点图
+      console.log('[CommitGraph] 开始渲染节点图...');
       this.render();
+      console.log('[CommitGraph] 节点图渲染完成');
     } catch (err) {
-      console.error('获取节点图失败:', err);
+      console.error('[CommitGraph] 获取节点图失败:', err);
       this.container.innerHTML = `<p style="color: var(--error); padding: 16px;">获取节点图失败</p>`;
     }
   }
