@@ -88,6 +88,14 @@ pub enum GitError {
      */
     #[error("UTF-8 编码错误: {0}")]
     Utf8Error(String),
+
+    /**
+     * 文件 I/O 错误
+     * 当读取或写入文件时发生错误
+     * 例如：文件不存在、权限不足等
+     */
+    #[error("文件 I/O 错误: {0}")]
+    Io(String),
 }
 
 /**

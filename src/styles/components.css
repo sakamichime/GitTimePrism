@@ -859,33 +859,73 @@
   -webkit-box-orient: vertical;               /* 垂直方向 */
 }
 
-/* 可视化节点图区域 */
-.commit-graph-visual {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+/* 节点图主体区域（包含所有行） */
+.commit-graph-body {
+  flex: 1;
+  overflow-y: auto;
 }
 
-/* 可视化节点图中的 SVG 圆点 */
-.commit-graph-visual svg circle.graph-node {
-  transition: r 0.15s ease;
-}
-
-/* 可视化节点图中的 SVG 圆点悬停效果 */
-.commit-graph-visual svg circle.graph-node:hover {
-  r: 7;
-}
-
-/* 提交信息行 */
-.commit-info-row {
+/* 一体化节点图行容器（左侧 SVG + 右侧文字） */
+.commit-graph-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
+  padding: 4px 12px;
   border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: background var(--transition-fast);
+}
+
+/* 节点图行悬停效果 */
+.commit-graph-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* 节点图行左侧 SVG 区域（圆点 + 分支线） */
+.commit-graph-row-visual {
+  display: flex;
+  align-items: center;
+}
+
+/* 节点图行右侧文字信息区域 */
+.commit-graph-row-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding-left: 12px;
   font-size: var(--font-size-sm);
+}
+
+/* 节点图行左侧文字（哈希 + 消息） */
+.commit-graph-row-info-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* 节点图行右侧文字（作者 + 日期） */
+.commit-graph-row-info-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 节点图行中的提交消息 */
+.commit-graph-row-info-left .commit-message {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* SVG 圆点悬停效果 */
+.commit-graph-row svg circle.graph-node:hover {
+  r: 7;
+  transition: r 0.15s ease;
 }
 
 /* 提交信息行悬停效果 */
@@ -1917,4 +1957,119 @@
 /* 菜单项文字 */
 .file-context-menu-text {
   flex: 1;                                    /* 占据剩余空间 */
+}
+
+/* ============================================================
+ * 左右分栏文件对比视图 (.diff-side-by-side)
+ * ============================================================
+ * 用于以左右分栏的方式显示文件差异对比。
+ * 左栏显示旧版本（如"工作树"或"暂存区"），右栏显示新版本。
+ * 两栏各占 50% 宽度，可以独立滚动，方便用户逐行对比。
+ *
+ * HTML 结构如下：
+ *   <div class="diff-side-by-side">
+ *     <div class="diff-pane">
+ *       <div class="diff-pane-header">工作树</div>
+ *       <div class="diff-pane-content">
+ *         <div class="diff-line diff-line-remove">
+ *           <span class="diff-line-number">1</span>
+ *           <span class="diff-line-content">- 被删除的行</span>
+ *         </div>
+ *         ...
+ *       </div>
+ *     </div>
+ *     <div class="diff-pane">
+ *       <div class="diff-pane-header">暂存区</div>
+ *       <div class="diff-pane-content">
+ *         <div class="diff-line diff-line-add">
+ *           <span class="diff-line-number">1</span>
+ *           <span class="diff-line-content">+ 新增的行</span>
+ *         </div>
+ *         ...
+ *       </div>
+ *     </div>
+ *   </div>
+ * ============================================================ */
+
+/* 左右分栏容器 - 将左右两栏水平排列，各占一半宽度 */
+/* 使用 flex 布局确保两栏等宽，高度占满父容器 */
+.diff-side-by-side {
+  display: flex;                              /* 弹性布局，子元素（两栏）水平排列 */
+  height: 100%;                               /* 高度占满父容器 */
+  overflow: hidden;                           /* 隐藏超出部分，滚动由子栏处理 */
+}
+
+/* 单栏容器 - 左右各一个，各占 50% 宽度 */
+/* 左栏带有右侧边框，用来与右栏分隔 */
+.diff-pane {
+  flex: 1;                                    /* 各占 50% 宽度（两栏等分） */
+  display: flex;                              /* 弹性布局，子元素垂直排列（标题栏 + 内容区） */
+  flex-direction: column;                     /* 子元素垂直排列：标题栏在上，内容区在下 */
+  min-width: 0;                               /* 允许收缩，防止内容溢出 */
+  overflow: hidden;                           /* 隐藏超出部分 */
+}
+
+/* 左栏的右侧边框 - 在左右两栏之间画一条分隔线 */
+/* 使用相邻兄弟选择器，只对第一个 .diff-pane 生效 */
+.diff-pane:first-child {
+  border-right: 1px solid var(--border);      /* 右侧边框，与右栏分隔 */
+}
+
+/* 分栏标题栏 - 显示"工作树"或"暂存区"等标题 */
+/* 使用 --bg-tertiary 背景色，与面板头部风格保持一致 */
+.diff-pane-header {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+  padding: 6px 12px;                          /* 内边距：上下 6px，左右 12px */
+  background: var(--bg-tertiary);             /* 使用第三级背景色（与面板头部一致） */
+  border-bottom: 1px solid var(--border);     /* 底部边框，与内容区分隔 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  font-weight: 600;                           /* 加粗，让标题更醒目 */
+  color: var(--text-primary);                 /* 主要文字色 */
+  flex-shrink: 0;                             /* 不允许被压缩，保持固定高度 */
+}
+
+/* 分栏内容区域 - 显示 diff 行内容，可以独立滚动 */
+/* 左右栏各自独立滚动，互不影响 */
+.diff-pane-content {
+  flex: 1;                                    /* 占据标题栏下方的所有剩余空间 */
+  overflow-y: auto;                           /* 内容超出时允许纵向滚动 */
+  overflow-x: auto;                           /* 内容超出时允许横向滚动（长行） */
+}
+
+/* ============================================================
+ * 左右分栏中的 diff 行样式
+ * ============================================================
+ * 以下样式用于左右分栏视图中的每一行代码。
+ * 每种行类型有不同的背景色，方便用户快速识别变更：
+ * - 新增行（绿色）：右栏中新增的代码
+ * - 删除行（红色）：左栏中被删除的代码
+ * - 上下文行（灰色）：未变更的代码，提供参考上下文
+ * ============================================================ */
+
+/* 分栏中的行号列 - 固定宽度，右对齐，显示行号 */
+/* 行号使用弱化颜色，不抢夺代码内容的注意力 */
+.diff-line-number {
+  width: 50px;                                /* 固定宽度 50px，确保左右栏行号列对齐 */
+  min-width: 50px;                            /* 最小宽度，防止被压缩 */
+  padding: 0 8px;                             /* 左右内边距 */
+  text-align: right;                          /* 右对齐，数字更美观 */
+  color: var(--text-muted);                   /* 弱化文字色，不抢眼 */
+  user-select: none;                          /* 禁止选中行号，避免复制时带入行号 */
+  font-family: var(--font-mono);              /* 等宽字体，确保数字宽度一致 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  line-height: 1.5;                           /* 行高 1.5，确保左右栏行高一致、行号对齐 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+}
+
+/* 分栏中的代码内容列 - 使用等宽字体显示代码 */
+/* 占据行号右侧的所有剩余空间 */
+.diff-line-content {
+  flex: 1;                                    /* 占据行号右侧的所有剩余空间 */
+  padding: 0 12px;                            /* 左右内边距 */
+  white-space: pre;                           /* 保持空格和换行，不自动折行 */
+  overflow-x: auto;                           /* 超出时允许横向滚动 */
+  font-family: var(--font-mono);              /* 等宽字体，代码对齐更整齐 */
+  font-size: var(--font-size-sm);             /* 小字号 */
+  line-height: 1.5;                           /* 行高 1.5，与行号列保持一致 */
 }

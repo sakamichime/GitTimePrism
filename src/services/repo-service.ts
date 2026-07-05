@@ -535,4 +535,40 @@ export const repoService = {
   async push(repoPath: string, remote: string, branch: string): Promise<string> {
     return await invoke<string>('push_changes', { repoPath, remote, branch });
   },
+
+  /**
+   * 获取工作树中文件的完整内容
+   * 直接读取工作目录中的文件
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 文件路径（相对于仓库根目录）
+   * @returns 文件内容
+   */
+  async getWorktreeFileContent(repoPath: string, filePath: string): Promise<string> {
+    return await invoke<string>('get_worktree_file_content', { repoPath, filePath });
+  },
+
+  /**
+   * 获取暂存区中文件的完整内容
+   * 使用 git show :file_path 获取暂存区中的文件内容
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 文件路径（相对于仓库根目录）
+   * @returns 文件内容
+   */
+  async getStagedFileContent(repoPath: string, filePath: string): Promise<string> {
+    return await invoke<string>('get_staged_file_content', { repoPath, filePath });
+  },
+
+  /**
+   * 获取 HEAD 提交中文件的完整内容
+   * 使用 git show HEAD:file_path 获取 HEAD 提交中的文件内容
+   * 
+   * @param repoPath - 仓库路径
+   * @param filePath - 文件路径（相对于仓库根目录）
+   * @returns 文件内容
+   */
+  async getHeadFileContent(repoPath: string, filePath: string): Promise<string> {
+    return await invoke<string>('get_head_file_content', { repoPath, filePath });
+  },
 };

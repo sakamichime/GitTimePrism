@@ -85,6 +85,10 @@ pub fn run() {
             // 远程操作命令（git pull 拉取更新、git push 推送提交）
             commands::remote::pull_changes,
             commands::remote::push_changes,
+            // 文件内容获取命令（工作树、暂存区、HEAD 版本）
+            commands::file_content::get_worktree_file_content,
+            commands::file_content::get_staged_file_content,
+            commands::file_content::get_head_file_content,
         ])
         
         // 注册终端 PTY 管理器为全局状态（所有命令都可以访问）

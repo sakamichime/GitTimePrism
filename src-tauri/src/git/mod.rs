@@ -75,3 +75,7 @@ pub mod pull;
 // 推送模块
 // 提供 git push 推送本地提交功能
 pub mod push;
+
+// 文件内容获取模块
+// 提供获取工作树、暂存区、HEAD 版本文件内容的功能
+pub mod file_content;
