@@ -47,6 +47,8 @@ export class App {
   private hasWallpaper: boolean = false;
   /** 当前打开的仓库路径 */
   private currentRepoPath: string | null = null;
+  /** 当前选中的提交哈希（用于返回按钮） */
+  private currentCommitHash: string | null = null;
   /** 文件变更列表组件实例 */
   private fileList: FileList | null = null;
   /** 提交输入组件实例 */
@@ -140,6 +142,15 @@ export class App {
           <div class="panel-body" id="detail-body">
             <p style="color: var(--text-muted); padding: 16px; text-align: center;">${t('detail.selectCommit')}</p>
           </div>
+        </aside>
+        <!-- 对比面板：左右分栏代码对比视图（默认隐藏，点击文件后弹出） -->
+        <div class="resize-handle resize-handle-vertical diff-panel-handle" data-target="diff-panel" data-direction="horizontal" id="diff-panel-handle" style="display: none;"></div>
+        <aside class="diff-panel" id="diff-panel" style="display: none;">
+          <div class="panel-header">
+            <span>代码对比</span>
+            <button class="btn btn-icon" id="btn-close-diff-panel" title="关闭对比面板" style="margin-left: auto; padding: 2px 8px;">✕</button>
+          </div>
+          <div class="panel-body" id="diff-viewer-body"></div>
         </aside>
       </div>
       <div class="resize-handle resize-handle-horizontal" data-target="terminal" data-direction="vertical"></div>
@@ -608,20 +619,37 @@ export class App {
       console.log('[App] 提交输入区域已显示');
     }
 
-    // 初始化 diff 视图组件（右侧面板）
-    // 必须在 FileList 和 FileHistory 之前初始化，因为它们需要引用 diffViewer
-    const detailBody = document.getElementById('detail-body');
-    if (detailBody) {
-      this.diffViewer = new DiffViewer('detail-body');
-      // 传入文件点击回调：点击提交详情中的文件时，显示左右分栏对比视图
-      this.commitDetail = new CommitDetail('detail-body', (filePath: string, commitHash: string) => {
-        this.showCommitFileDiff(filePath, commitHash);
+    // 初始化 diff 视图组件（对比面板）
+    // 使用 diff-viewer-body 作为容器，点击文件时在新面板中显示对比
+    const diffViewerBody = document.getElementById('diff-viewer-body');
+    if (diffViewerBody) {
+      // 传入返回回调：点击返回按钮时，隐藏对比面板
+      this.diffViewer = new DiffViewer('diff-viewer-body', () => {
+        this.hideDiffPanel();
       });
       console.log('[App] diff 视图组件初始化完成');
     }
 
-    // 初始化文件历史查看组件（右侧面板）
-    // 复用 diffViewer 实例，点击历史中的提交时在该面板中显示 diff
+    // 初始化提交详情组件（详情面板）
+    // 传入文件点击回调：点击提交详情中的文件时，在新面板中显示对比
+    const detailBody = document.getElementById('detail-body');
+    if (detailBody) {
+      this.commitDetail = new CommitDetail('detail-body', (filePath: string, commitHash: string) => {
+        this.showCommitFileDiff(filePath, commitHash);
+      });
+      console.log('[App] 提交详情组件初始化完成');
+    }
+
+    // 绑定对比面板关闭按钮
+    const closeDiffBtn = document.getElementById('btn-close-diff-panel');
+    if (closeDiffBtn) {
+      closeDiffBtn.addEventListener('click', () => {
+        this.hideDiffPanel();
+      });
+    }
+
+    // 初始化文件历史查看组件（详情面板）
+    // 点击历史中的提交时在该面板中显示 diff
     if (this.diffViewer) {
       this.fileHistory = new FileHistory('detail-body', this.diffViewer);
       console.log('[App] 文件历史组件初始化完成');
@@ -753,6 +781,9 @@ export class App {
   private async showCommitDetail(commit: GraphCommit): Promise<void> {
     if (!this.currentRepoPath || !this.commitDetail) return;
 
+    // 保存当前提交哈希，用于返回按钮
+    this.currentCommitHash = commit.hash;
+
     try {
       await this.commitDetail.showCommit(this.currentRepoPath, commit.hash);
     } catch (err) {
@@ -763,8 +794,9 @@ export class App {
   /**
    * 显示提交中某个文件的左右分栏对比视图
    * 
-   * 当用户在右侧提交详情面板中点击某个文件时调用，
-   * 左栏显示父提交的文件内容，右栏显示当前提交的文件内容。
+   * 当用户在提交详情面板中点击某个文件时调用，
+   * 弹出对比面板，左栏显示父提交的文件内容，右栏显示当前提交的文件内容。
+   * 提交详情面板保持不变。
    * 
    * @param filePath - 文件路径（相对于仓库根目录）
    * @param commitHash - 提交哈希值
@@ -772,11 +804,41 @@ export class App {
   private async showCommitFileDiff(filePath: string, commitHash: string): Promise<void> {
     if (!this.currentRepoPath || !this.diffViewer) return;
 
+    // 保存当前提交哈希，用于返回按钮
+    this.currentCommitHash = commitHash;
+
+    // 显示对比面板
+    this.showDiffPanel();
+
     try {
       await this.diffViewer.showCommitDiff(this.currentRepoPath, commitHash);
     } catch (err) {
       console.error('显示提交文件对比失败:', err);
     }
+  }
+
+  /**
+   * 显示对比面板（四栏布局）
+   * 
+   * 将隐藏的对比面板和拖拽手柄显示出来，形成四栏布局。
+   */
+  private showDiffPanel(): void {
+    const diffPanel = document.getElementById('diff-panel');
+    const diffHandle = document.getElementById('diff-panel-handle');
+    if (diffPanel) diffPanel.style.display = 'flex';
+    if (diffHandle) diffHandle.style.display = 'block';
+  }
+
+  /**
+   * 隐藏对比面板（恢复三栏布局）
+   * 
+   * 将对比面板和拖拽手柄隐藏，恢复原来的三栏布局。
+   */
+  private hideDiffPanel(): void {
+    const diffPanel = document.getElementById('diff-panel');
+    const diffHandle = document.getElementById('diff-panel-handle');
+    if (diffPanel) diffPanel.style.display = 'none';
+    if (diffHandle) diffHandle.style.display = 'none';
   }
 
   /**

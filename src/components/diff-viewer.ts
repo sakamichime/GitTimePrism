@@ -49,6 +49,8 @@ interface DiffLine {
 export class DiffViewer {
   /** 容器 DOM 元素的 ID */
   private containerId: string;
+  /** 返回回调函数，点击返回按钮时调用 */
+  private onBack: (() => void) | null;
   /** 当前正在显示的完整 diff 数据（包含所有文件），用于标签切换 */
   private currentDiffResult: DiffResult | null = null;
   /** 当前选中的文件索引（在 files 数组中的下标） */
@@ -64,9 +66,11 @@ export class DiffViewer {
    * 创建 diff 视图组件
    *
    * @param containerId - 容器 DOM 元素的 ID
+   * @param onBack - 返回回调函数（可选），点击返回按钮时调用
    */
-  constructor(containerId: string) {
+  constructor(containerId: string, onBack?: () => void) {
     this.containerId = containerId;
+    this.onBack = onBack || null;
   }
 
   /**
@@ -376,9 +380,12 @@ export class DiffViewer {
     // 构建 HTML
     let html = `
       <div class="diff-header">
-        <div class="diff-file-path">
-          <span class="diff-file-icon">📄</span>
-          <span class="diff-file-name">${this.escapeHtml(filePath)}</span>
+        <div class="diff-header-left">
+          ${this.onBack ? `<button class="diff-back-btn" id="diff-back-btn" title="返回详情">← 返回</button>` : ''}
+          <div class="diff-file-path">
+            <span class="diff-file-icon">📄</span>
+            <span class="diff-file-name">${this.escapeHtml(filePath)}</span>
+          </div>
         </div>
         <div class="diff-stats">
           <span class="diff-additions">+${additions}</span>
@@ -394,6 +401,9 @@ export class DiffViewer {
           <div class="diff-pane-content">
     `;
 
+    // 如果左栏内容为空且右栏有内容，说明是新文件
+    const isNewFile = leftContent.trim() === '' && rightContent.trim() !== '';
+
     // 渲染每一行到左栏
     for (const line of diffLines) {
       if (line.type === 'both') {
@@ -406,6 +416,15 @@ export class DiffViewer {
         // 新增行：左栏显示空行占位
         html += `<div class="diff-line diff-line-empty"><span class="diff-line-number"></span><span class="diff-line-content"></span></div>`;
       }
+    }
+
+    // 如果是新文件，在左栏显示提示
+    if (isNewFile && diffLines.length === 0) {
+      html += `<div class="diff-line diff-line-empty" style="padding: 16px; text-align: center; color: var(--text-muted);">
+        <span style="font-size: 24px;"></span><br/>
+        <span>此文件在父提交中不存在</span><br/>
+        <span style="font-size: 12px;">（新文件）</span>
+      </div>`;
     }
 
     html += `
@@ -440,6 +459,26 @@ export class DiffViewer {
     `;
 
     this.container.innerHTML = html;
+
+    // 绑定返回按钮点击事件
+    this.bindBackButton();
+  }
+
+  /**
+   * 绑定返回按钮的点击事件
+   * 
+   * 点击返回按钮时，调用 onBack 回调函数，
+   * 让用户可以回到之前的视图（如提交详情）。
+   */
+  private bindBackButton(): void {
+    if (!this.container || !this.onBack) return;
+
+    const backBtn = this.container.querySelector('#diff-back-btn');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        this.onBack!();
+      });
+    }
   }
 
   /**

@@ -148,53 +148,31 @@ fn parse_status_char(ch: char) -> Option<FileStatus> {
 /**
  * 获取仓库的完整状态信息
  * 
- * 执行 `git status --porcelain=v2` 命令，解析其输出，
+ * 执行 `git status --porcelain=v2 --branch` 命令，解析其输出，
  * 返回当前分支和所有文件的状态列表。
  * 
- * 执行步骤：
- * 1. 执行 git status --porcelain=v2 --branch 获取机器可读的状态信息
- * 2. 解析 # branch 行获取当前分支名
- * 3. 解析每个文件行（1 XY PATH 或 ? PATH）获取文件状态
- * 4. 将所有信息组装为 RepoStatus 结构体返回
- * 
- * 参数：
- * - repo_path: Git 仓库的根目录路径
- * 
- * 返回值：
- * - Ok(RepoStatus) - 状态查询成功，包含分支名和文件状态列表
- * - Err(GitError) - 查询失败（不是 Git 仓库、命令执行错误等）
- * 
- * porcelain v2 格式详细说明：
- * # branch.oid [commit_hash]      - 当前 HEAD 提交的哈希值
- * # branch.head [branch_name]    - 当前分支名
- * 1 XY SUB PATH                   - 已跟踪文件的状态
- *   X = 暂存区状态
- *   Y = 工作区状态
- *   SUB = 子模块信息（通常为空）
- *   PATH = 文件路径
- * ? PATH                         - 未跟踪文件
- * u XY SUB PATH                   - 未合并文件（有冲突）
+ * porcelain v2 完整格式:
+ * # branch.oid <commit_hash>
+ * # branch.head <branch_name>
+ * 1 XY SUB MH MI MW HH HI PATH
+ * ? PATH
+ * u XY SUB M1 M2 M3 H1 H2 PATH
  */
 pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
     // 执行 git status --porcelain=v2 --branch
-    // --porcelain=v2: 使用 v2 版本的机器可读格式
-    // --branch: 在输出中包含分支信息（# branch.head 行）
     let output = run_git(repo_path, &["status", "--porcelain=v2", "--branch"])?;
 
     // 初始化结果数据
-    let mut branch = String::from("unknown"); // 默认分支名
-    let mut entries: Vec<StatusEntry> = Vec::new(); // 文件状态条目列表
+    let mut branch = String::from("unknown");
+    let mut entries: Vec<StatusEntry> = Vec::new();
 
     // 逐行解析 git status 的输出
     for line in output.stdout.lines() {
-        // 跳过空行
         if line.is_empty() {
             continue;
         }
 
-        // 解析分支信息行
-        // 格式: # branch.head <branch_name>
-        // 这行告诉我们当前所在的分支名称
+        // 解析分支信息行: # branch.head <branch_name>
         if line.starts_with("# branch.head ") {
             branch = line
                 .strip_prefix("# branch.head ")
@@ -204,140 +182,94 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
             continue;
         }
 
-        // 解析未跟踪文件行
-        // 格式: ? <file_path>
-        // ? 表示这是一个未被 Git 跟踪的新文件
+        // 解析未跟踪文件行: ? <file_path>
         if line.starts_with("? ") {
             let path = line.strip_prefix("? ").unwrap_or("").trim().to_string();
             if !path.is_empty() {
                 entries.push(StatusEntry {
                     path,
                     status: FileStatus::Untracked,
-                    old_path: None,     // 未跟踪文件没有旧路径
-                    staged: false,       // 未跟踪文件不可能被暂存
+                    old_path: None,
+                    staged: false,
                 });
             }
             continue;
         }
 
-        // 解析已跟踪文件的状态行
-        // porcelain v2 完整格式: 1 <xy> <sub> <mH> <mI> <mW> <hH> <hI> <path>
-        // 示例: 1 M. N... 100644 100644 100644 abc1234 def5678 src/main.rs
-        // 字段说明：
-        //   1    = 条目类型（普通文件）
-        //   xy   = 两个状态码字符（x=暂存区状态, y=工作区状态）
-        //   sub  = 子模块信息（通常为 "..." 或 "N..."）
-        //   mH   = HEAD 中的文件模式（如 100644）
-        //   mI   = 暂存区中的文件模式（如 100644）
-        //   mW   = 工作区中的文件模式（如 100644）
-        //   hH   = HEAD 中的对象哈希
-        //   hI   = 暂存区中的对象哈希
-        //   path = 文件路径
+        // 解析已跟踪文件行: 1 XY SUB MH MI MW HH HI PATH
+        // 使用 split_whitespace() 自动处理多个空格
         if line.starts_with("1 ") {
-            // 去掉 "1 " 前缀，获取剩余部分
-            let rest = &line[2..];
+            let tokens: Vec<&str> = line.split_whitespace().collect();
+            
+            // 至少需要 9 个字段: 1 XY SUB MH MI MW HH HI PATH
+            if tokens.len() < 9 {
+                continue;
+            }
 
-            // 提取状态码（前两个字符）
-            // 例如 "M." 表示暂存区已修改，工作区未修改
-            //     ".M" 表示暂存区未修改，工作区已修改
-            //     "MM" 表示暂存区和工作区都已修改
-            let x_char = rest.chars().next().unwrap_or(' ');  // 暂存区状态码
-            let y_char = rest.chars().nth(1).unwrap_or(' '); // 工作区状态码
+            let xy = tokens[1];       // XY 状态码（2字符）
+            // tokens[2] = SUB (子模块信息，跳过)
+            // tokens[3] = MH (HEAD mode，跳过)
+            // tokens[4] = MI (暂存区 mode，跳过)
+            // tokens[5] = MW (工作区 mode，跳过)
+            // tokens[6] = HH (HEAD hash，跳过)
+            // tokens[7] = HI (暂存区 hash，跳过)
+            // tokens[8..] = PATH (可能包含空格)
 
-            // 判断文件是否已暂存
-            // 如果 x_char 不是 '.' 和 ' '，说明暂存区有变更
+            let x_char = xy.chars().next().unwrap_or(' ');
+            let y_char = xy.chars().nth(1).unwrap_or(' ');
             let staged = x_char != '.' && x_char != ' ';
 
-            // 确定文件的最终状态
-            // 优先使用暂存区状态（x），如果暂存区无变化则使用工作区状态（y）
             let status = if let Some(s) = parse_status_char(x_char) {
                 s
             } else if let Some(s) = parse_status_char(y_char) {
                 s
             } else {
-                // 两个状态码都无效，跳过此行
                 continue;
             };
 
-            // 解析文件路径部分
-            // 跳过 "XY" 状态码（2字符）和 "..." 子模块标记（1-3字符）
-            // 然后跳过 3 个 mode 字段和 2 个 hash 字段（共 5 个空格分隔的字段）
-            // 剩余部分就是文件路径
-            // 重命名/复制的文件格式为: <xy> <sub> <modes> <hashes> <old_path> -> <new_path>
-            let path_part = if rest.len() > 4 {
-                // 跳过 "XY..."（4个字符），然后跳过 mode 和 hash 字段
-                let after_xy_sub = &rest[4..];
-                // 跳过 5 个空格分隔的字段（3个mode + 2个hash）
-                let mut parts = after_xy_sub.splitn(6, ' ');
-                // 跳过前 5 个字段
-                for _ in 0..5 {
-                    if parts.next().is_none() {
-                        break;
-                    }
-                }
-                // 第 6 个部分是路径（可能包含空格，用剩余部分）
-                parts.next().unwrap_or("")
-            } else {
-                continue; // 行格式不正确，跳过
-            };
+            // 路径是第 9 个字段开始的所有内容（可能包含空格）
+            let path = tokens[8..].join(" ");
 
             // 检查是否是重命名/复制文件（包含 " -> " 分隔符）
-            if path_part.contains(" -> ") {
-                // 重命名/复制的文件：old_path -> new_path
-                let parts: Vec<&str> = path_part.splitn(2, " -> ").collect();
+            if path.contains(" -> ") {
+                let parts: Vec<&str> = path.splitn(2, " -> ").collect();
                 let old_path = parts[0].trim().to_string();
                 let new_path = parts[1].trim().to_string();
 
                 entries.push(StatusEntry {
-                    path: new_path,             // 当前路径（新路径）
-                    status,                     // 文件状态
-                    old_path: Some(old_path),   // 原始路径（旧路径）
+                    path: new_path,
+                    status,
+                    old_path: Some(old_path),
                     staged,
                 });
             } else {
-                // 普通文件（非重命名/复制）
-                let file_path = path_part.trim().to_string();
-                if !file_path.is_empty() {
-                    entries.push(StatusEntry {
-                        path: file_path,
-                        status,
-                        old_path: None,
-                        staged,
-                    });
-                }
+                entries.push(StatusEntry {
+                    path,
+                    status,
+                    old_path: None,
+                    staged,
+                });
             }
             continue;
         }
 
-        // 解析未合并文件行（合并冲突）
-        // 完整格式: u <xy> <sub> <m1> <m2> <m3> <h1> <h2> <path>
-        // 与 "1 " 格式类似，但前缀为 'u'
-        // 'u' 表示此文件有合并冲突，需要手动解决
+        // 解析未合并文件行: u XY SUB M1 M2 M3 H1 H2 PATH
         if line.starts_with("u ") {
-            let rest = &line[2..];
-            let x_char = rest.chars().next().unwrap_or(' ');
-            let y_char = rest.chars().nth(1).unwrap_or(' ');
+            let tokens: Vec<&str> = line.split_whitespace().collect();
+            
+            if tokens.len() < 9 {
+                continue;
+            }
 
-            // 合并冲突的文件视为部分已暂存
+            let xy = tokens[1];
+            let x_char = xy.chars().next().unwrap_or(' ');
+            let y_char = xy.chars().nth(1).unwrap_or(' ');
             let staged = x_char != '.' && x_char != ' ';
 
-            // 提取文件路径（跳过 XY + sub + 5个mode/hash字段）
-            let path_part = if rest.len() > 4 {
-                let after_xy_sub = &rest[4..];
-                let mut parts = after_xy_sub.splitn(6, ' ');
-                for _ in 0..5 {
-                    if parts.next().is_none() {
-                        break;
-                    }
-                }
-                parts.next().unwrap_or("")
-            } else {
-                continue;
-            };
+            let path = tokens[8..].join(" ");
 
-            // 处理可能的重命名情况
-            if path_part.contains(" -> ") {
-                let parts: Vec<&str> = path_part.splitn(2, " -> ").collect();
+            if path.contains(" -> ") {
+                let parts: Vec<&str> = path.splitn(2, " -> ").collect();
                 entries.push(StatusEntry {
                     path: parts[1].trim().to_string(),
                     status: FileStatus::Unmerged,
@@ -345,20 +277,16 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
                     staged,
                 });
             } else {
-                let file_path = path_part.trim().to_string();
-                if !file_path.is_empty() {
-                    entries.push(StatusEntry {
-                        path: file_path,
-                        status: FileStatus::Unmerged,
-                        old_path: None,
-                        staged,
-                    });
-                }
+                entries.push(StatusEntry {
+                    path,
+                    status: FileStatus::Unmerged,
+                    old_path: None,
+                    staged,
+                });
             }
             continue;
         }
     }
 
-    // 组装并返回完整的仓库状态
     Ok(RepoStatus { branch, entries })
 }

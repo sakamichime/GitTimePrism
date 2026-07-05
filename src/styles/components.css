@@ -244,6 +244,29 @@
 }
 
 /* ============================================================
+ * 对比面板 (.diff-panel)
+ * ============================================================
+ * 第四个面板，用于显示代码左右分栏对比视图。
+ * 默认隐藏，点击提交详情中的文件后弹出。
+ * 宽度可以通过拖拽手柄调整。
+ * ============================================================ */
+.diff-panel {
+  width: 500px;                                     /* 默认宽度 */
+  min-width: 300px;                                 /* 最小宽度 */
+  max-width: 800px;                                 /* 最大宽度 */
+  background: var(--bg-secondary);                  /* 背景色 */
+  border-left: 1px solid var(--border);             /* 左侧边框（与详情面板分隔） */
+  flex-shrink: 0;                                  /* 不允许被压缩 */
+  display: flex;                                   /* 弹性布局 */
+  flex-direction: column;                           /* 子元素垂直排列 */
+  overflow: hidden;                                 /* 隐藏超出部分 */
+  height: 100%;                                     /* 高度占满父容器 */
+  /* 毛玻璃效果 - 对比面板半透明 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* ============================================================
  * 垂直拖拽手柄 (.resize-handle-vertical)
  * ============================================================
  * 这是一个位于左右两个面板之间的细长条，用户可以拖动它来调整面板的宽度。
@@ -1958,6 +1981,79 @@
 /* 菜单项文字 */
 .file-context-menu-text {
   flex: 1;                                    /* 占据剩余空间 */
+}
+
+/* 分栏头部 - 包含返回按钮、文件路径和统计信息 */
+.diff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+/* 分栏头部左侧 - 包含返回按钮和文件路径 */
+.diff-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 返回按钮 - 点击返回到提交详情视图 */
+.diff-back-btn {
+  padding: 4px 12px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  transition: opacity var(--transition-fast);
+}
+
+.diff-back-btn:hover {
+  opacity: 0.8;
+}
+
+/* 分栏中的文件路径信息 */
+.diff-file-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.diff-file-icon {
+  font-size: 16px;
+}
+
+.diff-file-name {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分栏中的变更统计信息 */
+.diff-stats {
+  display: flex;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+}
+
+.diff-additions {
+  color: var(--success);
+}
+
+.diff-deletions {
+  color: var(--error);
 }
 
 /* ============================================================
