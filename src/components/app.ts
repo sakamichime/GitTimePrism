@@ -124,7 +124,7 @@ export class App {
             <div class="panel-body" id="commit-input-body"></div>
           </div>
         </aside>
-        <div class="resize-handle resize-handle-vertical" data-target="sidebar" data-direction="horizontal"></div>
+        <div class="resize-handle resize-handle-vertical" data-target="sidebar" data-direction="horizontal" data-side="left"></div>
         <!-- 中间面板：提交节点图 + 提交历史 -->
         <main class="center-panel" id="center-panel">
           <div class="panel-header"><span>提交历史</span></div>
@@ -135,7 +135,7 @@ export class App {
             </div>
           </div>
         </main>
-        <div class="resize-handle resize-handle-vertical" data-target="detail-panel" data-direction="horizontal"></div>
+        <div class="resize-handle resize-handle-vertical" data-target="detail-panel" data-direction="horizontal" data-side="right"></div>
         <!-- 右侧面板：文件 diff 对比视图 / 提交详情 -->
         <aside class="detail-panel" id="detail-panel">
           <div class="panel-header"><span>${t('detail.title')}</span></div>
@@ -144,7 +144,7 @@ export class App {
           </div>
         </aside>
         <!-- 对比面板：左右分栏代码对比视图（默认隐藏，点击文件后弹出） -->
-        <div class="resize-handle resize-handle-vertical diff-panel-handle" data-target="diff-panel" data-direction="horizontal" id="diff-panel-handle" style="display: none;"></div>
+        <div class="resize-handle resize-handle-vertical diff-panel-handle" data-target="diff-panel" data-direction="horizontal" data-side="right" id="diff-panel-handle" style="display: none;"></div>
         <aside class="diff-panel" id="diff-panel" style="display: none;">
           <div class="panel-header">
             <span>代码对比</span>
@@ -354,15 +354,22 @@ export class App {
 
   /** 拖拽中 */
   private onResize(e: MouseEvent): void {
-    if (!this.resizing || !this.resizeTarget) return;
+    if (!this.resizing || !this.resizeTarget || !this.resizeHandle) return;
     
     const diff = this.resizeDirection === 'horizontal'
       ? e.clientX - this.resizeStartX
       : e.clientY - this.resizeStartY;
 
+    // 使用 data-side 属性判断拖拽方向
+    // data-side="left"：目标面板在手柄左侧（如 sidebar），往右拖变大 → + diff
+    // data-side="right"：目标面板在手柄右侧（如 detail-panel），往右拖变小 → - diff
+    const side = this.resizeHandle.dataset.side || 'right';
+
     let newSize: number;
     if (this.resizeDirection === 'horizontal') {
-      newSize = this.resizeInitialSize - diff;
+      newSize = side === 'left'
+        ? this.resizeInitialSize + diff   // 左侧面板：往右拖变大
+        : this.resizeInitialSize - diff;  // 右侧面板：往右拖变小
     } else {
       newSize = this.resizeInitialSize + diff;
     }
@@ -370,6 +377,20 @@ export class App {
     const computedStyle = getComputedStyle(this.resizeTarget);
     const minSize = parseInt(computedStyle.getPropertyValue('min-width') || computedStyle.getPropertyValue('min-height') || '0');
     const maxSize = parseInt(computedStyle.getPropertyValue('max-width') || computedStyle.getPropertyValue('max-height') || '9999');
+
+    // 防止拖拽过头导致布局混乱：限制在合理范围内
+    // 同时确保不会超过父容器的可用空间
+    const parent = this.resizeTarget.parentElement;
+    if (parent && this.resizeDirection === 'horizontal') {
+      const parentWidth = parent.clientWidth;
+      // 保留其他面板的最小空间（每个面板至少 200px）
+      const siblings = Array.from(parent.children).filter(
+        (c) => c !== this.resizeTarget && !(c as HTMLElement).classList?.contains('resize-handle')
+      );
+      const siblingMinTotal = siblings.length * 200;
+      const maxAllowed = parentWidth - siblingMinTotal;
+      newSize = Math.min(newSize, maxAllowed);
+    }
 
     newSize = Math.max(minSize, Math.min(maxSize, newSize));
 

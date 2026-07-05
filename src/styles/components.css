@@ -251,9 +251,9 @@
  * 宽度可以通过拖拽手柄调整。
  * ============================================================ */
 .diff-panel {
-  width: 500px;                                     /* 默认宽度 */
-  min-width: 300px;                                 /* 最小宽度 */
-  max-width: 800px;                                 /* 最大宽度 */
+  width: 600px;                                     /* 默认宽度 */
+  min-width: 400px;                                 /* 最小宽度 */
+  max-width: 1200px;                                /* 最大宽度 */
   background: var(--bg-secondary);                  /* 背景色 */
   border-left: 1px solid var(--border);             /* 左侧边框（与详情面板分隔） */
   flex-shrink: 0;                                  /* 不允许被压缩 */
@@ -599,6 +599,7 @@
 /* diff 行 - 基础样式 */
 .diff-line {
   display: flex;                              /* 弹性布局 */
+  flex-wrap: nowrap;                          /* 不换行，长代码行允许横向滚动 */
   font-family: var(--font-mono);              /* 等宽字体 */
   font-size: var(--font-size-sm);             /* 小字号 */
   line-height: 1.5;                           /* 行高 */
@@ -2102,14 +2103,22 @@
   flex: 1;                                    /* 各占 50% 宽度（两栏等分） */
   display: flex;                              /* 弹性布局，子元素垂直排列（标题栏 + 内容区） */
   flex-direction: column;                     /* 子元素垂直排列：标题栏在上，内容区在下 */
-  min-width: 0;                               /* 允许收缩，防止内容溢出 */
+  min-width: 150px;                           /* 最小宽度，防止拖得太窄 */
   overflow: hidden;                           /* 隐藏超出部分 */
 }
 
-/* 左栏的右侧边框 - 在左右两栏之间画一条分隔线 */
-/* 使用相邻兄弟选择器，只对第一个 .diff-pane 生效 */
-.diff-pane:first-child {
-  border-right: 1px solid var(--border);      /* 右侧边框，与右栏分隔 */
+/* 左右分栏之间的可拖拽分隔条 */
+.diff-pane-divider {
+  width: 4px;                                 /* 4px 宽 */
+  background: var(--border);                  /* 边框色 */
+  cursor: col-resize;                         /* 鼠标变为水平调整大小的图标 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+  transition: background var(--transition-fast);
+  z-index: 10;                                /* 层级稍高，确保可点击 */
+}
+
+.diff-pane-divider:hover {
+  background: var(--accent);                  /* 悬停时变为强调色 */
 }
 
 /* 分栏标题栏 - 显示"工作树"或"暂存区"等标题 */

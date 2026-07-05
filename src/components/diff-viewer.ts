@@ -276,6 +276,9 @@ export class DiffViewer {
     if (allFiles.length > 1) {
       this.bindTabClickEvents();
     }
+
+    // 绑定分栏分隔条拖拽事件
+    this.bindDividerDrag();
   }
 
   /**
@@ -430,6 +433,8 @@ export class DiffViewer {
     html += `
           </div>
         </div>
+        <!-- 左右分栏之间的可拖拽分隔条 -->
+        <div class="diff-pane-divider" id="diff-pane-divider"></div>
         <!-- 右栏：新版本 -->
         <div class="diff-pane diff-pane-right">
           <div class="diff-pane-header">
@@ -462,6 +467,9 @@ export class DiffViewer {
 
     // 绑定返回按钮点击事件
     this.bindBackButton();
+
+    // 绑定分栏分隔条拖拽事件
+    this.bindDividerDrag();
   }
 
   /**
@@ -482,6 +490,61 @@ export class DiffViewer {
   }
 
   /**
+   * 绑定左右分栏分隔条的拖拽事件
+   * 
+   * 用户可以拖动分隔条来调整左右两栏的宽度比例。
+   * 拖拽时实时更新两栏的 flex 比例。
+   */
+  private bindDividerDrag(): void {
+    if (!this.container) return;
+
+    const divider = this.container.querySelector<HTMLElement>('#diff-pane-divider');
+    if (!divider) return;
+
+    let isDragging = false;
+    let startX = 0;
+    let leftPane: HTMLElement | null = null;
+    let rightPane: HTMLElement | null = null;
+    let containerWidth = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      startX = e.clientX;
+      leftPane = this.container?.querySelector('.diff-pane-left') as HTMLElement;
+      rightPane = this.container?.querySelector('.diff-pane-right') as HTMLElement;
+      containerWidth = this.container?.querySelector('.diff-side-by-side')?.clientWidth || 0;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !leftPane || !rightPane) return;
+
+      const diff = e.clientX - startX;
+      const newLeftWidth = leftPane.offsetWidth + diff;
+      const newRightWidth = rightPane.offsetWidth - diff;
+
+      // 限制每栏最小宽度为 150px
+      if (newLeftWidth < 150 || newRightWidth < 150) return;
+
+      // 使用 flex-basis 来调整比例
+      leftPane.style.flex = `0 0 ${newLeftWidth}px`;
+      rightPane.style.flex = `0 0 ${newRightWidth}px`;
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    divider.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  /**
    * 渲染分栏行数据为 HTML
    * 
    * 将 DiffLine 数组渲染为左右分栏的 HTML 结构。
@@ -492,8 +555,11 @@ export class DiffViewer {
   private renderDiffLines(diffLines: DiffLine[]): string {
     let html = `
       <div class="diff-side-by-side">
-        <!-- 左栏 -->
+        <!-- 左栏：父提交（旧版本） -->
         <div class="diff-pane diff-pane-left">
+          <div class="diff-pane-header">
+            <span class="diff-pane-title">父提交（旧版本）</span>
+          </div>
           <div class="diff-pane-content">
     `;
 
@@ -510,8 +576,13 @@ export class DiffViewer {
     html += `
           </div>
         </div>
-        <!-- 右栏 -->
+        <!-- 左右分栏之间的可拖拽分隔条 -->
+        <div class="diff-pane-divider" id="diff-pane-divider"></div>
+        <!-- 右栏：当前提交（新版本） -->
         <div class="diff-pane diff-pane-right">
+          <div class="diff-pane-header">
+            <span class="diff-pane-title">当前提交（新版本）</span>
+          </div>
           <div class="diff-pane-content">
     `;
 
