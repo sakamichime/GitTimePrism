@@ -342,6 +342,25 @@ export class App {
   private resizeStartX: number = 0;
   private resizeStartY: number = 0;
   private resizeInitialSize: number = 0;
+  /** 拖拽开始时容器的可用宽度（用于计算最大拖拽范围） */
+  private resizeContainerWidth: number = 0;
+  /** 拖拽开始时其他固定面板的总宽度（用于计算center-panel的剩余空间） */
+  private resizeOtherPanelsWidth: number = 0;
+
+  /**
+   * 获取所有水平排列的可调面板（sidebar, detail-panel, diff-panel）
+   * 不包括 center-panel（它是弹性的，自动填充剩余空间）
+   */
+  private getHorizontalPanels(): HTMLElement[] {
+    const panels: HTMLElement[] = [];
+    const sidebar = document.getElementById('sidebar');
+    const detail = document.getElementById('detail-panel');
+    const diff = document.getElementById('diff-panel');
+    if (sidebar) panels.push(sidebar);
+    if (detail) panels.push(detail);
+    if (diff && diff.style.display !== 'none') panels.push(diff);
+    return panels;
+  }
 
   /** 开始拖拽 */
   private startResize(e: MouseEvent, handle: HTMLElement): void {
@@ -357,13 +376,54 @@ export class App {
       this.resizeTarget = document.getElementById(targetId);
     }
 
-    if (!this.resizeTarget) return;
+    if (!this.resizeTarget) {
+      this.resizing = false;
+      return;
+    }
 
     this.resizeStartX = e.clientX;
     this.resizeStartY = e.clientY;
-    this.resizeInitialSize = this.resizeDirection === 'horizontal'
-      ? this.resizeTarget.offsetWidth
-      : this.resizeTarget.offsetHeight;
+
+    if (this.resizeDirection === 'horizontal') {
+      // 记录被拖拽面板的当前渲染宽度（包含border，因为box-sizing:border-box）
+      this.resizeInitialSize = this.resizeTarget.offsetWidth;
+
+      // 获取main-content容器宽度
+      const mainContent = document.querySelector('.main-content') as HTMLElement;
+      this.resizeContainerWidth = mainContent ? mainContent.offsetWidth : window.innerWidth;
+
+      // 计算其他固定面板（非center-panel）的宽度总和，以及handles宽度
+      const allPanels = this.getHorizontalPanels();
+      let fixedWidth = 0;
+      for (const p of allPanels) {
+        if (p !== this.resizeTarget) {
+          fixedWidth += p.offsetWidth;
+        }
+      }
+      // 加上所有resize-handle的宽度
+      const handles = mainContent?.querySelectorAll('.resize-handle-vertical') || [];
+      let handlesWidth = 0;
+      handles.forEach((h: Element) => {
+        const htmlH = h as HTMLElement;
+        if (htmlH.style.display !== 'none') {
+          handlesWidth += htmlH.offsetWidth;
+        }
+      });
+      this.resizeOtherPanelsWidth = fixedWidth + handlesWidth;
+
+      // 拖拽开始时，锁定所有可调面板的尺寸，防止flex自动重新分配
+      // 通过inline style设置flex-shrink:0; flex-grow:0; width明确值
+      for (const p of allPanels) {
+        p.style.flexShrink = '0';
+        p.style.flexGrow = '0';
+        // 如果面板还没有被JS设置过width（使用CSS默认值），用offsetWidth锁定
+        if (!p.style.width) {
+          p.style.width = `${p.offsetWidth}px`;
+        }
+      }
+    } else {
+      this.resizeInitialSize = this.resizeTarget.offsetHeight;
+    }
 
     handle.classList.add('active');
   }
@@ -376,43 +436,42 @@ export class App {
       ? e.clientX - this.resizeStartX
       : e.clientY - this.resizeStartY;
 
-    // 使用 data-side 属性判断拖拽方向
-    // data-side="left"：目标面板在手柄左侧（如 sidebar），往右拖变大 → + diff
-    // data-side="right"：目标面板在手柄右侧（如 detail-panel），往右拖变小 → - diff
-    const side = this.resizeHandle.dataset.side || 'right';
-
     let newSize: number;
     if (this.resizeDirection === 'horizontal') {
+      // 方向计算：
+      // data-side="left"：面板在手柄左边（如 sidebar）
+      //   → 鼠标往右(diff>0) → 面板变大 → newSize = initialSize + diff
+      // data-side="right"：面板在手柄右边（如 detail-panel, diff-panel）
+      //   → 鼠标往右(diff>0) → 手柄右移挤压右边面板 → 面板变小 → newSize = initialSize - diff
+      const side = this.resizeHandle.dataset.side || 'right';
       newSize = side === 'left'
-        ? this.resizeInitialSize + diff   // 左侧面板：往右拖变大
-        : this.resizeInitialSize - diff;  // 右侧面板：往右拖变小
-    } else {
-      newSize = this.resizeInitialSize + diff;
-    }
+        ? this.resizeInitialSize + diff
+        : this.resizeInitialSize - diff;
 
-    const computedStyle = getComputedStyle(this.resizeTarget);
-    const minSize = parseInt(computedStyle.getPropertyValue('min-width') || computedStyle.getPropertyValue('min-height') || '0');
-    const maxSize = parseInt(computedStyle.getPropertyValue('max-width') || computedStyle.getPropertyValue('max-height') || '9999');
+      // JS层面限制最小宽度：根据面板类型设置不同的最小值
+      // center-panel最小保留100px空间，保证主要内容区不被完全挤压
+      const centerMinWidth = 100;
+      let minSize = 100;
+      let maxSize = this.resizeContainerWidth - this.resizeOtherPanelsWidth - centerMinWidth;
+      
+      // sidebar有更合理的范围限制
+      if (this.resizeTarget.id === 'sidebar') {
+        minSize = 200;
+        const sidebarMax = 400;
+        if (maxSize > sidebarMax) maxSize = sidebarMax;
+      }
+      // detail-panel和diff-panel最小100px
+      
+      if (newSize < minSize) newSize = minSize;
+      if (newSize > maxSize) newSize = maxSize;
 
-    // 防止拖拽过头导致布局混乱：限制在合理范围内
-    // 同时确保不会超过父容器的可用空间
-    const parent = this.resizeTarget.parentElement;
-    if (parent && this.resizeDirection === 'horizontal') {
-      const parentWidth = parent.clientWidth;
-      // 保留其他面板的最小空间（每个面板至少 200px）
-      const siblings = Array.from(parent.children).filter(
-        (c) => c !== this.resizeTarget && !(c as HTMLElement).classList?.contains('resize-handle')
-      );
-      const siblingMinTotal = siblings.length * 200;
-      const maxAllowed = parentWidth - siblingMinTotal;
-      newSize = Math.min(newSize, maxAllowed);
-    }
-
-    newSize = Math.max(minSize, Math.min(maxSize, newSize));
-
-    if (this.resizeDirection === 'horizontal') {
+      // 使用 width 直接设置面板宽度（box-sizing:border-box 包含border）
+      // 因为已经在startResize中锁定了flex-shrink:0和flex-grow:0，
+      // flex不会自动重新分配空间，width就是最终渲染宽度
       this.resizeTarget.style.width = `${newSize}px`;
     } else {
+      newSize = this.resizeInitialSize + diff;
+      if (newSize < 100) newSize = 100;
       this.resizeTarget.style.height = `${newSize}px`;
     }
   }

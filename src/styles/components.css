@@ -176,10 +176,12 @@
  * 使用弹性布局实现三栏并列排列。
 * ============================================================ */
 .main-content {
-  display: flex;       /* 弹性布局，三栏水平排列 */
+  display: flex;       /* 弹性布局，面板水平排列 */
   flex: 1;             /* 占据剩余的所有垂直空间 */
-  overflow: hidden;    /* 隐藏超出部分 */
-  position: relative; /* 相对定位，作为内部绝对定位元素的参考 */
+  overflow: hidden;    /* 隐藏超出部分，不出现滚动条（避免干扰拖拽坐标计算） */
+  position: relative; /* 相对定位 */
+  flex-wrap: nowrap;  /* 禁止换行，确保面板始终水平排列 */
+  min-width: 0;       /* 允许收缩，防止flex子元素溢出 */
 }
 
 /* ============================================================
@@ -190,12 +192,14 @@
 * ============================================================ */
 .sidebar {
   width: var(--sidebar-width);                     /* 默认宽度 */
-  min-width: var(--sidebar-min-width);             /* 最小宽度（防止拖得太窄） */
-  max-width: var(--sidebar-max-width);             /* 最大宽度（防止拖得太宽） */
+  /* min-width和max-width由JS控制，避免CSS夹住JS拖拽导致灵敏度异常 */
+  min-width: 0;
+  /* 不设max-width */
   background: var(--bg-secondary);                 /* 背景色 */
   border-right: 1px solid var(--border);           /* 右侧边框（与中间面板分隔） */
   flex-direction: column;                           /* 子元素垂直排列 */
   flex-shrink: 0;                                   /* 不允许被压缩（保持设定宽度） */
+  flex-grow: 0;                                     /* 不允许自动增长 */
   display: flex;                                    /* 弹性布局 */
   overflow: hidden;                                 /* 隐藏超出部分 */
   /* 毛玻璃效果 - 侧边栏半透明，透出底层渐变背景 */
@@ -210,12 +214,14 @@
  * 它占据剩余的所有水平空间（flex: 1），是三栏中最主要的部分。
 * ============================================================ */
 .center-panel {
-  flex: 1;                  /* 占据所有剩余水平空间 */
-  min-width: 300px;         /* 最小宽度，确保内容不会挤得太窄 */
+  flex: 1;                  /* 占据所有剩余水平空间（弹性伸缩） */
+  min-width: 0;             /* 允许被压缩到0，由JS在拖拽时限制最小宽度 */
   flex-direction: column;   /* 子元素垂直排列 */
   display: flex;            /* 弹性布局 */
   overflow: hidden;         /* 隐藏超出部分 */
   background: var(--bg-secondary); /* 使用CSS变量，透明度由 --glass-opacity-panel 控制 */
+  flex-shrink: 1;           /* 允许收缩（这是唯一需要收缩的面板） */
+  flex-grow: 1;             /* 允许增长以填充剩余空间 */
   /* 毛玻璃效果 - 与侧边栏和详情面板保持一致 */
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
@@ -228,12 +234,13 @@
  * 宽度可以通过拖拽手柄调整。
 * ============================================================ */
 .detail-panel {
-  width: var(--detail-panel-width);                 /* 默认宽度 */
-  min-width: var(--detail-panel-min-width);         /* 最小宽度 */
-  max-width: var(--detail-panel-max-width);         /* 最大宽度 */
+  width: var(--detail-panel-width);                 /* 默认宽度（JS 未拖拽时的初始值） */
+  min-width: 0;                                     /* 不设最小宽度，由 JS 控制 */
+  /* 不设 max-width，避免 CSS 夹住 JS 拖拽（拖到一定程度就拖不了了） */
   background: var(--bg-secondary);                  /* 背景色 */
   border-left: 1px solid var(--border);             /* 左侧边框（与中间面板分隔） */
-  flex-shrink: 0;                                  /* 不允许被压缩 */
+  flex-shrink: 0;                                   /* 不允许被压缩，JS 完全控制宽度 */
+  flex-grow: 0;                                     /* 不允许自动增长 */
   display: flex;                                   /* 弹性布局 */
   flex-direction: column;                           /* 子元素垂直排列 */
   overflow: hidden;                                 /* 隐藏超出部分 */
@@ -251,12 +258,13 @@
  * 宽度可以通过拖拽手柄调整。
  * ============================================================ */
 .diff-panel {
-  width: 600px;                                     /* 默认宽度 */
-  min-width: 400px;                                 /* 最小宽度 */
-  max-width: 1200px;                                /* 最大宽度 */
+  width: 600px;                                     /* 默认宽度（JS 未拖拽时的初始值） */
+  min-width: 0;                                     /* 不设最小宽度，由 JS 控制 */
+  /* 不设 max-width，避免 CSS 夹住 JS 拖拽 */
   background: var(--bg-secondary);                  /* 背景色 */
   border-left: 1px solid var(--border);             /* 左侧边框（与详情面板分隔） */
-  flex-shrink: 0;                                  /* 不允许被压缩 */
+  flex-shrink: 0;                                   /* 不允许被压缩，JS 完全控制宽度 */
+  flex-grow: 0;                                     /* 不允许自动增长 */
   display: flex;                                   /* 弹性布局 */
   flex-direction: column;                           /* 子元素垂直排列 */
   overflow: hidden;                                 /* 隐藏超出部分 */
