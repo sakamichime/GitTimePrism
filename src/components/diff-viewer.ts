@@ -267,6 +267,45 @@ export class DiffViewer {
     // 从 hunks 构建分栏行
     const diffLines = this.hunksToDiffLines(fileDiff.hunks);
 
+    // 检测是否为二进制文件（hunks 为空且文件有变更，通常是二进制文件）
+    const isBinaryFile = fileDiff.hunks.length === 0 && (fileDiff.additions > 0 || fileDiff.deletions > 0);
+
+    if (isBinaryFile) {
+      const ext = fileDiff.path.split('.').pop()?.toUpperCase() || 'BINARY';
+      html += `
+        <div class="diff-side-by-side">
+          <div class="diff-pane diff-pane-left">
+            <div class="diff-pane-header">
+              <span class="diff-pane-title">父提交（旧版本）</span>
+            </div>
+            <div class="diff-pane-content" style="display:flex; align-items:center; justify-content:center; color: var(--text-muted);">
+              <div style="text-align:center;">
+                <div style="font-size:48px; margin-bottom:12px;">📦</div>
+                <div>二进制文件（.${ext.toLowerCase()}）</div>
+                <div style="font-size:12px; margin-top:4px;">无法显示文本对比</div>
+              </div>
+            </div>
+          </div>
+          <div class="diff-pane-divider"></div>
+          <div class="diff-pane diff-pane-right">
+            <div class="diff-pane-header">
+              <span class="diff-pane-title">当前提交（新版本）</span>
+            </div>
+            <div class="diff-pane-content" style="display:flex; align-items:center; justify-content:center; color: var(--text-muted);">
+              <div style="text-align:center;">
+                <div style="font-size:48px; margin-bottom:12px;">🖼️</div>
+                <div>二进制文件（.${ext.toLowerCase()}）</div>
+                <div style="font-size:12px; margin-top:4px;">无法显示文本对比</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      this.container.innerHTML = html;
+      this.bindDividerDrag();
+      return;
+    }
+
     // 渲染分栏内容
     html += this.renderDiffLines(diffLines);
 
@@ -371,6 +410,55 @@ export class DiffViewer {
 
     // 使用 Myers diff 算法进行行级别对比
     const diffLines = this.myersDiff(leftLines, rightLines);
+
+    // 检测是否为二进制文件
+    const isBinary = this.isBinaryContent(leftContent) || this.isBinaryContent(rightContent);
+
+    // 如果是二进制文件，显示提示信息而非乱码
+    if (isBinary) {
+      const ext = filePath.split('.').pop()?.toUpperCase() || 'BINARY';
+      let html = `
+        <div class="diff-header">
+          <div class="diff-header-left">
+            ${this.onBack ? `<button class="diff-back-btn" id="diff-back-btn" title="返回详情">← 返回</button>` : ''}
+            <div class="diff-file-path">
+              <span class="diff-file-icon"></span>
+              <span class="diff-file-name">${this.escapeHtml(filePath)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="diff-side-by-side">
+          <div class="diff-pane diff-pane-left">
+            <div class="diff-pane-header">
+              <span class="diff-pane-title">${this.escapeHtml(leftTitle)}</span>
+            </div>
+            <div class="diff-pane-content" style="display:flex; align-items:center; justify-content:center; color: var(--text-muted);">
+              <div style="text-align:center;">
+                <div style="font-size:48px; margin-bottom:12px;">️</div>
+                <div>二进制文件（.${ext.toLowerCase()}）</div>
+                <div style="font-size:12px; margin-top:4px;">无法显示文本对比</div>
+              </div>
+            </div>
+          </div>
+          <div class="diff-pane-divider"></div>
+          <div class="diff-pane diff-pane-right">
+            <div class="diff-pane-header">
+              <span class="diff-pane-title">${this.escapeHtml(rightTitle)}</span>
+            </div>
+            <div class="diff-pane-content" style="display:flex; align-items:center; justify-content:center; color: var(--text-muted);">
+              <div style="text-align:center;">
+                <div style="font-size:48px; margin-bottom:12px;">🖼️</div>
+                <div>二进制文件（.${ext.toLowerCase()}）</div>
+                <div style="font-size:12px; margin-top:4px;">无法显示文本对比</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      this.container.innerHTML = html;
+      this.bindBackButton();
+      return;
+    }
 
     // 统计新增/删除行数
     let additions = 0;
@@ -505,14 +593,20 @@ export class DiffViewer {
     let startX = 0;
     let leftPane: HTMLElement | null = null;
     let rightPane: HTMLElement | null = null;
-    let containerWidth = 0;
+    // 保存初始宽度，避免每次读取 offsetWidth 导致 diff 累加
+    let initialLeftWidth = 0;
+    let initialRightWidth = 0;
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true;
       startX = e.clientX;
       leftPane = this.container?.querySelector('.diff-pane-left') as HTMLElement;
       rightPane = this.container?.querySelector('.diff-pane-right') as HTMLElement;
-      containerWidth = this.container?.querySelector('.diff-side-by-side')?.clientWidth || 0;
+      // 记录初始宽度（基于百分比或像素）
+      if (leftPane && rightPane) {
+        initialLeftWidth = leftPane.offsetWidth;
+        initialRightWidth = rightPane.offsetWidth;
+      }
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
       e.preventDefault();
@@ -522,15 +616,19 @@ export class DiffViewer {
       if (!isDragging || !leftPane || !rightPane) return;
 
       const diff = e.clientX - startX;
-      const newLeftWidth = leftPane.offsetWidth + diff;
-      const newRightWidth = rightPane.offsetWidth - diff;
+      // 基于初始宽度计算，而非实时 offsetWidth（避免 diff 累加导致灵敏度异常）
+      const newLeftWidth = initialLeftWidth + diff;
+      const newRightWidth = initialRightWidth - diff;
+      const totalWidth = newLeftWidth + newRightWidth;
 
       // 限制每栏最小宽度为 150px
       if (newLeftWidth < 150 || newRightWidth < 150) return;
 
-      // 使用 flex-basis 来调整比例
-      leftPane.style.flex = `0 0 ${newLeftWidth}px`;
-      rightPane.style.flex = `0 0 ${newRightWidth}px`;
+      // 使用百分比 flex-basis，确保两栏总宽度始终等于容器宽度，不会产生空缺
+      const leftPercent = (newLeftWidth / totalWidth) * 100;
+      const rightPercent = (newRightWidth / totalWidth) * 100;
+      leftPane.style.flex = `0 0 ${leftPercent}%`;
+      rightPane.style.flex = `0 0 ${rightPercent}%`;
     };
 
     const onMouseUp = () => {
@@ -1008,6 +1106,24 @@ export class DiffViewer {
     html += this.renderDiffLines(diffLines);
 
     this.container.innerHTML = html;
+  }
+
+  /**
+   * 检测内容是否为二进制文件
+   * 
+   * 通过检测内容中是否包含 null 字节来判断（二进制文件的典型特征）。
+   * 
+   * @param content - 文件内容
+   * @returns 是否为二进制内容
+   */
+  private isBinaryContent(content: string): boolean {
+    if (!content) return false;
+    // 检测前 8KB 中是否有 null 字节
+    const sample = content.substring(0, 8192);
+    for (let i = 0; i < sample.length; i++) {
+      if (sample.charCodeAt(i) === 0) return true;
+    }
+    return false;
   }
 
   /**

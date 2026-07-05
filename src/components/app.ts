@@ -307,12 +307,28 @@ export class App {
     themeEngine.resetToDefault();
   }
 
-  /** 初始化面板拖拽调整大小功能 */
+  /** 初始化面板拖拽调整大小功能（使用事件委托） */
   private initResizeHandles(): void {
-    const handles = document.querySelectorAll<HTMLElement>('.resize-handle');
-    handles.forEach((handle) => {
-      handle.addEventListener('mousedown', (e) => this.startResize(e, handle));
-    });
+    // 使用事件委托：在 main-content 上监听 mousedown，
+    // 通过 e.target 判断是否点击了拖拽手柄。
+    // 这样即使 render() 重新生成 DOM，事件监听器也不会丢失。
+    const mainContent = document.querySelector('.main-content') as HTMLElement;
+    if (mainContent) {
+      mainContent.addEventListener('mousedown', ((e: MouseEvent) => {
+        const handle = (e.target as HTMLElement).closest('.resize-handle') as HTMLElement;
+        if (handle && handle.dataset.target) {
+          this.startResize(e, handle);
+        }
+      }) as EventListener);
+    }
+
+    // 终端面板的拖拽手柄在 main-content 外面，需要单独处理
+    const terminalHandle = document.querySelector('.resize-handle[data-target="terminal"]') as HTMLElement;
+    if (terminalHandle) {
+      terminalHandle.addEventListener('mousedown', ((e: MouseEvent) => {
+        this.startResize(e, terminalHandle);
+      }) as EventListener);
+    }
 
     document.addEventListener('mousemove', (e) => this.onResize(e));
     document.addEventListener('mouseup', () => this.stopResize());
