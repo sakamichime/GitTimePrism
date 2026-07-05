@@ -338,14 +338,16 @@ export class App {
   private resizing: boolean = false;
   private resizeHandle: HTMLElement | null = null;
   private resizeTarget: HTMLElement | null = null;
+  /** 拖拽时分隔条另一侧需要同时调整的兄弟面板（固定面板之间此消彼长时使用） */
+  private resizeSibling: HTMLElement | null = null;
   private resizeDirection: string = '';
   private resizeStartX: number = 0;
   private resizeStartY: number = 0;
   private resizeInitialSize: number = 0;
-  /** 拖拽开始时容器的可用宽度（用于计算最大拖拽范围） */
-  private resizeContainerWidth: number = 0;
-  /** 拖拽开始时其他固定面板的总宽度（用于计算center-panel的剩余空间） */
-  private resizeOtherPanelsWidth: number = 0;
+  /** 兄弟面板的初始宽度 */
+  private resizeSiblingInitialSize: number = 0;
+  /** 拖拽开始时 center-panel（弹性面板）的宽度，用于计算最大拖拽范围（当sibling是弹性面板时） */
+  private resizeCenterStartWidth: number = 0;
 
   /**
    * 获取所有水平排列的可调面板（sidebar, detail-panel, diff-panel）
@@ -368,6 +370,8 @@ export class App {
     this.resizing = true;
     this.resizeHandle = handle;
     this.resizeDirection = handle.dataset.direction || 'horizontal';
+    this.resizeSibling = null;
+    this.resizeSiblingInitialSize = 0;
     
     const targetId = handle.dataset.target || '';
     if (targetId === 'terminal') {
@@ -385,38 +389,47 @@ export class App {
     this.resizeStartY = e.clientY;
 
     if (this.resizeDirection === 'horizontal') {
-      // 记录被拖拽面板的当前渲染宽度（包含border，因为box-sizing:border-box）
+      // 记录被拖拽面板的当前渲染宽度
       this.resizeInitialSize = this.resizeTarget.offsetWidth;
 
-      // 获取main-content容器宽度
-      const mainContent = document.querySelector('.main-content') as HTMLElement;
-      this.resizeContainerWidth = mainContent ? mainContent.offsetWidth : window.innerWidth;
+      // 通过DOM遍历自动找到手柄左右相邻的元素，确定兄弟面板
+      // 分隔条的标准行为：控制左右两个相邻面板之间的空间分配
+      const prevEl = handle.previousElementSibling as HTMLElement | null;
+      const nextEl = handle.nextElementSibling as HTMLElement | null;
+      
+      // 判断target在左边还是右边，从而确定sibling是哪一边
+      let siblingEl: HTMLElement | null = null;
+      if (prevEl && this.resizeTarget === prevEl) {
+        // target是手柄左边的元素，sibling是右边的元素
+        siblingEl = nextEl;
+      } else if (nextEl && this.resizeTarget === nextEl) {
+        // target是手柄右边的元素，sibling是左边的元素
+        siblingEl = prevEl;
+      }
 
-      // 计算其他固定面板（非center-panel）的宽度总和，以及handles宽度
-      const allPanels = this.getHorizontalPanels();
-      let fixedWidth = 0;
-      for (const p of allPanels) {
-        if (p !== this.resizeTarget) {
-          fixedWidth += p.offsetWidth;
+      // 记录center-panel宽度（sibling是弹性面板时用于边界计算）
+      const centerPanel = document.getElementById('center-panel');
+      this.resizeCenterStartWidth = centerPanel ? centerPanel.offsetWidth : 0;
+
+      if (siblingEl) {
+        if (siblingEl.id === 'center-panel') {
+          // sibling是弹性面板(center-panel)：不需要手动调整，flex自动吸收空间
+          this.resizeSibling = null;
+        } else if (siblingEl.style.display !== 'none' && siblingEl.id) {
+          // sibling是固定面板：需要同时调整两个面板（此消彼长）
+          // 例如 diff手柄(detail/diff之间)：拖diff变大时detail需要变小
+          this.resizeSibling = siblingEl;
+          this.resizeSiblingInitialSize = siblingEl.offsetWidth;
         }
       }
-      // 加上所有resize-handle的宽度
-      const handles = mainContent?.querySelectorAll('.resize-handle-vertical') || [];
-      let handlesWidth = 0;
-      handles.forEach((h: Element) => {
-        const htmlH = h as HTMLElement;
-        if (htmlH.style.display !== 'none') {
-          handlesWidth += htmlH.offsetWidth;
-        }
-      });
-      this.resizeOtherPanelsWidth = fixedWidth + handlesWidth;
 
-      // 拖拽开始时，锁定所有可调面板的尺寸，防止flex自动重新分配
-      // 通过inline style设置flex-shrink:0; flex-grow:0; width明确值
-      for (const p of allPanels) {
+      // 拖拽开始时，锁定涉及到的面板尺寸，防止flex自动重新分配
+      const panelsToLock: HTMLElement[] = [this.resizeTarget];
+      if (this.resizeSibling) panelsToLock.push(this.resizeSibling);
+      for (const p of panelsToLock) {
         p.style.flexShrink = '0';
         p.style.flexGrow = '0';
-        // 如果面板还没有被JS设置过width（使用CSS默认值），用offsetWidth锁定
+        // 如果面板还没有被JS设置过width（使用CSS默认值），用offsetWidth锁定当前宽度
         if (!p.style.width) {
           p.style.width = `${p.offsetWidth}px`;
         }
@@ -448,27 +461,59 @@ export class App {
         ? this.resizeInitialSize + diff
         : this.resizeInitialSize - diff;
 
-      // JS层面限制最小宽度：根据面板类型设置不同的最小值
-      // center-panel最小保留100px空间，保证主要内容区不被完全挤压
-      const centerMinWidth = 100;
+      // 被拖拽面板的最小宽度
       let minSize = 100;
-      let maxSize = this.resizeContainerWidth - this.resizeOtherPanelsWidth - centerMinWidth;
-      
-      // sidebar有更合理的范围限制
       if (this.resizeTarget.id === 'sidebar') {
         minSize = 200;
-        const sidebarMax = 400;
-        if (maxSize > sidebarMax) maxSize = sidebarMax;
       }
-      // detail-panel和diff-panel最小100px
-      
-      if (newSize < minSize) newSize = minSize;
-      if (newSize > maxSize) newSize = maxSize;
 
-      // 使用 width 直接设置面板宽度（box-sizing:border-box 包含border）
-      // 因为已经在startResize中锁定了flex-shrink:0和flex-grow:0，
-      // flex不会自动重新分配空间，width就是最终渲染宽度
-      this.resizeTarget.style.width = `${newSize}px`;
+      if (this.resizeSibling) {
+        // ====== 情况1：sibling是固定面板（如detail和diff之间的手柄）======
+        // 两个固定面板之间此消彼长：target变多少，sibling反向变多少
+        // 两个面板总宽度保持不变，center-panel不受影响
+        let siblingNewSize = this.resizeSiblingInitialSize - (newSize - this.resizeInitialSize);
+        
+        // sibling最小宽度也是100px
+        const siblingMinSize = 100;
+        
+        // 边界检查：如果sibling被压到最小，限制target继续变大
+        if (siblingNewSize < siblingMinSize) {
+          const maxDelta = this.resizeSiblingInitialSize - siblingMinSize;
+          // target能增加的最大量 = sibling能减少的最大量
+          newSize = this.resizeInitialSize + maxDelta;
+          siblingNewSize = siblingMinSize;
+        }
+        
+        // 检查target最小宽度
+        if (newSize < minSize) {
+          newSize = minSize;
+          // target缩到最小时，sibling相应增大
+          siblingNewSize = this.resizeSiblingInitialSize + (this.resizeInitialSize - minSize);
+        }
+        
+        // 同时设置两个面板的宽度
+        this.resizeTarget.style.width = `${newSize}px`;
+        this.resizeSibling.style.width = `${siblingNewSize}px`;
+      } else {
+        // ====== 情况2：sibling是弹性面板(center-panel)，如sidebar和detail手柄 ======
+        // 只有target变化，center-panel自动吸收空间变化
+        // center-panel最小保留100px空间
+        const centerMinWidth = 100;
+        let maxSize = this.resizeCenterStartWidth + this.resizeInitialSize - centerMinWidth;
+        
+        // sidebar最大宽度限制
+        if (this.resizeTarget.id === 'sidebar') {
+          const sidebarMax = 400;
+          if (maxSize > sidebarMax) maxSize = sidebarMax;
+        }
+
+        // 应用最小/最大宽度限制
+        if (newSize < minSize) newSize = minSize;
+        if (newSize > maxSize) newSize = maxSize;
+
+        // 设置target宽度，center-panel通过flex:1自动调整
+        this.resizeTarget.style.width = `${newSize}px`;
+      }
     } else {
       newSize = this.resizeInitialSize + diff;
       if (newSize < 100) newSize = 100;
