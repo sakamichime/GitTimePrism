@@ -859,6 +859,65 @@
   -webkit-box-orient: vertical;               /* 垂直方向 */
 }
 
+/* 可视化节点图区域 */
+.commit-graph-visual {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* 可视化节点图中的 SVG 圆点 */
+.commit-graph-visual svg circle.graph-node {
+  transition: r 0.15s ease;
+}
+
+/* 可视化节点图中的 SVG 圆点悬停效果 */
+.commit-graph-visual svg circle.graph-node:hover {
+  r: 7;
+}
+
+/* 提交信息行 */
+.commit-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-size: var(--font-size-sm);
+}
+
+/* 提交信息行悬停效果 */
+.commit-info-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* 提交信息行左侧（哈希+消息） */
+.commit-info-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* 提交信息行右侧（作者+日期） */
+.commit-info-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 提交信息行中的消息文本 */
+.commit-info-left .commit-message {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ============================================================
  * 提交详情组件 (.commit-detail-*)
  * ============================================================

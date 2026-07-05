@@ -78,8 +78,13 @@ pub struct CommitGraph {
  */
 pub fn get_commit_graph(repo_path: &str, count: u32) -> Result<CommitGraph, GitError> {
     // 构建 format 字符串
-    // 使用 |||SEP||| 作为字段分隔符（极不可能出现在提交消息中）
-    let format_str = "%H|||SEP|||%h|||SEP|||%P|||SEP|||%an|||SEP|||%aI|||SEP|||%s";
+    // 使用 § (U+00A7) 作为字段分隔符，不会出现在正常提交数据中
+    // 与 |||SEP||| 不同，§ 是单字符，空字段不会产生多余元素
+    // 末尾加 %n 确保每个提交占一行（--pretty=format: 不会自动添加换行符）
+    let sep = "§";
+    let format_str = format!(
+        "%H{sep}%h{sep}%P{sep}%an{sep}%aI{sep}%s%n"
+    );
     let full_format = format!("--pretty=format:{}", format_str);
     
     // 构建参数列表
@@ -118,13 +123,20 @@ pub fn get_commit_graph(repo_path: &str, count: u32) -> Result<CommitGraph, GitE
 /**
  * 解析 git log --graph 的输出
  * 
- * 每行格式（带 |||SEP||| 分隔符）：
- * * commit_hash|||SEP|||short_hash|||SEP|||parent1 parent2|||SEP|||author|||SEP|||date|||SEP|||message
- * 
- * 或者纯图形线（无提交信息）：
+ * git log --graph 的实际输出格式（加了 %n 后每行一个提交）：
+ * ```
+ * * hash|||SEP|||short|||SEP|||parents|||SEP|||author|||SEP|||date|||SEP|||message
+ * |
+ * * hash|||SEP|||short|||SEP|||parents|||SEP|||author|||SEP|||date|||SEP|||message
  * |\
- * |/
- * | 
+ * * hash|||SEP|||short|||SEP|||parents|||SEP|||author|||SEP|||date|||SEP|||message
+ * ```
+ * 
+ * 图形线（*、|、|\ 等）和提交数据在同一行，用空格分隔。
+ * 纯图形线行（如单独的 |、|\）没有 |||SEP||| 分隔符，会被跳过。
+ * 
+ * 解析策略：逐行遍历，对包含 |||SEP||| 的行，
+ * 提取行首的图形线部分，然后解析剩余的提交数据字段。
  * 
  * 参数：
  * - output: git log --graph 的原始输出
@@ -141,26 +153,33 @@ fn parse_graph_output(output: &str) -> Vec<GraphCommit> {
             continue;
         }
         
-        // 检查是否包含提交信息（有 |||SEP||| 分隔符）
-        if trimmed.contains("|||SEP|||") {
-            // 提取图形线部分（在第一个 |||SEP||| 之前的内容）
-            let sep_pos = match trimmed.find("|||SEP|||") {
-                Some(pos) => pos,
-                None => continue,
-            };
-            
-            // 图形线是 commit 标记之前的部分
-            // 找到最后一个 * / \ | 等字符的位置
-            let graph_part = extract_graph_line(&trimmed[..sep_pos]);
-            
-            // 解析剩余字段
-            let data_part = &trimmed[sep_pos..];
-            if let Some(commit) = parse_commit_data(&graph_part, data_part) {
-                commits.push(commit);
-            }
+        // 检查是否包含提交数据（有 § 分隔符）
+        if !trimmed.contains('§') {
+            continue;
         }
-        // 纯图形线（如 |\, |/, | ）不需要单独存储，
-        // 它们会在前端渲染时与提交节点一起显示
+        
+        // 找到第一个 § 的位置
+        let sep_pos = match trimmed.find('§') {
+            Some(pos) => pos,
+            None => continue,
+        };
+        
+        // § 之前的部分包含图形线 + commit hash（如 "* 3a910037..." 或 "| * abc123..."）
+        let before_sep = &trimmed[..sep_pos];
+        
+        // 提取纯图形字符（如 "* "、"| * "）
+        let graph_part = extract_graph_line(before_sep);
+        
+        // hash 是图形线之后、§ 之前的部分
+        let hash = before_sep[graph_part.len()..].trim();
+        
+        // 构建完整的数据字符串：§hash§short_hash§parents§author§date§message
+        let data_part = &trimmed[sep_pos..];  // "§short_hash§parents§..."
+        let full_data = format!("§{}{}", hash, data_part);  // "§hash§short_hash§parents§..."
+        
+        if let Some(commit) = parse_commit_data(&graph_part, &full_data) {
+            commits.push(commit);
+        }
     }
     
     commits
@@ -263,21 +282,21 @@ fn extract_graph_line(prefix: &str) -> String {
  * - None - 格式不正确
  */
 fn parse_commit_data(graph_line: &str, data: &str) -> Option<GraphCommit> {
-    // 去掉开头的 |||SEP|||
-    let data = data.strip_prefix("|||SEP|||")?;
+    // 去掉开头的 § 分隔符
+    let data = data.strip_prefix('§')?;
     
-    // 分割字段
-    let parts: Vec<&str> = data.split("|||SEP|||").collect();
-    if parts.len() < 6 {
-        return None;
-    }
+    // 用 § 分割字段
+    // 格式：hash§short_hash§parents§author§date§message
+    // 当 parents 为空时，会出现 §§（连续分隔符），split 会产生空字符串元素
+    // 所以不能依赖固定索引，需要用 splitn 限制分割次数
+    let mut parts = data.splitn(6, '§');
     
-    let hash = parts[0].trim().to_string();
-    let short_hash = parts[1].trim().to_string();
-    let parents_str = parts[2].trim();
-    let author = parts[3].trim().to_string();
-    let date = parts[4].trim().to_string();
-    let message = parts[5].trim().to_string();
+    let hash = parts.next()?.trim().to_string();
+    let short_hash = parts.next()?.trim().to_string();
+    let parents_str = parts.next()?.trim();
+    let author = parts.next()?.trim().to_string();
+    let date = parts.next()?.trim().to_string();
+    let message = parts.next().unwrap_or("").trim().to_string();
     
     // 解析父提交列表（空格分隔）
     let parents: Vec<String> = if parents_str.is_empty() {
@@ -295,4 +314,44 @@ fn parse_commit_data(graph_line: &str, data: &str) -> Option<GraphCommit> {
         date,
         message,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_graph_output_single_commit() {
+        // 模拟 git log --graph 的实际输出（1 个提交，§ 分隔符）
+        let output = "* 3e10d417fc4b2c4be966918daaddb803d6fd09e3§3e10d41§§sakamichi§2026-07-05T07:28:13+08:00§初始化\n";
+        
+        let commits = parse_graph_output(output);
+        
+        assert_eq!(commits.len(), 1, "应该解析出 1 个提交");
+        assert_eq!(commits[0].short_hash, "3e10d41");
+        assert_eq!(commits[0].message, "初始化");
+        assert_eq!(commits[0].author, "sakamichi");
+        assert_eq!(commits[0].graph_line, "* ");
+        assert!(commits[0].parents.is_empty(), "初始提交应该没有父提交");
+    }
+
+    #[test]
+    fn test_parse_graph_output_multiple_commits() {
+        // 模拟多个提交的输出（§ 分隔符）
+        let output = "* 3a9100371e728a0db53caea3d2f898461c951bd0§3a91003§53f6c4a57fd580ca6cc2b61aaa3ebd724342e3e8§sakamichi§2026-07-05T08:43:31+08:00§feat: 新增分支创建功能\n|\n* 53f6c4a57fd580ca6cc2b61aaa3ebd724342e3e8§53f6c4a§a3e22a67f090fe3f309ad816f2500d0141121355§sakamichi§2026-07-05T06:30:07+08:00§feat: 实现提交按钮状态更新\n";
+        
+        let commits = parse_graph_output(output);
+        
+        assert_eq!(commits.len(), 2, "应该解析出 2 个提交");
+        assert_eq!(commits[0].short_hash, "3a91003");
+        assert_eq!(commits[1].short_hash, "53f6c4a");
+    }
+
+    #[test]
+    fn test_extract_graph_line() {
+        assert_eq!(extract_graph_line("* "), "* ");
+        assert_eq!(extract_graph_line("| * "), "| * ");
+        assert_eq!(extract_graph_line("|\\ "), "|\\ ");
+        assert_eq!(extract_graph_line("* 3e10d41"), "* ");
+    }
 }
