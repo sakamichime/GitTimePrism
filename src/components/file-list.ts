@@ -61,10 +61,19 @@ export class FileList {
   private onStagingChange: (() => void) | null;
   /** 当前仓库状态 */
   private status: StatusEntry[] = [];
-  /** 容器 DOM 元素引用 */
-  private container: HTMLElement | null = null;
   /** 右键菜单 DOM 元素 */
   private contextMenu: HTMLElement | null = null;
+
+  /**
+   * 获取容器 DOM 元素
+   * 
+   * 每次使用时重新查询 DOM，避免 app.render() 重新渲染后引用失效。
+   * 
+   * @returns 容器 DOM 元素，如果不存在则返回 null
+   */
+  private get container(): HTMLElement | null {
+    return document.getElementById(this.containerId);
+  }
 
   /**
    * 创建文件列表组件
@@ -86,7 +95,6 @@ export class FileList {
     this.onFileSelect = onFileSelect;
     this.onFileHistory = onFileHistory || null;
     this.onStagingChange = onStagingChange || null;
-    this.container = document.getElementById(containerId);
     // 初始化右键菜单
     this.initContextMenu();
   }

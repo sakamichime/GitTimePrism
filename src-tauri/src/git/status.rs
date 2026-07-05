@@ -221,13 +221,18 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
         }
 
         // 解析已跟踪文件的状态行
-        // 格式: 1 <xy> <sub> <path>   （普通文件）
-        // 或:   1 <xy> <sub> <old_path> <new_path>  （重命名/复制的文件）
-        // 第一个字符 '1' 表示这是一个普通条目
-        // xy: 两个状态码字符
-        //   x = 暂存区（索引）中的状态
-        //   y = 工作区中的状态
-        // sub: 子模块信息（对于非子模块文件为 '...' 或空）
+        // porcelain v2 完整格式: 1 <xy> <sub> <mH> <mI> <mW> <hH> <hI> <path>
+        // 示例: 1 M. N... 100644 100644 100644 abc1234 def5678 src/main.rs
+        // 字段说明：
+        //   1    = 条目类型（普通文件）
+        //   xy   = 两个状态码字符（x=暂存区状态, y=工作区状态）
+        //   sub  = 子模块信息（通常为 "..." 或 "N..."）
+        //   mH   = HEAD 中的文件模式（如 100644）
+        //   mI   = 暂存区中的文件模式（如 100644）
+        //   mW   = 工作区中的文件模式（如 100644）
+        //   hH   = HEAD 中的对象哈希
+        //   hI   = 暂存区中的对象哈希
+        //   path = 文件路径
         if line.starts_with("1 ") {
             // 去掉 "1 " 前缀，获取剩余部分
             let rest = &line[2..];
@@ -255,12 +260,23 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
             };
 
             // 解析文件路径部分
-            // 跳过 "XY" 状态码和 "..." 子模块标记
+            // 跳过 "XY" 状态码（2字符）和 "..." 子模块标记（1-3字符）
+            // 然后跳过 3 个 mode 字段和 2 个 hash 字段（共 5 个空格分隔的字段）
             // 剩余部分就是文件路径
-            // 重命名/复制的文件格式为: <xy> ... <old_path> -> <new_path>
+            // 重命名/复制的文件格式为: <xy> <sub> <modes> <hashes> <old_path> -> <new_path>
             let path_part = if rest.len() > 4 {
-                // 跳过 "XY..."（4个字符），获取路径部分
-                &rest[4..]
+                // 跳过 "XY..."（4个字符），然后跳过 mode 和 hash 字段
+                let after_xy_sub = &rest[4..];
+                // 跳过 5 个空格分隔的字段（3个mode + 2个hash）
+                let mut parts = after_xy_sub.splitn(6, ' ');
+                // 跳过前 5 个字段
+                for _ in 0..5 {
+                    if parts.next().is_none() {
+                        break;
+                    }
+                }
+                // 第 6 个部分是路径（可能包含空格，用剩余部分）
+                parts.next().unwrap_or("")
             } else {
                 continue; // 行格式不正确，跳过
             };
@@ -294,7 +310,8 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
         }
 
         // 解析未合并文件行（合并冲突）
-        // 格式: u <xy> <sub> <path>
+        // 完整格式: u <xy> <sub> <m1> <m2> <m3> <h1> <h2> <path>
+        // 与 "1 " 格式类似，但前缀为 'u'
         // 'u' 表示此文件有合并冲突，需要手动解决
         if line.starts_with("u ") {
             let rest = &line[2..];
@@ -304,9 +321,16 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
             // 合并冲突的文件视为部分已暂存
             let staged = x_char != '.' && x_char != ' ';
 
-            // 提取文件路径
+            // 提取文件路径（跳过 XY + sub + 5个mode/hash字段）
             let path_part = if rest.len() > 4 {
-                &rest[4..]
+                let after_xy_sub = &rest[4..];
+                let mut parts = after_xy_sub.splitn(6, ' ');
+                for _ in 0..5 {
+                    if parts.next().is_none() {
+                        break;
+                    }
+                }
+                parts.next().unwrap_or("")
             } else {
                 continue;
             };

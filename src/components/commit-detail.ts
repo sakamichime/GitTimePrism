@@ -30,17 +30,31 @@ import { repoService, type CommitInfo, type DiffResult } from '../services/repo-
 export class CommitDetail {
   /** 容器 DOM 元素的 ID */
   private containerId: string;
-  /** 容器 DOM 元素引用 */
-  private container: HTMLElement | null = null;
+  /** 文件点击回调函数，参数为文件路径和提交哈希 */
+  private onFileClick: ((filePath: string, commitHash: string) => void) | null;
+  /** 当前提交哈希（用于文件点击回调） */
+  private currentCommitHash: string | null = null;
 
   /**
    * 创建提交详情组件
    * 
    * @param containerId - 容器 DOM 元素的 ID
+   * @param onFileClick - 文件点击回调函数（可选），参数为文件路径和提交哈希
    */
-  constructor(containerId: string) {
+  constructor(containerId: string, onFileClick?: (filePath: string, commitHash: string) => void) {
     this.containerId = containerId;
-    this.container = document.getElementById(containerId);
+    this.onFileClick = onFileClick || null;
+  }
+
+  /**
+   * 获取容器 DOM 元素
+   * 
+   * 每次使用时重新查询 DOM，避免 app.render() 重新渲染后引用失效。
+   * 
+   * @returns 容器 DOM 元素，如果不存在则返回 null
+   */
+  private get container(): HTMLElement | null {
+    return document.getElementById(this.containerId);
   }
 
   /**
@@ -81,6 +95,7 @@ export class CommitDetail {
       }
 
       // 将提交元信息和文件变更数据一起传给渲染方法
+      this.currentCommitHash = commitHash;
       this.render(commitInfo, diffResult);
     } catch (err) {
       console.error('获取提交详情失败:', err);
@@ -278,7 +293,7 @@ export class CommitDetail {
       const statusText = file.is_new ? '新增' : file.is_deleted ? '删除' : file.is_renamed ? '重命名' : '修改';
 
       html += `
-        <div class="commit-file-item">
+        <div class="commit-file-item" data-file-path="${this.escapeHtml(file.path)}" style="cursor: pointer;">
           <!-- 文件状态图标 -->
           <span class="commit-file-icon">${icon}</span>
           <!-- 文件路径（鼠标悬停显示完整路径） -->
@@ -303,5 +318,27 @@ export class CommitDetail {
 
     // 将生成的 HTML 插入到容器中
     this.container.innerHTML = html;
+
+    // 绑定文件点击事件
+    this.bindFileClickEvents();
+  }
+
+  /**
+   * 绑定文件列表项的点击事件
+   * 
+   * 点击文件时，如果设置了 onFileClick 回调，则调用它来显示左右分栏对比视图。
+   */
+  private bindFileClickEvents(): void {
+    if (!this.container || !this.onFileClick || !this.currentCommitHash) return;
+
+    const fileItems = this.container.querySelectorAll('.commit-file-item');
+    for (const item of fileItems) {
+      const filePath = item.getAttribute('data-file-path');
+      if (filePath) {
+        item.addEventListener('click', () => {
+          this.onFileClick!(filePath, this.currentCommitHash!);
+        });
+      }
+    }
   }
 }

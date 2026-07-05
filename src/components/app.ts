@@ -613,7 +613,10 @@ export class App {
     const detailBody = document.getElementById('detail-body');
     if (detailBody) {
       this.diffViewer = new DiffViewer('detail-body');
-      this.commitDetail = new CommitDetail('detail-body');
+      // 传入文件点击回调：点击提交详情中的文件时，显示左右分栏对比视图
+      this.commitDetail = new CommitDetail('detail-body', (filePath: string, commitHash: string) => {
+        this.showCommitFileDiff(filePath, commitHash);
+      });
       console.log('[App] diff 视图组件初始化完成');
     }
 
@@ -754,6 +757,25 @@ export class App {
       await this.commitDetail.showCommit(this.currentRepoPath, commit.hash);
     } catch (err) {
       console.error('显示提交详情失败:', err);
+    }
+  }
+
+  /**
+   * 显示提交中某个文件的左右分栏对比视图
+   * 
+   * 当用户在右侧提交详情面板中点击某个文件时调用，
+   * 左栏显示父提交的文件内容，右栏显示当前提交的文件内容。
+   * 
+   * @param filePath - 文件路径（相对于仓库根目录）
+   * @param commitHash - 提交哈希值
+   */
+  private async showCommitFileDiff(filePath: string, commitHash: string): Promise<void> {
+    if (!this.currentRepoPath || !this.diffViewer) return;
+
+    try {
+      await this.diffViewer.showCommitDiff(this.currentRepoPath, commitHash);
+    } catch (err) {
+      console.error('显示提交文件对比失败:', err);
     }
   }
 

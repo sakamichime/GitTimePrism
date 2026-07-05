@@ -28,8 +28,6 @@ export class CommitInput {
   private repoPath: string;
   /** 提交成功回调函数 */
   private onCommitSuccess: () => void;
-  /** 容器 DOM 元素引用 */
-  private container: HTMLElement | null = null;
   /** 文本输入框 DOM 元素引用 */
   private textarea: HTMLTextAreaElement | null = null;
   /** 提交按钮 DOM 元素引用 */
@@ -40,6 +38,17 @@ export class CommitInput {
   private isCommitting: boolean = false;
   /** 是否有暂存文件（只有暂存了才能提交） */
   private hasStagedFiles: boolean = false;
+
+  /**
+   * 获取容器 DOM 元素
+   * 
+   * 每次使用时重新查询 DOM，避免 app.render() 重新渲染后引用失效。
+   * 
+   * @returns 容器 DOM 元素，如果不存在则返回 null
+   */
+  private get container(): HTMLElement | null {
+    return document.getElementById(this.containerId);
+  }
 
   /**
    * 创建提交输入组件
@@ -53,7 +62,6 @@ export class CommitInput {
     this.containerId = containerId;
     this.repoPath = repoPath;
     this.onCommitSuccess = onCommitSuccess;
-    this.container = document.getElementById(containerId);
     console.log('[CommitInput] container 元素存在:', !!this.container);
     this.render();
   }

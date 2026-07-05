@@ -31,8 +31,6 @@ import { DiffViewer } from './diff-viewer.js';
 export class FileHistory {
   /** 容器 DOM 元素的 ID */
   private containerId: string;
-  /** 容器 DOM 元素引用 */
-  private container: HTMLElement | null = null;
   /** diff 视图组件引用，用于显示提交的 diff */
   private diffViewer: DiffViewer;
   /** 当前仓库路径 */
@@ -46,8 +44,18 @@ export class FileHistory {
    */
   constructor(containerId: string, diffViewer: DiffViewer) {
     this.containerId = containerId;
-    this.container = document.getElementById(containerId);
     this.diffViewer = diffViewer;
+  }
+
+  /**
+   * 获取容器 DOM 元素
+   * 
+   * 每次使用时重新查询 DOM，避免 app.render() 重新渲染后引用失效。
+   * 
+   * @returns 容器 DOM 元素，如果不存在则返回 null
+   */
+  private get container(): HTMLElement | null {
+    return document.getElementById(this.containerId);
   }
 
   /**

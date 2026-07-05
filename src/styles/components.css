@@ -237,6 +237,7 @@
   display: flex;                                   /* 弹性布局 */
   flex-direction: column;                           /* 子元素垂直排列 */
   overflow: hidden;                                 /* 隐藏超出部分 */
+  height: 100%;                                     /* 高度占满父容器，确保 flex 子元素能正确计算高度 */
   /* 毛玻璃效果 - 详情面板半透明 */
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
@@ -2072,4 +2073,14 @@
   font-family: var(--font-mono);              /* 等宽字体，代码对齐更整齐 */
   font-size: var(--font-size-sm);             /* 小字号 */
   line-height: 1.5;                           /* 行高 1.5，与行号列保持一致 */
+}
+
+/* 分栏中的空行占位 - 用于对齐新增/删除行的空侧 */
+/* 例如：删除行时右栏显示空行，新增行时左栏显示空行 */
+.diff-line-empty {
+  background: transparent;                    /* 透明背景 */
+}
+
+.diff-line-empty .diff-line-number {
+  color: transparent;                         /* 隐藏空行的行号 */
 }

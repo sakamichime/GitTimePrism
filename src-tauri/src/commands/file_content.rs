@@ -5,6 +5,7 @@
  * 1. get_worktree_file_content - 获取工作树中文件的完整内容
  * 2. get_staged_file_content - 获取暂存区中文件的完整内容
  * 3. get_head_file_content - 获取 HEAD 提交中文件的完整内容
+ * 4. get_file_content_at_commit - 获取指定提交中文件的完整内容
  * 
  * 前端调用示例：
  * ```javascript
@@ -23,6 +24,13 @@
  * // 获取 HEAD 提交中的文件内容
  * const headContent = await invoke('get_head_file_content', {
  *   repoPath: '/path',
+ *   filePath: 'src/main.rs'
+ * });
+ * 
+ * // 获取指定提交中的文件内容
+ * const commitContent = await invoke('get_file_content_at_commit', {
+ *   repoPath: '/path',
+ *   commitHash: 'abc1234',
  *   filePath: 'src/main.rs'
  * });
  * ```
@@ -93,5 +101,29 @@ pub fn get_head_file_content(
     file_path: String,
 ) -> Result<String, String> {
     crate::git::file_content::get_head_file_content(&repo_path, &file_path)
+        .map_err(|e| e.to_string())
+}
+
+/**
+ * 获取指定提交中文件的完整内容
+ * 
+ * 使用 `git show <commit_hash>:file_path` 获取指定提交中的文件内容。
+ * 
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ * - commit_hash: 提交哈希值
+ * - file_path: 文件路径（相对于仓库根目录）
+ * 
+ * 返回值：
+ * - Ok(String) - 文件内容
+ * - Err(String) - 读取失败
+ */
+#[command]
+pub fn get_file_content_at_commit(
+    repo_path: String,
+    commit_hash: String,
+    file_path: String,
+) -> Result<String, String> {
+    crate::git::file_content::get_file_content_at_commit(&repo_path, &commit_hash, &file_path)
         .map_err(|e| e.to_string())
 }

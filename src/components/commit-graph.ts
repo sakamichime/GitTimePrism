@@ -29,8 +29,6 @@ export class CommitGraph {
   private repoPath: string;
   /** 节点选择回调函数 */
   private onCommitSelect: (commit: GraphCommit) => void;
-  /** 容器 DOM 元素引用 */
-  private container: HTMLElement | null = null;
   /** 当前节点图数据 */
   private graphData: CommitGraphData | null = null;
 
@@ -45,7 +43,17 @@ export class CommitGraph {
     this.containerId = containerId;
     this.repoPath = repoPath;
     this.onCommitSelect = onCommitSelect;
-    this.container = document.getElementById(containerId);
+  }
+
+  /**
+   * 获取容器 DOM 元素
+   * 
+   * 每次使用时重新查询 DOM，避免 app.render() 重新渲染后引用失效。
+   * 
+   * @returns 容器 DOM 元素，如果不存在则返回 null
+   */
+  private get container(): HTMLElement | null {
+    return document.getElementById(this.containerId);
   }
 
   /**

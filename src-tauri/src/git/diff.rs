@@ -204,10 +204,12 @@ fn parse_diff_output(diff_text: &str) -> Result<DiffResult, GitError> {
             }
 
             // 解析新旧文件路径
+            // diff --git a/file.txt b/file.txt
+            // parts[0]="diff", parts[1]="--git", parts[2]="a/file.txt", parts[3]="b/file.txt"
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 3 {
-                let old_path = parts[1].strip_prefix("a/").unwrap_or(parts[1]).to_string();
-                let new_path = parts[2].strip_prefix("b/").unwrap_or(parts[2]).to_string();
+            if parts.len() >= 4 {
+                let old_path = parts[2].strip_prefix("a/").unwrap_or(parts[2]).to_string();
+                let new_path = parts[3].strip_prefix("b/").unwrap_or(parts[3]).to_string();
                 
                 if old_path == "/dev/null" {
                     is_new = true;

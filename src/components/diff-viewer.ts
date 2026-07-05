@@ -49,8 +49,6 @@ interface DiffLine {
 export class DiffViewer {
   /** 容器 DOM 元素的 ID */
   private containerId: string;
-  /** 容器 DOM 元素引用 */
-  private container: HTMLElement | null = null;
   /** 当前正在显示的完整 diff 数据（包含所有文件），用于标签切换 */
   private currentDiffResult: DiffResult | null = null;
   /** 当前选中的文件索引（在 files 数组中的下标） */
@@ -69,7 +67,17 @@ export class DiffViewer {
    */
   constructor(containerId: string) {
     this.containerId = containerId;
-    this.container = document.getElementById(containerId);
+  }
+
+  /**
+   * 获取容器 DOM 元素
+   * 
+   * 每次使用时重新查询 DOM，避免 app.render() 重新渲染后引用失效。
+   * 
+   * @returns 容器 DOM 元素，如果不存在则返回 null
+   */
+  private get container(): HTMLElement | null {
+    return document.getElementById(this.containerId);
   }
 
   /**
@@ -185,6 +193,8 @@ export class DiffViewer {
    * 
    * 当提交涉及多个文件时，在顶部显示文件列表标签栏，
    * 标签栏下方显示当前选中文件的左右分栏对比内容。
+   * 
+   * 左栏显示父提交的文件内容，右栏显示当前提交的文件内容。
    */
   private async renderCommitDiffWithTabs(): Promise<void> {
     if (!this.container || !this.currentDiffResult || !this.currentRepoPath || !this.currentCommitHash) return;
@@ -194,18 +204,22 @@ export class DiffViewer {
 
     try {
       // 获取父提交和当前提交的文件内容
-      const parentRef = `${this.currentCommitHash}^`;
+      // 使用 git show <commit>:file_path 获取指定提交中的文件内容
       const [leftContent, rightContent] = await Promise.all([
-        // 使用 git show 获取父提交中的文件内容
-        repoService.getHeadFileContent(this.currentRepoPath, fileDiff.path).catch(() => ''),
-        // 使用 git show 获取当前提交中的文件内容
-        repoService.getHeadFileContent(this.currentRepoPath, fileDiff.path).catch(() => ''),
+        // 左栏：父提交的文件内容
+        repoService.getFileContentAtCommit(this.currentRepoPath, `${this.currentCommitHash}^`, fileDiff.path).catch(() => ''),
+        // 右栏：当前提交的文件内容
+        repoService.getFileContentAtCommit(this.currentRepoPath, this.currentCommitHash, fileDiff.path).catch(() => ''),
       ]);
 
-      // 注意：上面的 getHeadFileContent 只能获取 HEAD 的内容
-      // 对于提交 diff，我们需要使用不同的方式
-      // 暂时使用 diff hunks 来构建分栏视图
-      this.renderCommitSideBySide(fileDiff, files);
+      // 渲染左右分栏对比视图
+      this.renderSideBySideDiff(
+        leftContent,
+        rightContent,
+        `父提交 (${this.currentCommitHash.substring(0, 7)}^)`,
+        `当前提交 (${this.currentCommitHash.substring(0, 7)})`,
+        fileDiff.path
+      );
     } catch (err) {
       console.error('获取提交文件内容失败:', err);
       // 回退到使用 hunks 渲染

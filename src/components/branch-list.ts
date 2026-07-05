@@ -32,8 +32,6 @@ export class BranchList {
   private repoPath: string;
   /** 分支切换成功后的回调函数 */
   private onBranchChange: () => void;
-  /** 工具栏容器 DOM 元素引用 */
-  private toolbar: HTMLElement | null = null;
   /** 分支按钮 DOM 元素引用 */
   private branchButton: HTMLElement | null = null;
   /** 分支列表下拉菜单 DOM 元素引用 */
@@ -46,6 +44,17 @@ export class BranchList {
   private dropdownVisible: boolean = false;
 
   /**
+   * 获取工具栏容器 DOM 元素
+   * 
+   * 每次使用时重新查询 DOM，避免 app.render() 重新渲染后引用失效。
+   * 
+   * @returns 工具栏容器 DOM 元素，如果不存在则返回 null
+   */
+  private get toolbar(): HTMLElement | null {
+    return document.getElementById(this.toolbarId);
+  }
+
+  /**
    * 创建分支列表组件
    * 
    * @param toolbarId - 工具栏容器 DOM 元素的 ID
@@ -56,7 +65,6 @@ export class BranchList {
     this.toolbarId = toolbarId;
     this.repoPath = repoPath;
     this.onBranchChange = onBranchChange;
-    this.toolbar = document.getElementById(toolbarId);
   }
 
   /**

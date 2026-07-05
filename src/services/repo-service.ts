@@ -562,6 +562,7 @@ export const repoService = {
 
   /**
    * 获取 HEAD 提交中文件的完整内容
+   * 
    * 使用 git show HEAD:file_path 获取 HEAD 提交中的文件内容
    * 
    * @param repoPath - 仓库路径
@@ -570,5 +571,19 @@ export const repoService = {
    */
   async getHeadFileContent(repoPath: string, filePath: string): Promise<string> {
     return await invoke<string>('get_head_file_content', { repoPath, filePath });
+  },
+
+  /**
+   * 获取指定提交中文件的完整内容
+   * 
+   * 使用 git show <commitHash>:file_path 获取指定提交中的文件内容
+   * 
+   * @param repoPath - 仓库路径
+   * @param commitHash - 提交哈希值
+   * @param filePath - 文件路径（相对于仓库根目录）
+   * @returns 文件内容
+   */
+  async getFileContentAtCommit(repoPath: string, commitHash: string, filePath: string): Promise<string> {
+    return await invoke<string>('get_file_content_at_commit', { repoPath, commitHash, filePath });
   },
 };
