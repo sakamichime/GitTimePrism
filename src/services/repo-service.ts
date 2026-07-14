@@ -197,6 +197,10 @@ export interface DiffResult {
 /**
  * 提交节点图中的单个提交节点
  * 对应 Rust 后端的 GraphCommit 结构体
+ *
+ * @deprecated Task 13.8：已弃用。新代码应使用 AnnotatedCommit 类型（带 ref 注解的新版节点图数据结构）。
+ * AnnotatedCommit 提供 heads/tags/remotes/stash 注解字段，支持前端 Canvas 渲染。
+ * 此接口保留是为了不破坏旧版前端代码，后续版本可能移除。
  */
 export interface GraphCommit {
   /** 节点图的 ASCII 线条（如 "* ", "| ", "|\\", "|/" 等） */
@@ -218,6 +222,10 @@ export interface GraphCommit {
 /**
  * 完整的提交节点图数据
  * 对应 Rust 后端的 CommitGraph 结构体
+ *
+ * @deprecated Task 13.8：已弃用。新代码应使用 AnnotatedCommitGraph 类型（带 ref 注解的新版节点图返回数据）。
+ * AnnotatedCommitGraph 包含 head 引用和 moreCommitsAvailable 标志，支持增量加载。
+ * 此接口保留是为了不破坏旧版前端代码，后续版本可能移除。
  */
 export interface CommitGraph {
   /** 所有提交节点列表（按时间倒序，最新的在前） */
@@ -239,6 +247,175 @@ export interface TagInfo {
   is_annotated: boolean;
   /** 附注标签的消息内容（仅 annotated 标签有值，lightweight 标签为 null） */
   message: string | null;
+}
+
+/**
+ * 子模块信息结构（阶段 9：Task 9.1）
+ * 与 Rust 后端的 SubmoduleInfo 结构体字段一一对应（camelCase）
+ */
+export interface SubmoduleInfo {
+  /** 子模块在主仓库中的相对路径（如 "vendor/lib"） */
+  path: string;
+  /** 子模块的远程仓库 URL（HTTPS 或 SSH） */
+  url: string;
+  /** 子模块跟踪的分支名（如 "main"）；未指定分支时为空字符串 */
+  branch: string;
+  /** 子模块当前检出的完整提交哈希（40 位十六进制） */
+  currentCommit: string;
+  /** 子模块当前检出的短提交哈希（通常 7 位） */
+  shortCommit: string;
+  /** 子模块的差异状态（空格=无变更，"+"=提交不一致，"-"=未初始化，"U"=合并冲突） */
+  status: string;
+  /** 子模块是否已初始化（即 .git/modules/{path} 目录是否存在） */
+  isInitialized: boolean;
+}
+
+/**
+ * LFS 跟踪规则（阶段 9：Task 9.3）
+ * 与 Rust 后端的 LfsPattern 结构体字段一一对应（camelCase）
+ */
+export interface LfsPattern {
+  /** 跟踪规则的文件模式（如 "*.psd"、"*.zip"） */
+  pattern: string;
+  /** 此模式对应的文件是否已被锁定（通过 git lfs locks 查询） */
+  isLocked: boolean;
+}
+
+/**
+ * LFS 文件锁信息（阶段 9：Task 9.3）
+ * 与 Rust 后端的 LfsLock 结构体字段一一对应（camelCase）
+ */
+export interface LfsLock {
+  /** 被锁定的文件路径（相对于仓库根目录） */
+  path: string;
+  /** 锁的唯一 ID */
+  id: string;
+  /** 锁定此文件的用户名 */
+  owner: string;
+  /** 锁定时间（ISO 8601 格式字符串，如 "2024-01-15T08:30:00Z"） */
+  lockedAt: string;
+}
+
+/**
+ * GPG 签名状态枚举（阶段 9：Task 9.5）
+ * 与 Rust 后端的 SignatureStatus 枚举对应，序列化为单字符（G/U/X/Y/R/E/B）
+ * 注意：使用普通 enum（非 const enum），符合项目规范
+ */
+export enum SignatureStatus {
+  /** G - 签名良好且有效 */
+  GoodAndValid = 'G',
+  /** U - 签名良好但有效性未知 */
+  GoodWithUnknownValidity = 'U',
+  /** X - 签名良好但已过期 */
+  GoodButExpired = 'X',
+  /** Y - 签名良好但密钥已过期 */
+  GoodButMadeByExpiredKey = 'Y',
+  /** R - 签名良好但密钥已被吊销 */
+  GoodButMadeByRevokedKey = 'R',
+  /** E - 无法检查签名（例如缺少公钥） */
+  CannotBeChecked = 'E',
+  /** B - 签名错误 */
+  Bad = 'B',
+}
+
+/**
+ * GPG 签名信息（阶段 9：Task 9.5）
+ * 与 Rust 后端的 CommitSignature 结构体字段一一对应
+ */
+export interface CommitSignature {
+  /** GPG 密钥 ID（来自 %GK） */
+  key: string;
+  /** 签名者信息（来自 %GS，通常是 "Name <email>"） */
+  signer: string;
+  /** 签名状态 */
+  status: SignatureStatus;
+}
+
+/**
+ * 标签详情信息（阶段 9：Task 9.5）
+ * 与 Rust 后端的 TagDetails 结构体字段一一对应（camelCase）
+ */
+export interface TagDetails {
+  /** 标签名称（如 "v1.0.0"） */
+  name: string;
+  /** 标签类型："annotated" = 附注标签，"lightweight" = 轻量标签 */
+  type: string;
+  /** 标签指向的对象哈希（完整 40 位） */
+  object: string;
+  /** 附注标签的标签者名字（lightweight 标签为空字符串） */
+  taggerName: string;
+  /** 附注标签的标签者邮箱（lightweight 标签为空字符串） */
+  taggerEmail: string;
+  /** 附注标签的标签日期（Unix 时间戳，单位：秒；lightweight 标签为 0） */
+  taggerDate: number;
+  /** 标签消息（annotated 标签的消息内容；lightweight 标签为空字符串） */
+  message: string;
+  /** GPG 签名信息（null = 此标签没有签名） */
+  signature: CommitSignature | null;
+}
+
+/**
+ * 凭证信息（阶段 9：Task 9.8）
+ * 与 Rust 后端的 Credential 结构体字段一一对应（camelCase）
+ */
+export interface Credential {
+  /** 远程仓库的主机名（如 "github.com"、"gitlab.com"） */
+  host: string;
+  /** 用户名（HTTPS 认证用户名，或 OAuth token） */
+  username: string;
+  /** 密码或个人访问令牌（Personal Access Token） */
+  password: string;
+}
+
+/**
+ * 合并冲突文件信息（Task 8.1：与 Rust 后端 ConflictFile 结构体对应）
+ *
+ * 表示一个存在合并冲突的文件的详细信息。
+ * 合并冲突时，Git 索引中会同时存在该文件的三个版本（stage）：
+ * - stage 1：base 版本（共同祖先提交中的版本）
+ * - stage 2：ours 版本（当前分支的版本）
+ * - stage 3：theirs 版本（被合并分支的版本）
+ */
+export interface ConflictFile {
+  /** 冲突文件的路径（相对于仓库根目录） */
+  path: string;
+  /** ours 版本的 blob hash（stage 2，当前分支版本）；当前分支没有该文件时为 null（如 DU 状态） */
+  ours_hash: string | null;
+  /** theirs 版本的 blob hash（stage 3，被合并分支版本）；被合并分支没有该文件时为 null（如 UD 状态） */
+  theirs_hash: string | null;
+  /** base 版本的 blob hash（stage 1，共同祖先版本）；文件是新增的（无共同祖先版本，如 AA 状态）时为 null */
+  base_hash: string | null;
+}
+
+/**
+ * 单行的 Blame 信息（Task 8.3：与 Rust 后端 BlameLine 结构体对应）
+ *
+ * 表示文件中某一行的提交溯源信息。
+ * 包含该行所属提交的哈希、作者、提交者、日期以及行内容。
+ */
+export interface BlameLine {
+  /** 该行所属提交的完整哈希（40 位 SHA-1） */
+  commit_hash: string;
+  /** 该行所属提交的短哈希（前 7 位，便于显示） */
+  short_hash: string;
+  /** 作者名字（编写该行代码的人） */
+  author: string;
+  /** 作者邮箱 */
+  author_email: string;
+  /** 作者日期（ISO 8601 UTC 格式，如 "2024-01-15T08:30:00Z"） */
+  author_date: string;
+  /** 提交者名字（创建该提交的人，可能与作者不同，如 rebase 后） */
+  committer: string;
+  /** 提交者邮箱 */
+  committer_email: string;
+  /** 提交者日期（ISO 8601 UTC 格式） */
+  committer_date: string;
+  /** 该行在文件中的最终行号（从 1 开始） */
+  line_number: number;
+  /** 该行的实际内容（不含换行符） */
+  line_content: string;
+  /** 是否是边界提交（boundary commit，文件历史中最早可见的提交，blame 无法继续追溯更早的版本） */
+  is_boundary: boolean;
 }
 
 /**
@@ -454,6 +631,10 @@ export const repoService = {
    * 此方法保留是为了兼容可能仍依赖 ASCII graph_line 字段的旧代码，
    * 以及在需要快速回退时使用。
    *
+   * @deprecated Task 13.8：已弃用。新代码应使用 getCommitGraph（返回 AnnotatedCommitGraph）。
+   * 旧版节点图使用 ASCII 图形线渲染，新版改用 Canvas 渲染并支持 ref 注解。
+   * 此方法及关联的 GraphCommit/CommitGraph 类型后续版本可能移除。
+   *
    * @param repoPath - 仓库路径
    * @param count - 要获取的提交数量（0 表示全部，默认 50）
    * @returns 旧版节点图数据（包含 ASCII 图形线的提交节点列表和总数）
@@ -492,12 +673,17 @@ export const repoService = {
    * - soft: 保留更改在暂存区（最安全，只是撤销了 commit，文件修改还在暂存区）
    * - mixed: 保留更改在工作区（撤销 commit 和暂存，文件修改还在工作区但未暂存）
    * - hard: 完全撤销（危险操作，会丢失所有更改，文件恢复到提交前的状态）
-   * 
+   *
+   * 此方法已扩展支持 reset 到任意 commit（Task 6.3）。
+   * - 不传 commit 参数时，默认重置到 HEAD~1（撤销最近一次提交）
+   * - 传入 commit 参数时，重置到指定的 commit
+   *
    * @param repoPath - 仓库路径
    * @param mode - 撤销模式（"soft" | "mixed" | "hard"）
+   * @param commit - 可选，要重置到的目标 commit（哈希、分支名、HEAD~N 等）
    */
-  async resetCommit(repoPath: string, mode: string): Promise<void> {
-    await invoke<void>('reset_commit', { repoPath, mode });
+  async resetCommit(repoPath: string, mode: string, commit?: string): Promise<void> {
+    await invoke<void>('reset_commit', { repoPath, mode, commit: commit ?? null });
   },
 
   /**
@@ -802,4 +988,779 @@ export const repoService = {
   async getAnnotatedCommitGraph(repoPath: string, params: GraphQueryParams): Promise<AnnotatedCommitGraph> {
     return await invoke<AnnotatedCommitGraph>('get_annotated_commit_graph', { repoPath, params });
   },
+
+  /**
+   * 从远程仓库获取更新（fetch）
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git fetch [--all / <remote>] [--prune] [--prune-tags]` 命令，
+   * 从远程仓库下载更新到本地的远程跟踪分支，但不自动合并到当前分支。
+   *
+   * 与 pull 的区别：
+   *   - pull = fetch + merge，会自动合并到当前分支
+   *   - fetch 只下载，不合并，更安全（适合在查看远程更新后再决定是否合并）
+   *
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（如 "origin"）；不传（undefined）时使用 --all 拉取所有远程
+   * @param prune - 是否启用 --prune（清理远程已删除的本地远程跟踪分支引用）
+   * @param pruneTags - 是否启用 --prune-tags（清理远程已删除的本地标签引用）
+   * @returns fetch 命令的输出信息
+   */
+  async fetch(repoPath: string, remote?: string, prune?: boolean, pruneTags?: boolean): Promise<string> {
+    // remote 为 undefined 时传 null 给后端（Rust 端使用 Option<String> 接收，null → None → --all）
+    // prune 和 pruneTags 为 undefined 时传 false（默认不启用）
+    return await invoke<string>('fetch_command', {
+      repoPath,
+      remote: remote ?? null,
+      prune: prune ?? false,
+      pruneTags: pruneTags ?? false,
+    });
+  },
+
+  /**
+   * 清理指定远程仓库的本地引用（prune）
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git remote prune <name>` 命令，
+   * 清理那些在远程仓库中已不存在的分支的本地远程跟踪引用
+   * （如 origin/old-branch）。不会删除本地分支，也不会拉取新数据。
+   *
+   * @param repoPath - 仓库路径
+   * @param name - 远程仓库名（如 "origin"）
+   * @returns prune 命令的输出信息
+   */
+  async pruneRemote(repoPath: string, name: string): Promise<string> {
+    return await invoke<string>('prune_remote', { repoPath, name });
+  },
+
+  /**
+   * 添加新的远程仓库
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git remote add <name> <url>` 命令，向仓库添加一个新的远程仓库引用。
+   * 添加后可通过 fetch 方法拉取该远程的提交。
+   *
+   * @param repoPath - 仓库路径
+   * @param name - 新远程仓库名（不能与已有 remote 重名）
+   * @param url - 远程仓库 URL（HTTPS 或 SSH）
+   */
+  async addRemote(repoPath: string, name: string, url: string): Promise<void> {
+    await invoke<void>('add_remote', { repoPath, name, url });
+  },
+
+  /**
+   * 删除现有远程仓库
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git remote remove <name>` 命令，从仓库中删除指定的远程仓库引用。
+   * 删除后所有该远程的跟踪分支引用（如 origin/*）也会被删除。
+   *
+   * @param repoPath - 仓库路径
+   * @param name - 要删除的远程仓库名
+   */
+  async deleteRemote(repoPath: string, name: string): Promise<void> {
+    await invoke<void>('delete_remote', { repoPath, name });
+  },
+
+  /**
+   * 编辑现有远程仓库（重命名 + 修改 fetch/push URL）
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 支持三种编辑操作（按顺序执行）：
+   *   1. 如果 newName 与 name 不同：执行 `git remote rename <name> <newName>`
+   *   2. 如果 fetchUrl 不为 undefined：执行 `git remote set-url <newName> <fetchUrl>`
+   *   3. 如果 pushUrl 不为 undefined：执行 `git remote set-url --push <newName> <pushUrl>`
+   *
+   * @param repoPath - 仓库路径
+   * @param name - 当前远程仓库名
+   * @param newName - 新远程仓库名；不传（undefined）时表示不重命名
+   * @param fetchUrl - 新 fetch URL；不传（undefined）时表示不修改
+   * @param pushUrl - 新 push URL；不传（undefined）时表示不修改
+   */
+  async editRemote(repoPath: string, name: string, newName?: string, fetchUrl?: string, pushUrl?: string): Promise<void> {
+    await invoke<void>('edit_remote', {
+      repoPath,
+      name,
+      newName: newName ?? null,
+      fetchUrl: fetchUrl ?? null,
+      pushUrl: pushUrl ?? null,
+    });
+  },
+
+  /**
+   * 将远程分支 fetch 到本地分支
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git fetch <remote> <remoteBranch>:<localBranch>` 命令。
+   * 此命令会将远程分支的内容下载到指定的本地分支，但不切换分支也不合并。
+   *
+   * 适用场景：
+   *   - 查看远程分支的内容而不影响当前工作分支
+   *   - 创建本地分支跟踪远程分支
+   *
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（如 "origin"）
+   * @param remoteBranch - 远程分支名（不含 remote 前缀，如 "feature"）
+   * @param localBranch - 本地分支名（如 "feature"）
+   */
+  async fetchIntoLocalBranch(repoPath: string, remote: string, remoteBranch: string, localBranch: string): Promise<void> {
+    await invoke<void>('fetch_into_local_branch', { repoPath, remote, remoteBranch, localBranch });
+  },
+
+  /**
+   * 合并指定对象到当前分支
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.1）。
+   * 执行 `git merge <obj> [--squash] [--no-ff] [--no-commit] [-S]` 命令。
+   * 对于 squash 合并（且未指定 --no-commit），会自动创建提交。
+   *
+   * @param repoPath - 仓库路径
+   * @param obj - 要合并的对象（分支名、远程跟踪分支名、或提交哈希）
+   * @param squash - 是否启用 --squash（压缩合并）
+   * @param noFastForward - 是否启用 --no-ff（禁止快进）
+   * @param noCommit - 是否启用 --no-commit（合并不自动提交）
+   * @param sign - 是否启用 GPG 签名（-S 选项）
+   * @returns 新提交的哈希（如果产生了新提交），否则返回 null
+   */
+  async merge(repoPath: string, obj: string, squash: boolean, noFastForward: boolean, noCommit: boolean, sign: boolean): Promise<string | null> {
+    return await invoke<string | null>('merge', { repoPath, obj, squash, noFastForward, noCommit, sign });
+  },
+
+  /**
+   * 将当前分支变基到指定对象之上
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.1）。
+   * 执行 `git rebase <obj> [--ignore-date] [-S]` 命令。
+   * 注意：交互式变基（interactive=true）由前端在 PTY 终端中执行，不调用此命令。
+   *
+   * @param repoPath - 仓库路径
+   * @param obj - 要变基到的目标对象（分支名、远程跟踪分支名、或提交哈希）
+   * @param ignoreDate - 是否启用 --ignore-date（保持原始提交日期不变）
+   * @param sign - 是否启用 GPG 签名（-S 选项）
+   * @param interactive - 是否启用交互式变基（true 时由前端在 PTY 终端启动）
+   */
+  async rebase(repoPath: string, obj: string, ignoreDate: boolean, sign: boolean, interactive: boolean): Promise<void> {
+    await invoke<void>('rebase', { repoPath, obj, ignoreDate, sign, interactive });
+  },
+
+  /**
+   * 拣选指定提交的变更到当前分支
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.1）。
+   * 执行 `git cherry-pick [--no-commit] [-x] [-S] [-m <parent>] <hash>` 命令。
+   *
+   * @param repoPath - 仓库路径
+   * @param hash - 要拣选的提交哈希值
+   * @param noCommit - 是否启用 --no-commit（拣选但不创建提交）
+   * @param recordOrigin - 是否启用 -x（在提交消息中附加来源标记）
+   * @param sign - 是否启用 GPG 签名（-S 选项）
+   * @param mainline - 父提交索引（用于拣选合并提交，0 表示不指定）
+   */
+  async cherrypick(repoPath: string, hash: string, noCommit: boolean, recordOrigin: boolean, sign: boolean, mainline: number): Promise<void> {
+    await invoke<void>('cherrypick', { repoPath, hash, noCommit, recordOrigin, sign, mainline });
+  },
+
+  /**
+   * 还原指定提交（创建反向提交）
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.1）。
+   * 执行 `git revert --no-edit [-S] [-m <parent>] <hash>` 命令。
+   * 通过创建反向提交来撤销指定提交的变更（不改写历史，安全操作）。
+   *
+   * @param repoPath - 仓库路径
+   * @param hash - 要还原的提交哈希值
+   * @param sign - 是否启用 GPG 签名（-S 选项）
+   * @param mainline - 父提交索引（用于还原合并提交，0 表示不指定）
+   */
+  async revert(repoPath: string, hash: string, sign: boolean, mainline: number): Promise<void> {
+    await invoke<void>('revert', { repoPath, hash, sign, mainline });
+  },
+
+  /**
+   * 丢弃指定的提交
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.1）。
+   * 通过 `git rebase [-S] --onto <hash>^ <hash>` 命令实现丢弃提交。
+   * ⚠️ 危险操作：此操作会改写 Git 历史。
+   * 后端会进行拓扑可行性检查，不能丢弃 HEAD 的祖先提交。
+   *
+   * @param repoPath - 仓库路径
+   * @param hash - 要丢弃的提交哈希值
+   * @param sign - 是否启用 GPG 签名（-S 选项）
+   */
+  async dropCommit(repoPath: string, hash: string, sign: boolean): Promise<void> {
+    await invoke<void>('drop_commit', { repoPath, hash, sign });
+  },
+
+  /**
+   * 重命名分支
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.2）。
+   * 执行 `git branch -m <oldName> <newName>` 命令。
+   *
+   * @param repoPath - 仓库路径
+   * @param oldName - 旧的分支名称
+   * @param newName - 新的分支名称
+   */
+  async renameBranch(repoPath: string, oldName: string, newName: string): Promise<void> {
+    await invoke<void>('rename_branch', { repoPath, oldName, newName });
+  },
+
+  /**
+   * 删除本地分支
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.2）。
+   * 执行 `git branch -d <name>`（安全删除）或 `git branch -D <name>`（强制删除）。
+   *
+   * @param repoPath - 仓库路径
+   * @param name - 要删除的分支名称
+   * @param force - 是否强制删除（true 使用 -D，false 使用 -d）
+   */
+  async deleteBranch(repoPath: string, name: string, force: boolean): Promise<void> {
+    await invoke<void>('delete_branch', { repoPath, name, force });
+  },
+
+  /**
+   * 删除远程分支
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.2）。
+   * 先尝试执行 `git push <remote> --delete <branch>` 删除远程分支。
+   * 如果远程分支不存在，则兜底执行 `git branch -d -r <remote>/<branch>` 删除本地远程跟踪引用。
+   *
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（如 "origin"）
+   * @param branch - 要删除的远程分支名（不含 remote 前缀）
+   */
+  async deleteRemoteBranch(repoPath: string, remote: string, branch: string): Promise<void> {
+    await invoke<void>('delete_remote_branch', { repoPath, remote, branch });
+  },
+
+  /**
+   * 检出到指定提交（进入 detached HEAD 状态）
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.2）。
+   * 执行 `git checkout <hash>` 命令，进入分离头指针状态。
+   *
+   * @param repoPath - 仓库路径
+   * @param hash - 要检出的提交哈希值
+   */
+  async checkoutCommit(repoPath: string, hash: string): Promise<void> {
+    await invoke<void>('checkout_commit', { repoPath, hash });
+  },
+
+  /**
+   * 创建新分支
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.2）。
+   * 支持以下创建方式：
+   * - checkout=true, force=false: 创建并切换（git checkout -b）
+   * - checkout=false: 仅创建不切换（git branch）
+   * - force=true: 强制创建（git branch -f）
+   *
+   * @param repoPath - 仓库路径
+   * @param name - 新分支的名称
+   * @param hash - 新分支要指向的提交哈希（空字符串表示使用当前 HEAD）
+   * @param checkout - 创建后是否立即切换到新分支
+   * @param force - 是否强制创建（覆盖同名分支）
+   */
+  async createBranch(repoPath: string, name: string, hash: string, checkout: boolean, force: boolean): Promise<void> {
+    await invoke<void>('create_branch', { repoPath, name, hash, checkout, force });
+  },
+
+  /**
+   * 从远程仓库拉取更新（带选项）
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.4）。
+   * 执行 `git pull <remote> <branch> [--squash|--no-ff] [-S]` 命令。
+   * 对于 squash 拉取，会自动检查暂存区是否有变更并创建提交。
+   *
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（通常为 "origin"）
+   * @param branch - 要拉取的分支名
+   * @param squash - 是否启用 --squash（压缩拉取）
+   * @param noFastForward - 是否启用 --no-ff（禁止快进）
+   * @param sign - 是否启用 GPG 签名（-S 选项）
+   * @returns 拉取操作的输出信息
+   */
+  async pullWithOptions(repoPath: string, remote: string, branch: string, squash: boolean, noFastForward: boolean, sign: boolean): Promise<string> {
+    return await invoke<string>('pull_changes_with_options', { repoPath, remote, branch, squash, noFastForward, sign });
+  },
+
+  /**
+   * 推送本地提交到远程仓库（带选项）
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.4）。
+   * 执行 `git push <remote> <branch> [--set-upstream] [--force|--force-with-lease]` 命令。
+   *
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（通常为 "origin"）
+   * @param branch - 要推送的分支名
+   * @param setUpstream - 是否启用 --set-upstream
+   * @param force - 是否启用 --force（强制推送）
+   * @param forceWithLease - 是否启用 --force-with-lease（带租约的强制推送）
+   * @returns 推送操作的输出信息
+   */
+  async pushWithOptions(repoPath: string, remote: string, branch: string, setUpstream: boolean, force: boolean, forceWithLease: boolean): Promise<string> {
+    return await invoke<string>('push_changes_with_options', { repoPath, remote, branch, setUpstream, force, forceWithLease });
+  },
+
+  /**
+   * 推送标签到远程仓库
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 6.4）。
+   * 执行 `git push <remote> <tag>` 命令，将指定的标签推送到远程仓库。
+   *
+   * @param repoPath - 仓库路径
+   * @param remote - 远程仓库名（通常为 "origin"）
+   * @param tag - 要推送的标签名
+   * @returns 推送操作的输出信息
+   */
+  async pushTag(repoPath: string, remote: string, tag: string): Promise<string> {
+    return await invoke<string>('push_tag', { repoPath, remote, tag });
+  },
+
+  /**
+   * 检测仓库中存在合并冲突的文件列表
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 8.1）。
+   * 执行 `git ls-files -u -z` 命令，返回所有 unmerged 文件的列表，
+   * 每个文件包含 path、ours_hash、theirs_hash、base_hash 信息。
+   *
+   * 使用场景：
+   * - merge/pull/rebase 操作后，如果命令返回错误（可能存在冲突），
+   *   前端调用此方法获取冲突文件列表，然后打开合并编辑器解决冲突。
+   * - 也可以在任意时刻调用此方法检查仓库是否处于冲突状态。
+   *
+   * @param repoPath - 仓库路径
+   * @returns 冲突文件列表（无冲突时返回空数组）
+   */
+  async detectConflicts(repoPath: string): Promise<ConflictFile[]> {
+    return await invoke<ConflictFile[]>('detect_conflicts', { repoPath });
+  },
+
+  /**
+   * 获取文件每行的 Blame 信息
+   *
+   * 与 gitgraph 项目对齐的新增命令（Task 8.3）。
+   * 执行 `git blame --line-porcelain -- <file_path>` 命令，
+   * 返回文件每行的提交溯源信息列表（BlameLine 数组）。
+   *
+   * 每行信息包含：提交完整哈希和短哈希、作者信息、提交者信息、
+   * 行号、行内容、是否是边界提交（boundary commit）。
+   *
+   * 使用场景：
+   * - 用户在文件右键菜单中选择"View Blame"时，前端调用此方法
+   *   获取行级别的提交信息，然后在 Blame 视图中显示。
+   * - 点击某行可跳转到对应提交的详情视图。
+   *
+   * @param repoPath - 仓库路径
+   * @param filePath - 要查询 blame 的文件路径（相对于仓库根目录）
+   * @returns 文件每行的 blame 信息列表
+   */
+  async getBlame(repoPath: string, filePath: string): Promise<BlameLine[]> {
+    return await invoke<BlameLine[]>('get_blame', { repoPath, filePath });
+  },
+
+  /**
+   * 将内容写入工作树中的文件
+   *
+   * Task 8.2 新增命令：用于合并编辑器在用户解决冲突后将合并结果写回文件。
+   * 直接写入工作目录中的文件，覆盖原有内容。
+   *
+   * @param repoPath - 仓库路径
+   * @param filePath - 文件路径（相对于仓库根目录）
+   * @param content - 要写入的文件内容
+   */
+  async writeFileContent(repoPath: string, filePath: string, content: string): Promise<void> {
+    await invoke<void>('write_file_content', { repoPath, filePath, content });
+  },
+
+  // ==================== 阶段 10：仓库管理 + 状态持久化 + 头像 ====================
+
+  /**
+   * 获取指定用户的头像（阶段 10：Task 10.5）
+   *
+   * 调用后端 get_avatar 命令获取头像：
+   * 1. 先检查本地缓存（~/.gittimeprism/avatars/）
+   * 2. 缓存未命中时根据仓库 remote 源类型获取：
+   *    - GitHub 源：调用 GitHub API（本阶段简化为 Gravatar 兜底）
+   *    - GitLab 源：调用 GitLab API
+   *    - Gravatar 源：用 email 的 MD5 哈希构造 URL
+   * 3. 返回头像文件的本地路径
+   *
+   * 前端可以用 convertFileSrc(path) 将本地路径转为可加载的 URL：
+   * ```typescript
+   * import { convertFileSrc } from '@tauri-apps/api/core';
+   * const avatarPath = await repoService.getAvatar(repoPath, email, author);
+   * if (avatarPath) {
+   *   imgElement.src = convertFileSrc(avatarPath);
+   * }
+   * ```
+   *
+   * @param repoPath - 仓库路径（用于检测 remote 源类型）
+   * @param email - 用户邮箱（用于标识头像和构造 Gravatar URL）
+   * @param author - 作者名（备用，目前未使用）
+   * @returns 头像文件的本地路径，获取失败则为 null
+   */
+  async getAvatar(repoPath: string, email: string, author: string): Promise<string | null> {
+    const result = await invoke<string | null>('get_avatar', { repoPath, email, author });
+    return result;
+  },
+
+  /**
+   * 清除所有头像缓存（阶段 10：Task 10.5）
+   *
+   * 删除 ~/.gittimeprism/avatars/ 目录下的所有头像文件和缓存索引。
+   * 用户在设置中"清除头像缓存"时调用。
+   *
+   * @returns Promise，完成后所有头像缓存被清除
+   */
+  async clearAvatarCache(): Promise<void> {
+    await invoke<void>('clear_avatar_cache');
+  },
+
+  /**
+   * 发现指定路径下的所有 Git 仓库（阶段 10：Task 10.1）
+   *
+   * 递归搜索 workspacePath 下的所有 Git 仓库（识别含 .git 目录的文件夹）。
+   *
+   * @param workspacePath - 工作区根路径
+   * @param maxDepth - 最大递归深度（0 = 仅检查根路径，1 = 检查一层子目录）
+   * @returns 发现的仓库列表（含已注册与未注册的）
+   */
+  async discoverRepos(workspacePath: string, maxDepth: number): Promise<RepoEntry[]> {
+    return await invoke<RepoEntry[]>('discover_repos', { workspacePath, maxDepth });
+  },
+
+  /**
+   * 注册仓库（阶段 10：Task 10.1）
+   *
+   * 将仓库路径加入已注册列表，并记录打开时间。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async registerRepo(repoPath: string): Promise<void> {
+    await invoke<void>('register_repo', { repoPath });
+  },
+
+  /**
+   * 取消注册仓库（阶段 10：Task 10.1）
+   *
+   * 将仓库从已注册列表中移除。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async unregisterRepo(repoPath: string): Promise<void> {
+    await invoke<void>('unregister_repo', { repoPath });
+  },
+
+  /**
+   * 忽略仓库（阶段 10：Task 10.1）
+   *
+   * 将仓库加入忽略列表。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async ignoreRepo(repoPath: string): Promise<void> {
+    await invoke<void>('ignore_repo', { repoPath });
+  },
+
+  /**
+   * 列出所有已注册的仓库（阶段 10：Task 10.1）
+   *
+   * @returns 已注册仓库的列表
+   */
+  async listRegisteredRepos(): Promise<RepoEntry[]> {
+    return await invoke<RepoEntry[]>('list_registered_repos');
+  },
+
+  /**
+   * 扫描仓库的子模块（阶段 10：Task 10.1）
+   *
+   * @param repoPath - 仓库路径
+   * @returns 子模块路径列表（相对仓库根目录）
+   */
+  async scanSubmodules(repoPath: string): Promise<string[]> {
+    return await invoke<string[]>('scan_submodules', { repoPath });
+  },
+
+  /**
+   * 启动文件监听（阶段 10：Task 10.2）
+   *
+   * 开始监听指定仓库目录下的文件变化，触发 repo_changed 事件。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async startWatcher(repoPath: string): Promise<void> {
+    await invoke<void>('start_watcher', { repoPath });
+  },
+
+  /**
+   * 停止文件监听（阶段 10：Task 10.2）
+   */
+  async stopWatcher(): Promise<void> {
+    await invoke<void>('stop_watcher');
+  },
+
+  /**
+   * 静音文件监听（阶段 10：Task 10.2）
+   *
+   * 在执行 Git 操作前调用，防止 GitTimePrism 自身的操作触发刷新。
+   */
+  async muteWatcher(): Promise<void> {
+    await invoke<void>('mute_watcher');
+  },
+
+  /**
+   * 取消静音文件监听（阶段 10：Task 10.2）
+   *
+   * 在 Git 操作完成后调用，恢复正常监听。
+   * unmute 后 1.5 秒内的事件仍被忽略。
+   */
+  async unmuteWatcher(): Promise<void> {
+    await invoke<void>('unmute_watcher');
+  },
+
+  // ==================== 阶段 9：子模块 + LFS + GPG 签名 + difftool + 文件编码 + askpass ====================
+
+  /**
+   * 获取仓库中所有子模块列表（阶段 9：Task 9.1）
+   *
+   * 解析 .gitmodules 文件获取子模块配置，结合 git submodule status 获取当前状态。
+   *
+   * @param repoPath - 仓库路径
+   * @returns 子模块信息列表（无子模块时返回空数组）
+   */
+  async listSubmodules(repoPath: string): Promise<SubmoduleInfo[]> {
+    return await invoke<SubmoduleInfo[]>('list_submodules', { repoPath });
+  },
+
+  /**
+   * 添加子模块（阶段 9：Task 9.1）
+   *
+   * 执行 git submodule add <url> <path> [--branch <branch>] 命令。
+   *
+   * @param repoPath - 仓库路径
+   * @param url - 子模块的远程仓库 URL
+   * @param path - 子模块在主仓库中的相对路径
+   * @param branch - 子模块跟踪的分支名（空字符串表示不指定分支）
+   */
+  async addSubmodule(repoPath: string, url: string, path: string, branch: string): Promise<void> {
+    await invoke<void>('add_submodule', { repoPath, url, path, branch });
+  },
+
+  /**
+   * 更新子模块（阶段 9：Task 9.1）
+   *
+   * 执行 git submodule update --init --recursive 命令，
+   * 初始化并递归更新所有子模块到记录的提交。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async updateSubmodules(repoPath: string): Promise<void> {
+    await invoke<void>('update_submodules', { repoPath });
+  },
+
+  /**
+   * 删除子模块（阶段 9：Task 9.1）
+   *
+   * 执行 git submodule deinit -f <path> + git rm -f <path> + 删除 .git/modules/<path> 目录。
+   *
+   * @param repoPath - 仓库路径
+   * @param path - 要删除的子模块路径
+   */
+  async deleteSubmodule(repoPath: string, path: string): Promise<void> {
+    await invoke<void>('delete_submodule', { repoPath, path });
+  },
+
+  /**
+   * 初始化 LFS（阶段 9：Task 9.3）
+   *
+   * 执行 git lfs install 命令，在仓库中安装 LFS 钩子。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async lfsInstall(repoPath: string): Promise<void> {
+    await invoke<void>('lfs_install', { repoPath });
+  },
+
+  /**
+   * 添加 LFS 跟踪规则（阶段 9：Task 9.3）
+   *
+   * 执行 git lfs track <pattern> 命令，将文件模式添加到 .gitattributes。
+   *
+   * @param repoPath - 仓库路径
+   * @param pattern - 要跟踪的文件模式（如 "*.psd"）
+   */
+  async lfsTrack(repoPath: string, pattern: string): Promise<void> {
+    await invoke<void>('lfs_track', { repoPath, pattern });
+  },
+
+  /**
+   * 移除 LFS 跟踪规则（阶段 9：Task 9.3）
+   *
+   * 执行 git lfs untrack <pattern> 命令，从 .gitattributes 移除文件模式。
+   *
+   * @param repoPath - 仓库路径
+   * @param pattern - 要移除跟踪的文件模式
+   */
+  async lfsUntrack(repoPath: string, pattern: string): Promise<void> {
+    await invoke<void>('lfs_untrack', { repoPath, pattern });
+  },
+
+  /**
+   * 获取 LFS 跟踪的文件类型列表（阶段 9：Task 9.3）
+   *
+   * 解析 .gitattributes 文件，返回所有 LFS 跟踪规则及其锁定状态。
+   *
+   * @param repoPath - 仓库路径
+   * @returns LFS 跟踪规则列表
+   */
+  async lfsList(repoPath: string): Promise<LfsPattern[]> {
+    return await invoke<LfsPattern[]>('lfs_list', { repoPath });
+  },
+
+  /**
+   * 获取 LFS 文件锁列表（阶段 9：Task 9.3）
+   *
+   * 执行 git lfs locks --json 命令，返回所有文件锁。
+   *
+   * @param repoPath - 仓库路径
+   * @returns 文件锁列表
+   */
+  async lfsLocks(repoPath: string): Promise<LfsLock[]> {
+    return await invoke<LfsLock[]>('lfs_locks', { repoPath });
+  },
+
+  /**
+   * 拉取 LFS 对象（阶段 9：Task 9.3）
+   *
+   * 执行 git lfs pull 命令，从 LFS 服务器下载当前提交所需的 LFS 对象。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async lfsPull(repoPath: string): Promise<void> {
+    await invoke<void>('lfs_pull', { repoPath });
+  },
+
+  /**
+   * 推送 LFS 对象（阶段 9：Task 9.3）
+   *
+   * 执行 git lfs push --all origin 命令，将本地 LFS 对象推送到远程。
+   *
+   * @param repoPath - 仓库路径
+   */
+  async lfsPush(repoPath: string): Promise<void> {
+    await invoke<void>('lfs_push', { repoPath });
+  },
+
+  /**
+   * 获取标签详情（阶段 9：Task 9.5）
+   *
+   * 执行 git for-each-ref + git verify-tag --raw 获取标签完整详情，
+   * 包括标签类型、标签者信息、GPG 签名状态。
+   *
+   * @param repoPath - 仓库路径
+   * @param tagName - 标签名称
+   * @returns 标签详情（含签名信息）
+   */
+  async getTagDetails(repoPath: string, tagName: string): Promise<TagDetails> {
+    return await invoke<TagDetails>('get_tag_details', { repoPath, tagName });
+  },
+
+  /**
+   * 打开目录差异对比工具（阶段 9：Task 9.6）
+   *
+   * 执行 git difftool --dir-diff <from> <to> 命令，
+   * 在系统默认 difftool 中打开两个提交的目录差异对比。
+   *
+   * @param repoPath - 仓库路径
+   * @param from - 起始提交哈希（空字符串表示工作区）
+   * @param to - 目标提交哈希（空字符串表示工作区）
+   */
+  async openDirDiff(repoPath: string, from: string, to: string): Promise<void> {
+    await invoke<void>('open_dir_diff', { repoPath, from, to });
+  },
+
+  /**
+   * 获取支持的文件编码列表（阶段 9：Task 9.7）
+   *
+   * 返回前端可选择的编码名称列表，用于文件内容查看器的编码选择。
+   *
+   * @returns 支持的编码名称列表（如 ["utf8", "gbk", "big5", ...]）
+   */
+  async getSupportedEncodings(): Promise<string[]> {
+    return await invoke<string[]>('get_supported_encodings');
+  },
+
+  /**
+   * 设置凭证（阶段 9：Task 9.8）
+   *
+   * 将指定 host 的用户名/密码存入内存缓存（session 级别，不持久化）。
+   *
+   * @param host - 远程仓库主机名（如 "github.com"）
+   * @param username - 用户名
+   * @param password - 密码或个人访问令牌
+   */
+  async setCredential(host: string, username: string, password: string): Promise<void> {
+    await invoke<void>('set_credential', { host, username, password });
+  },
+
+  /**
+   * 获取凭证（阶段 9：Task 9.8）
+   *
+   * 从内存缓存中获取指定 host 的凭证。
+   *
+   * @param host - 远程仓库主机名
+   * @returns 凭证信息（未找到时返回 null）
+   */
+  async getCredential(host: string): Promise<Credential | null> {
+    return await invoke<Credential | null>('get_credential', { host });
+  },
+
+  /**
+   * 清除指定 host 的凭证（阶段 9：Task 9.8）
+   *
+   * @param host - 远程仓库主机名
+   */
+  async clearCredential(host: string): Promise<void> {
+    await invoke<void>('clear_credential', { host });
+  },
+
+  /**
+   * 检查是否已缓存指定 host 的凭证（阶段 9：Task 9.8）
+   *
+   * @param host - 远程仓库主机名
+   * @returns true = 已缓存凭证，false = 未缓存
+   */
+  async hasCredential(host: string): Promise<boolean> {
+    return await invoke<boolean>('has_credential', { host });
+  },
+
+  /**
+   * 列出所有已缓存凭证的 host 列表（阶段 9：Task 9.8）
+   *
+   * @returns 已缓存凭证的主机名列表
+   */
+  async listCredentialHosts(): Promise<string[]> {
+    return await invoke<string[]>('list_credential_hosts');
+  },
 };
+
+/**
+ * 仓库注册信息（阶段 10：与 Rust 后端的 RepoEntry 结构体对应）
+ *
+ * 描述一个被发现的或已注册的 Git 仓库的基本信息。
+ */
+export interface RepoEntry {
+  /** 仓库的绝对路径 */
+  path: string;
+  /** 仓库的显示名称（默认为路径末尾的文件夹名） */
+  name: string;
+  /** 是否已注册到 GitTimePrism */
+  is_registered: boolean;
+  /** 上次打开此仓库的时间（Unix 时间戳，秒；从未打开过则为 null） */
+  last_opened: number | null;
+  /** 此仓库是否包含子模块 */
+  has_submodules: boolean;
+}

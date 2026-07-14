@@ -56,8 +56,14 @@ use tauri::command;
  * 返回值：
  * - Ok(CommitGraph) - 查询成功，包含节点列表和总数
  * - Err(String) - 查询失败
+ *
+ * Task 13.8：底层实现已标记为 deprecated。
+ * 此 Tauri 命令保留是为了不破坏旧版前端代码（前端可能仍在调用 invoke('get_commit_graph')）。
+ * 新代码应使用 get_annotated_commit_graph 命令。
+ * 使用 #[allow(deprecated)] 抑制此处的弃用警告。
  */
 #[command]
+#[allow(deprecated)]
 pub fn get_commit_graph(
     repo_path: String,
     count: u32,

@@ -1,0 +1,202 @@
+/**
+ * Find Widget 样式（find-widget.css）
+ *
+ * Find Widget 是浮动在提交节点图上方的搜索框。
+ * 样式特点：
+ * - 毛玻璃效果（backdrop-filter）与项目整体设计风格一致
+ * - 默认隐藏（向上平移），通过 .active 类显示（向下滑入）
+ * - 匹配文本高亮（黄色背景）
+ * - 当前匹配项所在行高亮（半透明黄色背景）
+ * - 错误状态（红色边框，正则非法时）
+ */
+
+/* ============================================================
+ * Find Widget 容器
+ * ============================================================ */
+
+.find-widget {
+  /* 定位：浮动在节点图容器内顶部 */
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 100;
+
+  /* 布局：水平排列输入框和按钮 */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  /* 内边距和尺寸 */
+  padding: 4px 8px;
+  min-width: 360px;
+
+  /* 背景：毛玻璃效果 */
+  background: var(--bg-panel, rgba(40, 40, 50, 0.85));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  /* 边框和圆角 */
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+
+  /* 阴影：增加立体感 */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  /* 字体 */
+  font-size: var(--font-size-sm, 13px);
+  color: var(--text-primary, #fff);
+
+  /* 默认隐藏：向上平移并淡出 */
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* 显示状态：向下滑入并淡入 */
+.find-widget.active {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* 错误状态：红色边框（正则表达式非法时） */
+.find-widget.error {
+  border-color: var(--danger-color, #e74c3c);
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2), 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+
+/* ============================================================
+ * 输入框
+ * ============================================================ */
+
+.find-widget .find-input {
+  /* 尺寸 */
+  flex: 1;
+  min-width: 180px;
+  padding: 4px 8px;
+
+  /* 字体 */
+  font-size: var(--font-size-sm, 13px);
+  color: var(--text-primary, #fff);
+
+  /* 背景：半透明 */
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid transparent;
+  border-radius: 4px;
+
+  /* 去除聚焦时的默认轮廓 */
+  outline: none;
+}
+
+.find-widget .find-input:focus {
+  border-color: var(--accent-color, #4a9eff);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.find-widget .find-input::placeholder {
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+}
+
+
+/* ============================================================
+ * 按钮（大小写敏感、正则、上一个、下一个、关闭）
+ * ============================================================ */
+
+.find-widget button {
+  /* 尺寸 */
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+
+  /* 字体 */
+  font-size: var(--font-size-sm, 13px);
+  font-family: monospace;
+  color: var(--text-primary, #fff);
+
+  /* 背景：透明 */
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+
+  /* 过渡动画 */
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+/* 悬停效果 */
+.find-widget button:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 激活状态（大小写敏感、正则模式开启时） */
+.find-widget button.active {
+  background: var(--accent-color, #4a9eff);
+  border-color: var(--accent-color, #4a9eff);
+  color: #fff;
+}
+
+/* 禁用状态（无匹配项时的上一个/下一个按钮） */
+.find-widget button.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 关闭按钮单独样式：略带危险色 */
+.find-widget .find-close:hover {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: rgba(231, 76, 60, 0.4);
+  color: var(--danger-color, #e74c3c);
+}
+
+
+/* ============================================================
+ * 匹配结果计数
+ * ============================================================ */
+
+.find-widget .find-results {
+  /* 尺寸 */
+  min-width: 48px;
+  padding: 0 8px;
+
+  /* 文字 */
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  text-align: center;
+  font-variant-numeric: tabular-nums; /* 等宽数字，避免宽度跳动 */
+  white-space: nowrap;
+}
+
+
+/* ============================================================
+ * 匹配高亮（在提交行内的匹配文本）
+ * ============================================================ */
+
+/*
+ * 匹配文本高亮：黄色背景
+ * 应用到 <span class="findMatch"> 元素上
+ */
+.findMatch {
+  background: #ffd700;
+  color: #000;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/*
+ * 当前匹配项所在行的高亮
+ * 应用到 <tr class="commit-row findCurrentCommit"> 元素上
+ * 使用半透明黄色背景，与匹配文本高亮区分
+ */
+.findCurrentCommit {
+  background: rgba(255, 215, 0, 0.2) !important;
+}
+
+/* 当前匹配项所在行内的匹配文本：更深的黄色 */
+.findCurrentCommit .findMatch {
+  background: #ff9500;
+  color: #fff;
+}

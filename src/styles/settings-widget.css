@@ -1,0 +1,680 @@
+/**
+ * 设置面板样式（settings-widget.css）
+ *
+ * 此文件定义设置面板（Settings Panel）的样式。
+ * 设置面板以模态对话框形式显示，左侧为分组导航，右侧为表单区域。
+ *
+ * 样式特点：
+ * - 毛玻璃效果（backdrop-filter）与项目整体设计风格一致
+ * - 左右分栏布局（导航 + 内容）
+ * - 复用现有的表单控件样式（.form-group / .form-label / .form-input 等）
+ * - 复用现有的按钮样式（.btn / .btn-primary）
+ * - 支持 Issue Link 超链接样式（.externalUrl）
+ *
+ * 参考：
+ * - src/styles/find-widget.css（毛玻璃效果参考）
+ * - src/styles/variables.css（CSS 变量定义）
+ * - src/components/settings-panel.ts（对应的组件代码）
+ */
+
+/* ============================================================
+ * 遮罩层（Overlay）
+ * ============================================================ */
+
+/* 遮罩层 - 覆盖整个窗口，半透明黑色背景 */
+.settings-panel-overlay {
+  /* 固定定位，覆盖整个视口 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+
+  /* 半透明黑色背景 */
+  background: rgba(0, 0, 0, 0.5);
+
+  /* 弹性布局，居中显示对话框 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* 最高层级，确保覆盖所有其他元素 */
+  z-index: 1000;
+
+  /* 毛玻璃模糊效果 */
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ============================================================
+ * 对话框容器（Dialog Container）
+ * ============================================================ */
+
+/* 对话框容器 - 包含头部、主体、底部 */
+.settings-panel-dialog {
+  /* 尺寸 */
+  width: 80vw;
+  max-width: 900px;
+  height: 80vh;
+  max-height: 700px;
+
+  /* 布局：垂直排列头部、主体、底部 */
+  display: flex;
+  flex-direction: column;
+
+  /* 背景：毛玻璃面板背景 */
+  background: var(--bg-secondary);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+
+  /* 边框和圆角 */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+
+  /* 阴影：增加立体感 */
+  box-shadow: var(--shadow-lg);
+
+  /* 字体 */
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+
+  /* 溢出隐藏（各区域自行处理滚动） */
+  overflow: hidden;
+}
+
+/* ============================================================
+ * 头部（Header）
+ * ============================================================ */
+
+/* 对话框头部 - 包含标题和关闭按钮 */
+.settings-panel-header {
+  /* 布局：水平排列标题和关闭按钮 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  /* 内边距 */
+  padding: 16px 20px;
+
+  /* 底部分隔线 */
+  border-bottom: 1px solid var(--border);
+
+  /* 不收缩高度 */
+  flex-shrink: 0;
+}
+
+/* 标题文字 */
+.settings-panel-title {
+  /* 字号和字重 */
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+
+  /* 清除默认外边距 */
+  margin: 0;
+}
+
+/* 关闭按钮（右上角 ×） */
+.settings-panel-close-btn {
+  /* 尺寸 */
+  width: 28px;
+  height: 28px;
+
+  /* 背景和边框 */
+  background: transparent;
+  border: none;
+
+  /* 文字样式 */
+  font-size: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  /* 圆角 */
+  border-radius: var(--radius-sm);
+
+  /* 过渡动画 */
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+/* 关闭按钮悬停状态 */
+.settings-panel-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+ * 主体（Body）- 左侧导航 + 右侧内容
+ * ============================================================ */
+
+/* 主体容器 - 包含导航和内容区域 */
+.settings-panel-body {
+  /* 布局：水平排列导航和内容 */
+  display: flex;
+
+  /* 占据剩余高度 */
+  flex: 1;
+
+  /* 溢出隐藏 */
+  overflow: hidden;
+}
+
+/* ============================================================
+ * 左侧导航（Navigation）
+ * ============================================================ */
+
+/* 导航容器 */
+.settings-panel-nav {
+  /* 宽度固定 */
+  width: 200px;
+  flex-shrink: 0;
+
+  /* 背景 */
+  background: var(--bg-tertiary);
+
+  /* 右侧分隔线 */
+  border-right: 1px solid var(--border);
+
+  /* 垂直滚动 */
+  overflow-y: auto;
+
+  /* 内边距 */
+  padding: 8px 0;
+}
+
+/* 导航列表 */
+.settings-panel-nav ul {
+  /* 清除默认样式 */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 导航项 */
+.settings-nav-item {
+  /* 内边距 */
+  padding: 10px 20px;
+
+  /* 文字样式 */
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  /* 过渡动画 */
+  transition: background var(--transition-fast), color var(--transition-fast);
+
+  /* 用户选择禁用（避免点击时选中文字） */
+  user-select: none;
+}
+
+/* 导航项悬停状态 */
+.settings-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* 导航项激活状态（当前选中） */
+.settings-nav-item.active {
+  /* 强调色背景 */
+  background: var(--accent-muted);
+
+  /* 左侧强调色边框 */
+  border-left: 3px solid var(--accent);
+  padding-left: 17px; /* 补偿左边框宽度 */
+
+  /* 强调色文字 */
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ============================================================
+ * 右侧内容区域（Content Area）
+ * ============================================================ */
+
+/* 内容容器 */
+.settings-panel-content {
+  /* 占据剩余宽度 */
+  flex: 1;
+
+  /* 内边距 */
+  padding: 20px 24px;
+
+  /* 垂直滚动 */
+  overflow-y: auto;
+}
+
+/* 分组标题 */
+.settings-section-title {
+  /* 字号和字重 */
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+
+  /* 外边距 */
+  margin: 0 0 8px 0;
+}
+
+/* 分组描述文字 */
+.settings-section-desc {
+  /* 字号和颜色 */
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+
+  /* 外边距 */
+  margin: 0 0 20px 0;
+
+  /* 行高 */
+  line-height: 1.5;
+}
+
+/* 表单组的间距 */
+.settings-panel-content .form-group {
+  /* 底部外边距 */
+  margin-bottom: 16px;
+}
+
+/* ============================================================
+ * 子分组（Subsection）- 用于 Git 用户身份的 Local/Global 分组
+ * ============================================================ */
+
+/* 子分组容器 */
+.settings-subsection {
+  /* 底部外边距 */
+  margin-bottom: 24px;
+
+  /* 内边距 */
+  padding: 16px;
+
+  /* 背景和边框 */
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* 子分组标题 */
+.settings-subsection-title {
+  /* 字号和字重 */
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+
+  /* 外边距 */
+  margin: 0 0 4px 0;
+}
+
+/* 子分组描述 */
+.settings-subsection-desc {
+  /* 字号和颜色 */
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+
+  /* 外边距 */
+  margin: 0 0 12px 0;
+}
+
+/* ============================================================
+ * 复选框和单选框样式
+ * ============================================================ */
+
+/* 复选框容器（label 包裹 input 和文字） */
+.form-checkbox {
+  /* 布局：水平排列复选框和文字 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  /* 鼠标变为手型 */
+  cursor: pointer;
+
+  /* 用户选择禁用 */
+  user-select: none;
+}
+
+/* 复选框输入 */
+.form-checkbox input[type="checkbox"] {
+  /* 尺寸 */
+  width: 16px;
+  height: 16px;
+
+  /* 强调色 */
+  accent-color: var(--accent);
+
+  /* 鼠标变为手型 */
+  cursor: pointer;
+}
+
+/* 复选框文字 */
+.form-checkbox span {
+  /* 字号和颜色 */
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+/* 单选按钮组容器 */
+.form-radio-group {
+  /* 布局：垂直排列各选项 */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 单选按钮容器 */
+.form-radio {
+  /* 布局：水平排列单选框和文字 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  /* 鼠标变为手型 */
+  cursor: pointer;
+
+  /* 用户选择禁用 */
+  user-select: none;
+}
+
+/* 单选按钮输入 */
+.form-radio input[type="radio"] {
+  /* 尺寸 */
+  width: 16px;
+  height: 16px;
+
+  /* 强调色 */
+  accent-color: var(--accent);
+
+  /* 鼠标变为手型 */
+  cursor: pointer;
+}
+
+/* 单选按钮文字 */
+.form-radio span {
+  /* 字号和颜色 */
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+ * 表单提示文字
+ * ============================================================ */
+
+/* 表单提示（form-hint）- 输入框下方的说明文字 */
+.form-hint {
+  /* 字号和颜色 */
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+
+  /* 外边距 */
+  margin-top: 4px;
+
+  /* 行高 */
+  line-height: 1.4;
+}
+
+/* ============================================================
+ * 底部按钮栏（Footer）
+ * ============================================================ */
+
+/* 底部容器 */
+.settings-panel-footer {
+  /* 布局：水平排列，左右两端对齐 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  /* 内边距 */
+  padding: 16px 20px;
+
+  /* 顶部分隔线 */
+  border-top: 1px solid var(--border);
+
+  /* 不收缩高度 */
+  flex-shrink: 0;
+}
+
+/* 底部右侧按钮组 */
+.settings-panel-footer-right {
+  /* 布局：水平排列 */
+  display: flex;
+  gap: 8px;
+}
+
+/* ============================================================
+ * 次要按钮样式（.btn-secondary）
+ * ============================================================ */
+
+/* 次要按钮 - 用于"取消"、"重置"等操作 */
+.btn-secondary {
+  /* 背景：透明 */
+  background: transparent;
+
+  /* 边框 */
+  border: 1px solid var(--border);
+
+  /* 文字颜色 */
+  color: var(--text-secondary);
+}
+
+/* 次要按钮悬停状态 */
+.btn-secondary:hover {
+  /* 悬停背景 */
+  background: var(--bg-hover);
+
+  /* 文字变亮 */
+  color: var(--text-primary);
+}
+
+/* ============================================================
+ * 加载和错误状态
+ * ============================================================ */
+
+/* 加载中提示 */
+.settings-loading {
+  /* 文字居中 */
+  text-align: center;
+  padding: 40px;
+
+  /* 颜色 */
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
+}
+
+/* 错误提示 */
+.settings-error {
+  /* 颜色 */
+  color: var(--error);
+  font-size: var(--font-size-sm);
+
+  /* 外边距 */
+  margin: 12px 0;
+}
+
+/* ============================================================
+ * Issue Link 超链接样式
+ * ============================================================ */
+
+/* 提交消息中的 Issue 链接 */
+.commit-message a.externalUrl,
+a.externalUrl {
+  /* 强调色 */
+  color: var(--accent);
+
+  /* 下划线 */
+  text-decoration: underline;
+
+  /* 鼠标变为手型 */
+  cursor: pointer;
+
+  /* 过渡动画 */
+  transition: color var(--transition-fast);
+}
+
+/* Issue 链接悬停状态 */
+.commit-message a.externalUrl:hover,
+a.externalUrl:hover {
+  /* 悬停时变为强调悬停色 */
+  color: var(--accent-hover);
+}
+
+/* ============================================================
+ * 滚动条样式
+ * ============================================================ */
+
+/* 导航和内容区域的滚动条 */
+.settings-panel-nav::-webkit-scrollbar,
+.settings-panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* 滚动条滑块 */
+.settings-panel-nav::-webkit-scrollbar-thumb,
+.settings-panel-content::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+/* 滚动条轨道 */
+.settings-panel-nav::-webkit-scrollbar-track,
+.settings-panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+ * Task 13.7：新增组件样式
+ * ============================================================ */
+
+/* 危险按钮样式（用于删除操作） */
+.btn-danger {
+  /* 红色背景表示危险操作 */
+  background: var(--error);
+  /* 白色文字 */
+  color: #fff;
+  /* 红色边框 */
+  border: 1px solid var(--error);
+}
+
+/* 危险按钮悬停效果 */
+.btn-danger:hover {
+  /* 悬停时加深背景色 */
+  background: var(--error-hover, #c0392b);
+  border-color: var(--error-hover, #c0392b);
+}
+
+/* 输入框+按钮组合容器（Task 13.7：用于 Git 用户身份删除按钮） */
+.form-input-with-button {
+  /* 弹性布局，让输入框和按钮在同一行 */
+  display: flex;
+  /* 输入框和按钮之间的间距 */
+  gap: 8px;
+  /* 垂直居中对齐 */
+  align-items: center;
+}
+
+/* 输入框占据剩余空间 */
+.form-input-with-button .form-input {
+  flex: 1;
+}
+
+/* 远程仓库列表项容器（Task 13.7） */
+.remote-item {
+  /* 边框分隔每个远程项 */
+  border: 1px solid var(--border);
+  /* 圆角 */
+  border-radius: var(--radius-sm);
+  /* 内边距 */
+  padding: 12px;
+  /* 上下间距 */
+  margin-bottom: 8px;
+  /* 背景色 */
+  background: var(--bg-secondary);
+}
+
+/* 远程项头部（名称+操作按钮） */
+.remote-item-header {
+  /* 弹性布局 */
+  display: flex;
+  /* 两端对齐：名称在左，按钮在右 */
+  justify-content: space-between;
+  /* 垂直居中 */
+  align-items: center;
+  /* 下方间距 */
+  margin-bottom: 8px;
+}
+
+/* 远程仓库名称 */
+.remote-item-name {
+  /* 加粗显示 */
+  font-weight: 600;
+  /* 主要文字色 */
+  color: var(--text-primary);
+  /* 等宽字体 */
+  font-family: var(--font-mono);
+}
+
+/* 远程项操作按钮组 */
+.remote-item-actions {
+  /* 弹性布局 */
+  display: flex;
+  /* 按钮间距 */
+  gap: 4px;
+}
+
+/* 远程 URL 行 */
+.remote-url-row {
+  /* 弹性布局 */
+  display: flex;
+  /* 间距 */
+  gap: 8px;
+  /* 小行高 */
+  line-height: 1.6;
+}
+
+/* 远程 URL 标签 */
+.remote-url-label {
+  /* 弱化文字色 */
+  color: var(--text-muted);
+  /* 不缩小 */
+  flex-shrink: 0;
+  /* 小字号 */
+  font-size: var(--font-size-xs);
+}
+
+/* 远程 URL 值 */
+.remote-url-value {
+  /* 主要文字色 */
+  color: var(--text-primary);
+  /* 等宽字体显示 URL */
+  font-family: var(--font-mono);
+  /* 小字号 */
+  font-size: var(--font-size-xs);
+  /* 允许换行 */
+  word-break: break-all;
+}
+
+/* 设置面板提示文字（用于无数据提示） */
+.settings-hint {
+  /* 弱化文字色 */
+  color: var(--text-muted);
+  /* 小字号 */
+  font-size: var(--font-size-sm);
+  /* 居中 */
+  text-align: center;
+  /* 上下间距 */
+  padding: 16px 0;
+}
+
+/* 设置面板列表（用于导出内容列表等） */
+.settings-list {
+  /* 左侧内边距 */
+  padding-left: 20px;
+  /* 行高 */
+  line-height: 1.8;
+  /* 主要文字色 */
+  color: var(--text-primary);
+  /* 小字号 */
+  font-size: var(--font-size-sm);
+}
+
+/* 设置列表项 */
+.settings-list li {
+  /* 列表项标记 */
+  list-style-type: disc;
+}

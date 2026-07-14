@@ -140,6 +140,36 @@ fn parse_status_char(ch: char) -> Option<FileStatus> {
 }
 
 /**
+ * 判断 XY 状态码组合是否表示合并冲突（unmerged）状态
+ *
+ * Git 在合并冲突时会产生以下 7 种 unmerged 状态码组合：
+ * - DD：双方都删除了该文件（both deleted）
+ * - AU：我们添加，他们修改（added by us）
+ * - UD：我们修改，他们删除（deleted by them）
+ * - UA：我们修改，他们添加（added by them）
+ * - DU：我们删除，他们修改（deleted by us）
+ * - AA：双方都添加了该文件（both added）
+ * - UU：双方都修改了该文件（both modified）
+ *
+ * 这些组合与普通状态码不同：X 和 Y 都不是空格，
+ * 表示文件在暂存区和工作区都处于冲突状态。
+ *
+ * 参数：
+ * - x: 状态码的第一个字符（暂存区状态）
+ * - y: 状态码的第二个字符（工作区状态）
+ *
+ * 返回值：
+ * - true: 该组合是合并冲突状态
+ * - false: 该组合不是合并冲突状态
+ */
+fn is_unmerged_pair(x: char, y: char) -> bool {
+    matches!(
+        (x, y),
+        ('D', 'D') | ('A', 'U') | ('U', 'D') | ('U', 'A') | ('D', 'U') | ('A', 'A') | ('U', 'U')
+    )
+}
+
+/**
  * 获取仓库的完整状态信息（旧版，保持向后兼容）
  *
  * 执行 `git status --porcelain=v2 --branch` 命令，解析其输出，
@@ -403,6 +433,13 @@ fn parse_status_z_output(bytes: &[u8]) -> Vec<StatusEntry> {
         } else if x_char == '!' && y_char == '!' {
             // 忽略文件：!! path（不显示）
             None
+        } else if is_unmerged_pair(x_char, y_char) {
+            // 合并冲突状态：UU/DU/UD/AU/UA/AA/DD
+            // 这些状态码表示文件存在合并冲突，需要用户手动解决
+            // Task 8.1：识别 unmerged 组合状态，正确填充 FileStatus::Unmerged
+            // 注意：unmerged 状态下 staged 标记为 false，因为冲突文件既不在暂存区也不在工作区
+            // 而是处于特殊的冲突状态（三个 stage 同时存在于索引中）
+            Some((FileStatus::Unmerged, false))
         } else if let Some(s) = parse_status_char(x_char) {
             // X 是有效状态码（暂存区的变更）
             Some((s, true))
@@ -451,6 +488,135 @@ fn parse_status_z_output(bytes: &[u8]) -> Vec<StatusEntry> {
     }
 
     entries
+}
+
+/**
+ * 合并冲突文件信息
+ *
+ * 表示一个存在合并冲突的文件的详细信息。
+ * 合并冲突时，Git 索引中会同时存在该文件的三个版本（stage）：
+ * - stage 1：base 版本（共同祖先提交中的版本）
+ * - stage 2：ours 版本（当前分支的版本）
+ * - stage 3：theirs 版本（被合并分支的版本）
+ *
+ * 通过 `git ls-files -u` 命令可以获取这些 stage 的 blob hash。
+ * 用户解决冲突后，对应 stage 会被清除，文件回到正常的暂存状态。
+ *
+ * 此结构体用于 Task 8.1 合并冲突检测功能。
+ */
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct ConflictFile {
+    /// 冲突文件的路径（相对于仓库根目录）
+    pub path: String,
+    /// ours 版本的 blob hash（stage 2，当前分支版本）
+    /// 如果当前分支没有该文件（如 DU 状态），则为 None
+    pub ours_hash: Option<String>,
+    /// theirs 版本的 blob hash（stage 3，被合并分支版本）
+    /// 如果被合并分支没有该文件（如 UD 状态），则为 None
+    pub theirs_hash: Option<String>,
+    /// base 版本的 blob hash（stage 1，共同祖先版本）
+    /// 如果文件是新增的（无共同祖先版本，如 AA 状态），则为 None
+    pub base_hash: Option<String>,
+}
+
+/**
+ * 检测仓库中存在合并冲突的文件列表
+ *
+ * 执行 `git ls-files -u -z` 命令获取所有 unmerged 文件的 stage 信息，
+ * 解析后返回 ConflictFile 列表。
+ *
+ * `git ls-files -u -z` 输出格式（每个条目用 NUL 分隔）：
+ *   `<mode> <hash> <stage>\t<file>\0`
+ * 其中：
+ * - mode：文件权限模式（如 100644）
+ * - hash：blob 对象的 SHA-1 哈希（40 位）
+ * - stage：阶段编号（1=base, 2=ours, 3=theirs）
+ * - file：文件路径（相对于仓库根目录）
+ *
+ * 同一冲突文件会有多个 stage 条目（1/2/3），此函数会将它们合并为单个 ConflictFile。
+ *
+ * 此函数用于 merge/pull/rebase 等操作后检测是否产生冲突。
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ *
+ * 返回值：
+ * - Ok(Vec<ConflictFile>): 冲突文件列表（无冲突时返回空 Vec）
+ * - Err(GitError): 命令执行失败
+ */
+pub fn detect_conflicts(repo_path: &str) -> Result<Vec<ConflictFile>, GitError> {
+    // 执行 git ls-files -u -z
+    // -u：显示 unmerged 文件（带 stage 信息）
+    // -z：使用 NUL 字符分隔条目（处理含空格/特殊字符的文件名）
+    let bytes = run_git_raw(repo_path, &["ls-files", "-u", "-z"])?;
+
+    // 如果输出为空，说明没有冲突文件
+    if bytes.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 使用 HashMap 按文件路径分组，收集每个文件的三个 stage hash
+    // key: 文件路径，value: (base_hash, ours_hash, theirs_hash)
+    let mut conflict_map: std::collections::HashMap<String, (Option<String>, Option<String>, Option<String>)> =
+        std::collections::HashMap::new();
+
+    // 按 NUL 字符分割字节流
+    let fields: Vec<&[u8]> = bytes.split(|&b| b == 0).collect();
+
+    for field in fields {
+        // 跳过空字段（-z 格式末尾会有一个空字段）
+        if field.is_empty() {
+            continue;
+        }
+
+        // 将字节转换为字符串（lossy 转换避免无效 UTF-8 导致 panic）
+        let line = String::from_utf8_lossy(field);
+
+        // 解析行格式：<mode> <hash> <stage>\t<file>
+        // 先按 tab 分割，分离出 "<mode> <hash> <stage>" 和 "<file>" 两部分
+        let tab_pos = match line.find('\t') {
+            Some(pos) => pos,
+            None => continue, // 格式异常，跳过
+        };
+
+        let meta_part = &line[..tab_pos]; // "<mode> <hash> <stage>"
+        let file_path = &line[tab_pos + 1..]; // "<file>"
+
+        // 解析 meta 部分：按空格分割为 [mode, hash, stage]
+        let meta_tokens: Vec<&str> = meta_part.split_whitespace().collect();
+        if meta_tokens.len() < 3 {
+            continue; // 格式异常，跳过
+        }
+
+        let hash = meta_tokens[1].to_string();
+        let stage: u32 = meta_tokens[2].parse().unwrap_or(0);
+
+        // 获取或创建该文件的冲突信息条目
+        let entry = conflict_map
+            .entry(file_path.to_string())
+            .or_insert((None, None, None));
+
+        // 根据 stage 编号填充对应的 hash
+        match stage {
+            1 => entry.0 = Some(hash), // base（共同祖先）
+            2 => entry.1 = Some(hash), // ours（当前分支）
+            3 => entry.2 = Some(hash), // theirs（被合并分支）
+            _ => {} // 忽略其他 stage（理论上不会出现）
+        }
+    }
+
+    // 将 HashMap 转换为 Vec<ConflictFile>
+    let conflicts: Vec<ConflictFile> = conflict_map
+        .into_iter()
+        .map(|(path, (base_hash, ours_hash, theirs_hash))| ConflictFile {
+            path,
+            ours_hash,
+            theirs_hash,
+            base_hash,
+        })
+        .collect();
+
+    Ok(conflicts)
 }
 
 #[cfg(test)]

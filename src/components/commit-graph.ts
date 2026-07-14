@@ -85,6 +85,16 @@ import {
 // EventOverlay：全屏事件遮罩，用于列宽拖拽时捕获鼠标事件
 import { UNCOMMITTED, escapeHtml, EventOverlay } from '../utils/git-utils.js';
 
+// 导入提交消息格式化工具（Task 7.5 + Task 11.1：用于 Issue Linking 和完整 AST 解析）
+// formatCommitMessage：格式化提交消息（HTML 转义 + Issue Linking 替换 + Markdown/Emoji 等可选）
+import { formatCommitMessage } from '../utils/text-formatter.js';
+// 导入 ImageResizer 类（阶段 10：Task 10.5 - 用于缩放头像到 18×18 像素）
+// ImageResizer 使用 Canvas 将头像缩放到 18×18，返回 data URI 供 <img> 元素使用
+import { ImageResizer } from '../utils/git-utils.js';
+// 导入右键菜单组件（Task 13.1：用于列头右键菜单，切换 Date/Author/Commit 列显隐）
+// contextMenu：全局单例，调用 show() 方法显示菜单
+import { contextMenu } from './context-menu.js';
+
 
 /**
  * 默认分支颜色列表
@@ -260,6 +270,46 @@ const DEFAULT_COLUMN_VISIBILITY: ColumnVisibility = {
  *   5. 切换仓库/关闭：由 app.ts 重新创建实例
  */
 export class CommitGraph {
+  /* ============================================================
+   * 阶段 10：Task 10.5 - 静态属性（头像缓存与缩放器）
+   * ============================================================
+   * 这些静态属性在所有 CommitGraph 实例之间共享：
+   *   - avatarCache：避免切换仓库时重复请求同一作者的头像
+   *   - imageResizer：避免为每次头像缩放都创建新的 Canvas
+   */
+
+  /**
+   * 头像内存缓存
+   *
+   * 键：作者邮箱（email）
+   * 值：
+   *   - string：头像 URL（已成功获取并缩放后的 data URI 或 convertFileSrc 转换的 URL）
+   *   - null：已查询过但该作者无头像（避免重复请求失败的头像）
+   *   - undefined：尚未查询过（通过 .get() 返回 undefined 判断）
+   *
+   * 使用 Map 而非 Object 的原因：
+   *   - Map 的键可以是任意类型（这里用 string），且保持插入顺序
+   *   - Map.get() 对不存在的键返回 undefined，便于与 null（已查询无头像）区分
+   *
+   * 使用静态属性的原因：
+   *   - 同一作者可能在多个仓库中出现，缓存跨仓库复用避免重复网络请求
+   *   - 应用生命周期内头像 URL 不变，无需随 CommitGraph 实例销毁而清空
+   */
+  private static avatarCache: Map<string, string | null> = new Map();
+
+  /**
+   * ImageResizer 实例（用于缩放头像到 18×18 像素）
+   *
+   * ImageResizer 内部使用 Canvas 将原图缩放到目标尺寸，
+   * 返回 data URI 供 <img> 元素的 src 属性使用。
+   *
+   * 使用静态实例的原因：
+   *   - Canvas 创建和销毁有性能开销，复用同一实例避免重复创建
+   *   - ImageResizer 内部维护一个内存缓存（原图 URL → 缩放后 data URI），
+   *     静态实例使得不同 CommitGraph 实例可以共享这个缓存
+   */
+  private static imageResizer: ImageResizer = new ImageResizer();
+
   /** 容器 DOM 元素的 ID（由 app.ts 传入，通常是 'center-body'） */
   private readonly containerId: string;
   /** 仓库路径（用于调用后端 API 和 localStorage 键名） */
@@ -475,6 +525,35 @@ export class CommitGraph {
     console.log('[CommitGraph] 已滚动到 stash（行', stashIndex, '）');
   }
 
+  /**
+   * 滚动到指定哈希的提交
+   *
+   * 将滚动区域滚动到指定哈希的提交所在行，使其可见。
+   * 用于 Find Widget 导航匹配项时自动滚动到当前匹配的提交。
+   *
+   * @param hash - 要滚动到的提交哈希
+   */
+  public scrollToCommit(hash: string): void {
+    if (!this.graphData || !this.scrollArea) return;
+
+    /* 查找指定哈希提交的索引 */
+    let targetIndex = -1;
+    for (let i = 0; i < this.graphData.commits.length; i++) {
+      if (this.graphData.commits[i].hash === hash) {
+        targetIndex = i;
+        break;
+      }
+    }
+
+    if (targetIndex === -1) {
+      console.log('[CommitGraph] 提交不在已加载列表中，无法滚动:', hash);
+      return;
+    }
+
+    /* 滚动到对应位置（每行高度 = GRID_Y） */
+    this.scrollArea.scrollTop = targetIndex * GRID_Y;
+  }
+
 
   /* ============================================================
    * 渲染主流程
@@ -540,6 +619,106 @@ export class CommitGraph {
 
     /* 第七步：绑定所有交互事件 */
     this.bindEvents();
+
+    /* 第八步：阶段 10 - Task 10.5 异步获取作者头像 */
+    // 头像加载是异步的，先显示透明占位符，加载完成后填充并淡入显示
+    // 此方法不会阻塞渲染，仅在后台逐个加载头像
+    this.fetchAvatarsForVisibleCommits();
+  }
+
+  /**
+   * 阶段 10：Task 10.5 - 为已渲染的提交异步加载作者头像
+   *
+   * 此方法在 render() 后调用，遍历所有 .author-cell 元素，
+   * 为每个作者异步获取头像：
+   * 1. 检查内存缓存（avatarCache）是否已有此 email 的头像
+   * 2. 如果缓存命中且未过期，直接使用缓存的 URL
+   * 3. 如果缓存未命中，调用 repoService.getAvatar 异步获取
+   * 4. 头像加载完成后，使用 ImageResizer 缩放到 18×18 并淡入显示
+   *
+   * 注意：此方法不阻塞主渲染流程，所有头像加载都是异步的。
+   */
+  private async fetchAvatarsForVisibleCommits(): Promise<void> {
+    // 如果没有容器或表格数据，直接返回
+    if (!this.container || !this.graphData) return;
+
+    // 遍历所有 .author-cell 元素
+    const authorCells = this.container.querySelectorAll<HTMLTableCellElement>('.author-cell');
+    for (const cell of authorCells) {
+      // 读取 data-email 和 data-author 属性
+      const email = cell.getAttribute('data-email') || '';
+      const author = cell.getAttribute('data-author') || '';
+      if (!email) continue;
+
+      // 获取此 cell 中的 <img> 元素
+      const img = cell.querySelector<HTMLImageElement>('.author-avatar');
+      if (!img) continue;
+
+      // 异步获取头像（不阻塞循环）
+      this.fetchAvatarForCell(img, email, author).catch((err) => {
+        console.warn('[CommitGraph] 获取头像失败:', email, err);
+      });
+    }
+  }
+
+  /**
+   * 阶段 10：Task 10.5 - 为单个 <img> 元素加载头像
+   *
+   * 此方法异步加载头像：
+   * 1. 检查内存缓存（avatarCache）- 避免重复请求
+   * 2. 调用 repoService.getAvatar 获取头像路径
+   * 3. 用 ImageResizer 缩放到 18×18
+   * 4. 设置 img.src 并淡入显示
+   *
+   * @param img - 要填充头像的 <img> 元素
+   * @param email - 作者邮箱
+   * @param author - 作者名
+   */
+  private async fetchAvatarForCell(img: HTMLImageElement, email: string, author: string): Promise<void> {
+    // 检查内存缓存
+    let avatarUrl = CommitGraph.avatarCache.get(email);
+    if (avatarUrl === undefined) {
+      // 缓存未命中，调用后端获取头像
+      try {
+        const avatarPath = await repoService.getAvatar(this.repoPath, email, author);
+        if (avatarPath) {
+          // 将本地文件路径转为可加载的 URL
+          // Tauri 2.x 使用 convertFileSrc 将本地路径转为 asset 协议 URL
+          const { convertFileSrc } = await import('@tauri-apps/api/core');
+          avatarUrl = convertFileSrc(avatarPath);
+          // 缓存到内存
+          CommitGraph.avatarCache.set(email, avatarUrl);
+        } else {
+          // 获取失败，缓存 null 避免重复请求
+          CommitGraph.avatarCache.set(email, null);
+          return;
+        }
+      } catch (err) {
+        console.warn('[CommitGraph] 获取头像失败:', email, err);
+        return;
+      }
+    } else if (avatarUrl === null) {
+      // 之前获取失败，跳过
+      return;
+    }
+
+    // avatarUrl 此时是有效的 URL
+    const url = avatarUrl as string;
+
+    // 用 ImageResizer 缩放到 18×18
+    CommitGraph.imageResizer.resize(url, (resizedUrl: string) => {
+      // 设置缩放后的图片 URL
+      img.src = resizedUrl;
+      // 加载完成后淡入显示（CSS 过渡）
+      img.onload = () => {
+        img.style.opacity = '1';
+        img.style.transition = 'opacity 0.2s';
+      };
+      // 如果图片加载失败（如格式问题），保持透明
+      img.onerror = () => {
+        img.style.opacity = '0';
+      };
+    });
   }
 
   /**
@@ -716,14 +895,20 @@ export class CommitGraph {
     const dateCellHtml = this.columnVisibility.date
       ? `<td class="date-cell">${dateStr}</td>`
       : '';
+    // 阶段 10：Task 10.5 - 在作者单元格中加入头像占位符
+    // <img> 标签初始为透明（opacity:0），由 fetchAvatarForCommit 异步加载后填充
+    // data-email 属性保存作者邮箱，用于关联头像加载结果
     const authorCellHtml = this.columnVisibility.author
-      ? `<td class="author-cell">${escapeHtml(commit.author)}</td>`
+      ? `<td class="author-cell" data-email="${escapeHtml(commit.email)}" data-author="${escapeHtml(commit.author)}">
+           <img class="author-avatar" alt="" style="width:18px;height:18px;border-radius:50%;vertical-align:middle;margin-right:6px;opacity:0;" />
+           <span class="author-name">${escapeHtml(commit.author)}</span>
+         </td>`
       : '';
     const commitCellHtml = this.columnVisibility.commit
       ? `<td class="commit-cell">
            <span class="commit-hash" title="完整哈希: ${escapeHtml(commit.hash)}">${shortHash}</span>
            ${annotationsHtml}
-           <span class="commit-message">${escapeHtml(commit.message)}</span>
+           <span class="commit-message">${formatCommitMessage(commit.message)}</span>
          </td>`
       : '';
 
@@ -827,6 +1012,7 @@ export class CommitGraph {
    *   6. 列宽拖拽事件（调整列宽）
    *   7. 滚动事件（自动加载更多）
    *   8. 加载更多按钮点击事件
+   *   9. 列头右键事件（Task 13.1：切换 Date/Author/Commit 列显隐）
    */
   private bindEvents(): void {
     if (!this.container) return;
@@ -848,6 +1034,101 @@ export class CommitGraph {
 
     /* 绑定加载更多按钮点击事件 */
     this.bindLoadMoreButtonEvent();
+
+    /* Task 13.1：绑定列头右键菜单（切换 Date/Author/Commit 列显隐） */
+    this.bindColumnHeaderContextMenu();
+  }
+
+  /**
+   * 绑定列头右键菜单（Task 13.1）
+   *
+   * 为 thead 中的 th 元素（带 data-col 属性的列头）绑定 contextmenu 事件。
+   * 右键点击列头时，弹出菜单含三个选项：
+   *   - 显示/隐藏 日期列（调用 toggleColumnVisibility('date')）
+   *   - 显示/隐藏 作者列（调用 toggleColumnVisibility('author')）
+   *   - 显示/隐藏 提交列（调用 toggleColumnVisibility('commit')）
+   *
+   * 菜单项的 checked 状态根据当前列可见性设置：
+   *   - 列可见时，菜单项显示对勾标记
+   *   - 列隐藏时，菜单项不显示对勾标记
+   *
+   * 菜单使用 contextMenu.show() 方法显示，传入 checked=true 表示显示勾选标记列，
+   * 每个菜单项的 checked 字段控制该项是否打勾。
+   *
+   * frameElem 使用滚动区域元素，菜单相对于此元素定位。
+   */
+  private bindColumnHeaderContextMenu(): void {
+    if (!this.container) return;
+
+    /* 查询所有带 data-col 属性的列头 th 元素 */
+    const headers = this.container.querySelectorAll('thead th[data-col]');
+    for (const header of headers) {
+      /* 为每个列头绑定 contextmenu 事件 */
+      header.addEventListener('contextmenu', (event: Event) => {
+        const mouseEvent = event as MouseEvent;
+        /* 阻止浏览器默认右键菜单 */
+        mouseEvent.preventDefault();
+        /* 阻止事件冒泡，避免触发其他右键处理逻辑 */
+        mouseEvent.stopPropagation();
+
+        /* 获取滚动区域元素作为菜单的定位容器（frameElem） */
+        const frameElem = this.scrollArea ?? this.container;
+        if (!frameElem) return;
+
+        /* 构建菜单项的二维数组（一组三项：日期/作者/提交列的显隐切换）
+         * 每个菜单项的 checked 字段表示当前列是否可见（控制对勾标记显示）
+         * onClick 回调调用 toggleColumnVisibility 切换该列显隐 */
+        const actions = [
+          [
+            {
+              /* 日期列切换项 */
+              title: '日期列',
+              visible: true,
+              checked: this.columnVisibility.date,
+              onClick: () => {
+                this.toggleColumnVisibility('date');
+              }
+            },
+            {
+              /* 作者列切换项 */
+              title: '作者列',
+              visible: true,
+              checked: this.columnVisibility.author,
+              onClick: () => {
+                this.toggleColumnVisibility('author');
+              }
+            },
+            {
+              /* 提交列切换项 */
+              title: '提交列',
+              visible: true,
+              checked: this.columnVisibility.commit,
+              onClick: () => {
+                this.toggleColumnVisibility('commit');
+              }
+            }
+          ]
+        ];
+
+        /* 显示右键菜单
+         * - actions：菜单项二维数组
+         * - checked=true：表示启用勾选标记列（菜单项左侧显示对勾位置）
+         * - target=null：列头菜单不与具体提交/ref 关联，无目标
+         * - mouseEvent：用于定位菜单的鼠标事件
+         * - frameElem：菜单的定位容器（滚动区域）
+         * - onClose=null：菜单关闭时无需回调
+         * - className='column-header-context-menu'：额外 CSS 类名，便于样式定制 */
+        contextMenu.show(
+          actions,
+          true,           /* checked: 启用勾选标记列 */
+          null,           /* target: 列头菜单无具体目标 */
+          mouseEvent,
+          frameElem as HTMLElement,
+          null,           /* onClose: 无关闭回调 */
+          'column-header-context-menu'
+        );
+      });
+    }
   }
 
   /**
@@ -862,6 +1143,50 @@ export class CommitGraph {
 
     const rows = this.container.querySelectorAll('.commit-row');
     for (const row of rows) {
+      /* Issue Link / 外部 URL 超链接点击事件（Task 7.5 + Task 11.2） */
+      /* 点击提交消息中的外部链接时，在默认浏览器中打开 URL，而不是触发行点击事件 */
+      const externalLinks = row.querySelectorAll('a.externalUrl');
+      externalLinks.forEach((link) => {
+        link.addEventListener('click', async (event: Event) => {
+          /* 阻止默认的链接导航行为 */
+          event.preventDefault();
+          /* 阻止事件冒泡，避免触发行点击事件 */
+          event.stopPropagation();
+          /* 获取链接的 href 属性 */
+          const url = (link as HTMLAnchorElement).getAttribute('href');
+          if (url) {
+            try {
+              /* 调用 Tauri 后端命令在默认浏览器中打开 URL */
+              const { invoke } = await import('@tauri-apps/api/core');
+              await invoke('open_external_url', { url });
+            } catch (err) {
+              console.error('[CommitGraph] 打开外部链接失败:', err);
+            }
+          }
+        });
+      });
+
+      /* 内部 URL（commit hash 链接）点击事件（Task 11.2） */
+      /* 点击提交消息中的 commit hash 链接时，触发 onCommitSelect 回调跳转到对应提交 */
+      const internalLinks = row.querySelectorAll('span.internalUrl[data-type="commit"]');
+      internalLinks.forEach((link) => {
+        link.addEventListener('click', (event: Event) => {
+          /* 阻止事件冒泡，避免触发行点击事件 */
+          event.stopPropagation();
+          /* 获取 data-value 属性（完整提交哈希） */
+          const hash = (link as HTMLElement).getAttribute('data-value');
+          if (hash) {
+            console.log('[CommitGraph] 点击内部 commit 链接，hash:', hash);
+            /* 在提交列表中查找对应的 commit 对象 */
+            const commit = this.graphData?.commits.find(c => c.hash === hash);
+            if (commit) {
+              /* 触发选择回调（与行点击相同的行为：显示提交详情） */
+              this.onCommitSelect(commit);
+            }
+          }
+        });
+      });
+
       /* 行点击事件 */
       row.addEventListener('click', (event: Event) => {
         const mouseEvent = event as MouseEvent;

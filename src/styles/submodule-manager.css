@@ -1,0 +1,252 @@
+/**
+ * 子模块管理器样式（阶段 9：Task 9.9）
+ *
+ * 定义子模块管理对话框的视觉样式，包括：
+ * - 遮罩层（覆盖整个窗口的半透明背景）
+ * - 对话框容器（居中显示的模态窗口）
+ * - 子模块列表项（路径、URL、状态标记）
+ * - 添加子模块表单
+ * - 状态标记徽章（正常/已修改/未初始化/合并冲突）
+ */
+
+/* 遮罩层：覆盖整个窗口的半透明背景 */
+.submodule-manager-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+/* 对话框容器：居中显示的模态窗口 */
+.submodule-manager-dialog {
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-surface);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* 对话框头部：标题和关闭按钮 */
+.submodule-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bg-surface);
+}
+
+/* 对话框标题 */
+.submodule-manager-title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+/* 关闭按钮 */
+.submodule-manager-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.submodule-manager-close-btn:hover {
+  color: var(--text-primary);
+}
+
+/* 对话框主体：可滚动区域 */
+.submodule-manager-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 区块容器 */
+.submodule-manager-section {
+  margin-bottom: 24px;
+}
+
+/* 区块标题行（含操作按钮） */
+.submodule-manager-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+/* 区块标题 */
+.submodule-manager-section-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 加载中/空状态提示 */
+.submodule-manager-loading,
+.submodule-manager-empty,
+.submodule-manager-error {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 16px;
+}
+
+.submodule-manager-error {
+  color: var(--error);
+}
+
+/* 子模块列表项 */
+.submodule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-surface);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+/* 子模块信息区 */
+.submodule-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 子模块路径 */
+.submodule-item-path {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 子模块 URL */
+.submodule-item-url {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+/* 子模块元信息行（提交哈希、分支、状态） */
+.submodule-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 提交哈希 */
+.submodule-item-commit {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-muted);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* 分支名 */
+.submodule-item-branch {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 子模块操作按钮区 */
+.submodule-item-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+}
+
+/* 状态标记徽章 */
+.submodule-status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* 正常状态 - 绿色 */
+.submodule-status-ok {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+/* 已修改状态 - 黄色 */
+.submodule-status-modified {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+/* 未初始化状态 - 红色 */
+.submodule-status-uninitialized {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+/* 合并冲突状态 - 红色 */
+.submodule-status-conflict {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+/* 添加子模块表单 */
+.submodule-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 表单分组 */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 表单标签 */
+.form-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* 表单输入框 */
+.form-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-surface);
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+}
+
+/* 小按钮 */
+.btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+}

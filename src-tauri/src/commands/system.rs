@@ -161,15 +161,15 @@ fn get_git_path() -> Option<String> {
 
 /**
  * 打开外部 URL（在系统默认浏览器中打开）
- * 
+ *
  * 使用 Tauri Shell 插件的 open 功能来打开外部链接。
  * 主要用于打开 Git 官网下载页面。
- * 
+ *
  * 前端调用方式：
  * ```javascript
  * await invoke('open_external_url', { url: 'https://git-scm.com/download/win' });
  * ```
- * 
+ *
  * 参数：
  * - app: Tauri 应用句柄，用于调用 Shell 插件功能
  * - url: 要打开的外部 URL 字符串
@@ -183,4 +183,28 @@ pub fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), Strin
     app.shell()
         .open(url, None)
         .map_err(|e| format!("打开外部链接失败: {}", e))
+}
+
+/**
+ * 获取 Git 版本号（Task 11.4：状态栏增强）
+ *
+ * 调用 git::commands::git_version() 函数获取系统安装的 Git 版本号。
+ * 用于在状态栏显示当前 Git 版本。
+ *
+ * 前端调用方式：
+ * ```javascript
+ * const version = await invoke('get_git_version');
+ * console.log('Git 版本:', version);  // 如 "2.45.0"
+ * ```
+ *
+ * 返回值：
+ * - Ok(String) - Git 版本号字符串（如 "2.45.0"）
+ * - Err(String) - 获取失败（如 Git 未安装或输出格式异常）
+ */
+#[command]
+pub fn get_git_version() -> Result<String, String> {
+    // 调用 git::commands 模块中的 git_version 函数
+    // 该函数执行 `git --version` 并解析输出
+    crate::git::commands::git_version()
+        .map_err(|e| format!("获取 Git 版本失败: {}", e))
 }

@@ -29,6 +29,12 @@ import { CommitDetail } from './commit-detail.js';
 import { BranchList } from './branch-list.js';
 import { ResetDialog } from './reset-dialog.js';
 import { TagManager } from './tag-manager.js';
+// 导入子模块管理组件（阶段 9：Task 9.2：用于子模块的添加/更新/删除管理）
+import { SubmoduleManager } from './submodule-manager.js';
+// 导入 LFS 管理组件（阶段 9：Task 9.4：用于 LFS 跟踪规则/文件锁/对象拉推管理）
+import { LfsManager } from './lfs-manager.js';
+// 导入设置面板组件（Task 7.4：用于编辑应用配置和 Git 仓库配置）
+import { SettingsPanel } from './settings-panel.js';
 import { FileHistory } from './file-history.js';
 // 导入右键菜单全局单例（用于显示上下文菜单）
 import { contextMenu } from './context-menu.js';
@@ -54,6 +60,28 @@ import type { ContextMenuActions } from './context-menu.js';
 import { UNCOMMITTED } from '../utils/git-utils.js';
 // 导入 Stash 管理组件（提供 stash 操作对话框，作为 commit-graph 的辅助组件）
 import { StashManager } from './stash-manager.js';
+// 阶段 12：导入合并编辑器回调设置函数（用于在检测到冲突时自动打开合并编辑器）
+// setMergeEditorCallbacks：注入关闭回调和保存成功回调，由 merge-editor 单例在操作完成后调用
+import { setMergeEditorCallbacks } from './merge-editor.js';
+// 阶段 12：导入 Blame 视图回调设置函数（用于在 Blame 视图中点击提交哈希时跳转详情）
+// setBlameViewerCallbacks：注入提交点击回调和关闭回调，由 blame-viewer 单例在用户交互时调用
+import { setBlameViewerCallbacks } from './blame-viewer.js';
+// 导入 Find Widget 搜索框组件（Task 5.1：浮动在节点图上方的提交搜索框）
+import { FindWidget } from './find-widget.js';
+// 导入键盘快捷键工具（Task 11.3：用于解析和匹配快捷键）
+// parseShortcutString：将快捷键字符串（如 "Ctrl+F"）解析为结构化表示
+// matchShortcut：比较 KeyboardEvent 和快捷键是否匹配
+import { parseShortcutString, matchShortcut } from '../utils/keyboard-shortcuts.js';
+// 导入配置服务（Task 11.3：读取快捷键配置）
+import { configService } from '../services/config-service.js';
+// 导入状态持久化服务（阶段 10：Task 10.6 - 启动时恢复仓库状态，切换仓库时加载对应状态）
+// stateService 提供 loadStateFromBackend / saveStateToBackend 等方法
+// 用于通过 Tauri IPC 调用后端 state.rs 持久化仓库视图状态到 ~/.gittimeprism/state.json
+import { stateService } from '../services/state-service.js';
+// 导入 Tauri 事件监听函数（阶段 10：Task 10.2 - 监听后端 repo_changed 事件）
+// 当文件监听器检测到 .git 目录下的文件变化时，后端会 emit 'repo_changed' 事件
+// 前端通过 listen() 监听此事件并触发节点图刷新
+import { listen } from '@tauri-apps/api/event';
 
 export class App {
   /** 左侧面板引用 */
@@ -92,8 +120,33 @@ export class App {
   private fileHistory: FileHistory | null = null;
   /** Stash 管理组件实例（提供 stash 操作对话框） */
   private stashManager: StashManager | null = null;
+  /** Find Widget 搜索框组件实例（Task 5.1：浮动在节点图上方的提交搜索框） */
+  private findWidget: FindWidget | null = null;
 
-  /** 初始化应用 */
+  /**
+   * repo_changed 事件取消监听函数（阶段 10：Task 10.2）
+   *
+   * 当文件监听器检测到 .git 目录下的文件变化时（如提交、分支切换、stash 操作等），
+   * 后端会通过 Tauri 事件系统 emit 'repo_changed' 事件。
+   * 前端通过 listen() 注册监听器，返回一个取消监听的函数。
+   * 在切换仓库或关闭应用时调用此函数，避免重复监听和内存泄漏。
+   */
+  private unlistenRepoChanged: (() => void) | null = null;
+
+  /**
+   * 初始化应用
+   *
+   * 应用启动入口，按顺序执行以下初始化：
+   *   1. 渲染基础 DOM 结构
+   *   2. 初始化标题栏（窗口拖拽、最小化/最大化/关闭按钮）
+   *   3. 初始化面板分隔条（可拖拽调整面板大小）
+   *   4. 初始化键盘快捷键
+   *   5. 初始化主题切换按钮
+   *   6. 初始化壁纸功能
+   *   7. 检查 Git 是否已安装
+   *   8. 阶段 10：异步初始化状态服务（从后端加载全局状态到 localStorage）
+   *   9. 阶段 10：注册 repo_changed 事件监听器（文件变化时刷新节点图）
+   */
   init(): void {
     this.render();
     this.initTitlebar();
@@ -102,6 +155,76 @@ export class App {
     this.initThemeToggle();
     this.initWallpaper();
     this.checkGitInstallation();
+    // 阶段 10：异步初始化状态服务（从磁盘加载全局状态到 localStorage）
+    // 使用 void 标记 fire-and-forget，不阻塞 init() 主流程
+    void this.initStateService();
+    // 阶段 10：注册 repo_changed 事件监听器
+    // 当后端文件监听器检测到 .git 目录变化时，触发节点图刷新
+    void this.setupRepoChangedListener();
+  }
+
+  /**
+   * 初始化状态服务（阶段 10：Task 10.6）
+   *
+   * 在应用启动时调用 stateService.initStateService()，
+   * 从磁盘（~/.gittimeprism/state.json）加载全局状态到 localStorage。
+   * 同时尝试从后端加载全局状态（主题、最近仓库列表等）。
+   *
+   * 此方法是异步的，但不阻塞应用启动主流程。
+   * 如果加载失败，应用仍可正常使用（使用 localStorage 现有数据或默认值）。
+   */
+  private async initStateService(): Promise<void> {
+    try {
+      // 调用 state-service 的初始化方法（从 Tauri Store 加载到 localStorage）
+      await stateService.initStateService();
+      console.log('[App] 状态服务初始化完成');
+
+      // 尝试从后端加载全局状态（阶段 10：通过 Rust 后端读取 state.json）
+      const backendGlobalState = await stateService.loadGlobalStateFromBackend();
+      if (backendGlobalState) {
+        console.log('[App] 已从后端加载全局状态:', backendGlobalState);
+        // 如果后端有保存的最近仓库列表，可以在这里恢复（后续 Task 12.x 集成）
+        // 当前阶段仅记录日志，实际恢复在 onRepoOpened 中处理
+      }
+    } catch (err) {
+      // 状态服务初始化失败不影响应用启动
+      console.warn('[App] 状态服务初始化失败（不影响应用启动）:', err);
+    }
+  }
+
+  /**
+   * 设置 repo_changed 事件监听器（阶段 10：Task 10.2）
+   *
+   * 监听后端 emit 的 'repo_changed' 事件。
+   * 当文件监听器检测到 .git 目录下的文件变化时（如提交、分支切换、stash 操作等），
+   * 后端会 emit 此事件，前端收到后触发节点图刷新。
+   *
+   * 防抖机制：
+   *   后端已实现 750ms 防抖，前端无需再次防抖。
+   *   后端在 750ms 内的多次文件变化只 emit 一次事件。
+   *
+   * 此方法是异步的，但调用方无需 await（fire-and-forget）。
+   */
+  private async setupRepoChangedListener(): Promise<void> {
+    try {
+      // 如果已有监听器，先取消旧的（避免重复监听）
+      if (this.unlistenRepoChanged) {
+        this.unlistenRepoChanged();
+        this.unlistenRepoChanged = null;
+      }
+      // 注册新的监听器
+      // listen 返回一个取消监听的函数，保存以便后续清理
+      this.unlistenRepoChanged = await listen('repo_changed', () => {
+        console.log('[App] 收到 repo_changed 事件，刷新所有组件');
+        // 触发节点图和文件列表刷新
+        // 注意：refreshAllComponents 是 async 方法，这里不 await（fire-and-forget）
+        void this.refreshAllComponents();
+      });
+      console.log('[App] repo_changed 事件监听器已注册');
+    } catch (err) {
+      // 监听器注册失败不影响应用启动（只是无法自动刷新）
+      console.warn('[App] 注册 repo_changed 事件监听器失败:', err);
+    }
   }
 
   /** 渲染整体布局的 DOM 结构 */
@@ -129,10 +252,15 @@ export class App {
         <div class="toolbar-spacer"></div>
         <div class="toolbar-section" id="toolbar-right">
           <button class="btn" id="btn-tag-manager" title="标签管理">🏷 标签</button>
+          <button class="btn" id="btn-submodule-manager" title="子模块管理">📦 子模块</button>
+          <button class="btn" id="btn-lfs-manager" title="LFS 管理">🗃 LFS</button>
           <button class="btn" id="btn-reset-commit" title="撤销提交">↩ 撤销</button>
           <button class="btn" id="btn-stash" title="Stash 未提交的变更">📦 Stash</button>
+          <button class="btn" id="btn-fetch" title="从远程仓库获取更新（不合并）">⤓ Fetch</button>
           <button class="btn" id="btn-pull" title="从远程仓库拉取更新">↓ 拉取</button>
           <button class="btn" id="btn-push" title="推送本地提交到远程仓库">↑ 推送</button>
+          <button class="btn" id="btn-find" title="搜索提交 (Ctrl+F)">🔍 查找</button>
+          <button class="btn" id="btn-settings" title="设置">⚙ 设置</button>
           <button class="btn" id="btn-wallpaper" title="设置壁纸">🖼</button>
           <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`">${t('toolbar.toggleTerminal')}</button>
         </div>
@@ -192,8 +320,26 @@ export class App {
         <div class="terminal-body" id="terminal-body"></div>
       </div>
       <footer class="statusbar" id="statusbar">
-        <div class="statusbar-item" id="statusbar-git-version">Git: ${t('statusbar.checking')}</div>
-        <div class="statusbar-item" id="statusbar-repo-path"></div>
+        <!-- Task 11.4：状态栏增强，显示 Git 版本、分支、ahead/behind、提交总数、排序方式、仓库路径 -->
+        <div class="statusbar-item" id="statusbar-git-version" title="Git 版本号">Git: ${t('statusbar.checking')}</div>
+        <div class="statusbar-separator">|</div>
+        <div class="statusbar-item" id="statusbar-branch" title="当前分支" style="display: none;">
+          <span class="statusbar-icon">⎇</span>
+          <span id="statusbar-branch-name">-</span>
+        </div>
+        <div class="statusbar-item" id="statusbar-ahead-behind" title="领先/落后远程提交数" style="display: none;">
+          <span id="statusbar-ahead-behind-text">↑0 ↓0</span>
+        </div>
+        <div class="statusbar-separator">|</div>
+        <div class="statusbar-item" id="statusbar-commit-count" title="已加载提交总数" style="display: none;">
+          <span class="statusbar-icon"> commits</span>
+          <span id="statusbar-commit-count-text">0</span>
+        </div>
+        <div class="statusbar-item" id="statusbar-sort-order" title="提交排序方式" style="display: none;">
+          <span id="statusbar-sort-order-text">date</span>
+        </div>
+        <div class="statusbar-separator">|</div>
+        <div class="statusbar-item" id="statusbar-repo-path" title="仓库路径"></div>
         <div class="statusbar-spacer"></div>
         <div class="statusbar-item" id="statusbar-terminal">
           <button class="btn" id="btn-toggle-terminal-status" title="Ctrl+\`" style="padding: 2px 8px; font-size: var(--font-size-xs);">${t('toolbar.toggleTerminal')}</button>
@@ -561,12 +707,148 @@ export class App {
     this.resizeTarget = null;
   }
 
-  /** 初始化全局快捷键 */
+  /**
+   * 初始化全局键盘快捷键（Task 11.3 重写）
+   *
+   * 从 configService 读取快捷键配置，使用 matchShortcut 进行匹配。
+   * 支持的快捷键包括：
+   *   - Ctrl+F：打开/关闭 Find Widget
+   *   - Ctrl+R：刷新节点图
+   *   - Ctrl+H：滚动到 HEAD
+   *   - Ctrl+S：滚动到第一个 Stash
+   *   - Ctrl+Shift+S：滚动到上一个 Stash
+   *   - Up/Down：切换上/下提交
+   *   - Ctrl+Up/Down：沿同一分支导航
+   *   - Ctrl+Shift+Up/Down：沿替代分支导航
+   *   - Enter：提交对话框
+   *   - Escape：关闭菜单/对话框/详情视图
+   *   - Ctrl+`：切换终端面板
+   *
+   * 注意：当焦点在输入框（input/textarea）中时，单键快捷键（如 Up/Down/Enter/Escape）
+   * 不会触发，避免干扰用户输入。但 Ctrl 组合键仍然会触发。
+   */
   private initKeyboardShortcuts(): void {
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === '`') {
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      /* 从 configService 获取快捷键配置 */
+      const cfg = configService.getAppConfig().keyboardShortcuts;
+
+      /* 判断当前焦点是否在输入框中（单键快捷键在此情况下不触发） */
+      const activeEl: Element | null = document.activeElement;
+      const isInInput: boolean = activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        (activeEl instanceof HTMLElement && activeEl.isContentEditable);
+
+      /* 遍历所有快捷键配置，匹配则执行对应操作 */
+      /* 1. toggleTerminal：切换终端面板 */
+      const toggleTerminalShortcut = parseShortcutString(cfg.toggleTerminal);
+      if (toggleTerminalShortcut && matchShortcut(e, toggleTerminalShortcut)) {
         e.preventDefault();
         this.toggleTerminal();
+        return;
+      }
+
+      /* 2. find：打开/关闭 Find Widget（仅在已打开仓库时响应） */
+      const findShortcut = parseShortcutString(cfg.find);
+      if (findShortcut && matchShortcut(e, findShortcut)) {
+        e.preventDefault();
+        this.toggleFindWidget();
+        return;
+      }
+
+      /* 3. refresh：刷新节点图（仅在已打开仓库时响应） */
+      const refreshShortcut = parseShortcutString(cfg.refresh);
+      if (refreshShortcut && matchShortcut(e, refreshShortcut) && this.currentRepoPath) {
+        e.preventDefault();
+        this.refreshAllComponents();
+        return;
+      }
+
+      /* 4. scrollToHead：滚动到 HEAD（仅在已打开仓库时响应） */
+      const scrollToHeadShortcut = parseShortcutString(cfg.scrollToHead);
+      if (scrollToHeadShortcut && matchShortcut(e, scrollToHeadShortcut) && this.commitGraph) {
+        e.preventDefault();
+        this.commitGraph.scrollToHead();
+        return;
+      }
+
+      /* 5. scrollToStash：滚动到第一个 Stash */
+      const scrollToStashShortcut = parseShortcutString(cfg.scrollToStash);
+      if (scrollToStashShortcut && matchShortcut(e, scrollToStashShortcut) && this.commitGraph) {
+        e.preventDefault();
+        this.commitGraph.scrollToStash();
+        return;
+      }
+
+      /* 6. scrollToPrevStash：滚动到上一个 Stash（暂未实现，打印日志） */
+      const scrollToPrevStashShortcut = parseShortcutString(cfg.scrollToPrevStash);
+      if (scrollToPrevStashShortcut && matchShortcut(e, scrollToPrevStashShortcut)) {
+        e.preventDefault();
+        console.log('[KeyboardShortcut] scrollToPrevStash（暂未实现）');
+        return;
+      }
+
+      /* 7. closeOverlay：关闭菜单/对话框/详情视图（单键，输入框中不触发） */
+      const closeOverlayShortcut = parseShortcutString(cfg.closeOverlay);
+      if (closeOverlayShortcut && matchShortcut(e, closeOverlayShortcut) && !isInInput) {
+        /* 先尝试关闭右键菜单 */
+        contextMenu.close();
+        /* 再尝试关闭对话框 */
+        dialogSingleton.close();
+        return;
+      }
+
+      /* 8. commitDialog：打开提交对话框（单键，输入框中不触发） */
+      const commitDialogShortcut = parseShortcutString(cfg.commitDialog);
+      if (commitDialogShortcut && matchShortcut(e, commitDialogShortcut) && !isInInput && this.commitInput) {
+        e.preventDefault();
+        /* 聚焦提交消息输入框 */
+        const textarea: HTMLElement | null = document.getElementById('commit-message');
+        if (textarea) {
+          textarea.focus();
+        }
+        return;
+      }
+
+      /* 9. navigateUp：切换到上一个提交（单键，输入框中不触发） */
+      const navigateUpShortcut = parseShortcutString(cfg.navigateUp);
+      if (navigateUpShortcut && matchShortcut(e, navigateUpShortcut) && !isInInput) {
+        e.preventDefault();
+        this.navigateCommit(-1);
+        return;
+      }
+
+      /* 10. navigateDown：切换到下一个提交（单键，输入框中不触发） */
+      const navigateDownShortcut = parseShortcutString(cfg.navigateDown);
+      if (navigateDownShortcut && matchShortcut(e, navigateDownShortcut) && !isInInput) {
+        e.preventDefault();
+        this.navigateCommit(1);
+        return;
+      }
+
+      /* 11-14. 沿分支导航（暂未实现，打印日志） */
+      const sameBranchUpShortcut = parseShortcutString(cfg.navigateSameBranchUp);
+      if (sameBranchUpShortcut && matchShortcut(e, sameBranchUpShortcut)) {
+        e.preventDefault();
+        console.log('[KeyboardShortcut] navigateSameBranchUp（暂未实现）');
+        return;
+      }
+      const sameBranchDownShortcut = parseShortcutString(cfg.navigateSameBranchDown);
+      if (sameBranchDownShortcut && matchShortcut(e, sameBranchDownShortcut)) {
+        e.preventDefault();
+        console.log('[KeyboardShortcut] navigateSameBranchDown（暂未实现）');
+        return;
+      }
+      const altBranchUpShortcut = parseShortcutString(cfg.navigateAltBranchUp);
+      if (altBranchUpShortcut && matchShortcut(e, altBranchUpShortcut)) {
+        e.preventDefault();
+        console.log('[KeyboardShortcut] navigateAltBranchUp（暂未实现）');
+        return;
+      }
+      const altBranchDownShortcut = parseShortcutString(cfg.navigateAltBranchDown);
+      if (altBranchDownShortcut && matchShortcut(e, altBranchDownShortcut)) {
+        e.preventDefault();
+        console.log('[KeyboardShortcut] navigateAltBranchDown（暂未实现）');
+        return;
       }
     });
 
@@ -643,6 +925,38 @@ export class App {
       tagManager.show();
     });
 
+    // 子模块管理按钮 - 点击后弹出子模块管理对话框（阶段 9：Task 9.2）
+    // 只有在已打开仓库的情况下才能管理子模块，否则提示用户先打开仓库
+    document.getElementById('btn-submodule-manager')?.addEventListener('click', () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行子模块管理');
+        return;
+      }
+      // 创建子模块管理对话框并显示
+      // 传入当前仓库路径和成功回调（子模块操作成功后刷新所有组件）
+      const submoduleManager = new SubmoduleManager(this.currentRepoPath, () => {
+        this.refreshAllComponents();
+      });
+      submoduleManager.show();
+    });
+
+    // LFS 管理按钮 - 点击后弹出 LFS 管理对话框（阶段 9：Task 9.4）
+    // 只有在已打开仓库的情况下才能管理 LFS，否则提示用户先打开仓库
+    document.getElementById('btn-lfs-manager')?.addEventListener('click', () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行 LFS 管理');
+        return;
+      }
+      // 创建 LFS 管理对话框并显示
+      // 传入当前仓库路径和成功回调（LFS 操作成功后刷新所有组件）
+      const lfsManager = new LfsManager(this.currentRepoPath, () => {
+        this.refreshAllComponents();
+      });
+      lfsManager.show();
+    });
+
     // Stash 按钮 - 点击后弹出"Stash 未提交的变更"对话框
     // 只有在已打开仓库的情况下才能 stash，否则提示用户先打开仓库
     // stashManager 实例在 onRepoOpened 中创建（需要仓库路径）
@@ -663,6 +977,36 @@ export class App {
       this.stashManager.showPushStashDialog();
     });
 
+    // Fetch 按钮 - 从远程仓库获取更新（不合并到当前分支）
+    // 与 Pull 的区别：Fetch 只下载远程更新到远程跟踪分支，不自动合并；
+    // Pull = Fetch + Merge，会自动合并到当前分支。
+    // 只有在已打开仓库的情况下才能 fetch，否则提示用户先打开仓库
+    document.getElementById('btn-fetch')?.addEventListener('click', async () => {
+      await this.handleFetch();
+    });
+
+    // 查找按钮 - 切换 Find Widget 搜索框的显示/隐藏
+    // 也可以通过 Ctrl+F 快捷键触发
+    document.getElementById('btn-find')?.addEventListener('click', () => {
+      this.toggleFindWidget();
+    });
+
+    // 设置按钮 - 点击后弹出设置面板（Task 7.4）
+    // 只有在已打开仓库的情况下才能编辑配置，否则提示用户先打开仓库
+    document.getElementById('btn-settings')?.addEventListener('click', () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行设置');
+        return;
+      }
+      // 创建设置面板并显示
+      // 传入当前仓库路径和成功回调（配置保存后刷新所有组件）
+      const settingsPanel = new SettingsPanel(this.currentRepoPath, () => {
+        this.refreshAllComponents();
+      });
+      settingsPanel.show();
+    });
+
     // 拉取按钮 - 从远程仓库拉取最新提交并合并到当前分支
     // 只有在已打开仓库的情况下才能拉取，否则提示用户先打开仓库
     document.getElementById('btn-pull')?.addEventListener('click', async () => {
@@ -679,18 +1023,49 @@ export class App {
         return;
       }
 
+      // 阶段 12：Git 操作前静音文件监听器
+      try {
+        await repoService.muteWatcher();
+      } catch (muteErr) {
+        console.warn('[App] 静音文件监听器失败:', muteErr);
+      }
+
       try {
         // 调用后端执行 git pull origin <branch>
         // remote 通常为 "origin"，branch 为当前分支名
         const result = await repoService.pull(this.currentRepoPath, 'origin', currentBranch);
+
+        // 阶段 12：Git 操作完成后取消静音文件监听器
+        try {
+          await repoService.unmuteWatcher();
+        } catch (unmuteErr) {
+          console.warn('[App] 取消静音文件监听器失败:', unmuteErr);
+        }
+
         // 显示成功信息
         alert(`拉取成功！\n\n${result}`);
         // 拉取成功后刷新所有组件（更新提交历史、文件列表等）
         await this.refreshAllComponents();
+
+        // 阶段 12：检测合并冲突（pull = fetch + merge，可能产生冲突）
+        await this.checkConflictsAfterOperation();
       } catch (err) {
+        // 阶段 12：操作失败也要取消静音文件监听器
+        try {
+          await repoService.unmuteWatcher();
+        } catch (unmuteErr) {
+          console.warn('[App] 取消静音文件监听器失败:', unmuteErr);
+        }
+
         // 显示错误信息
         console.error('拉取失败:', err);
-        alert(`拉取失败：${err}`);
+
+        // 阶段 12：检测合并冲突（拉取失败可能是因为产生了冲突）
+        const hasConflicts = await this.checkConflictsAfterOperation();
+        if (!hasConflicts) {
+          // 没有冲突，显示错误信息
+          alert(`拉取失败：${err}`);
+        }
       }
     });
 
@@ -710,15 +1085,37 @@ export class App {
         return;
       }
 
+      // 阶段 12：Git 操作前静音文件监听器
+      try {
+        await repoService.muteWatcher();
+      } catch (muteErr) {
+        console.warn('[App] 静音文件监听器失败:', muteErr);
+      }
+
       try {
         // 调用后端执行 git push origin <branch>
         // remote 通常为 "origin"，branch 为当前分支名
         const result = await repoService.push(this.currentRepoPath, 'origin', currentBranch);
+
+        // 阶段 12：Git 操作完成后取消静音文件监听器
+        try {
+          await repoService.unmuteWatcher();
+        } catch (unmuteErr) {
+          console.warn('[App] 取消静音文件监听器失败:', unmuteErr);
+        }
+
         // 显示成功信息
         alert(`推送成功！\n\n${result}`);
         // 推送成功后刷新所有组件（更新分支信息、提交历史等）
         await this.refreshAllComponents();
       } catch (err) {
+        // 阶段 12：操作失败也要取消静音文件监听器
+        try {
+          await repoService.unmuteWatcher();
+        } catch (unmuteErr) {
+          console.warn('[App] 取消静音文件监听器失败:', unmuteErr);
+        }
+
         // 显示错误信息
         console.error('推送失败:', err);
         alert(`推送失败：${err}`);
@@ -738,6 +1135,140 @@ export class App {
     if (!this.branchList) return null;
     // 使用 branchList 组件提供的公共方法获取当前分支名
     return this.branchList.getCurrentBranchName();
+  }
+
+  /**
+   * 处理 Fetch 按钮点击事件（Task 5.3）
+   *
+   * 从远程仓库获取更新（git fetch --all --prune），不合并到当前分支。
+   * 流程：
+   *   1. 检查是否已打开仓库
+   *   2. 显示 loading 对话框（"正在获取远程更新..."）
+   *   3. 阶段 12：静音文件监听器（muteWatcher），避免 fetch 触发 repo_changed
+   *   4. 调用 repoService.fetch 执行 git fetch --all --prune
+   *      （默认配置：prune=true 启用清理已删除分支，pruneTags=false 不清理标签）
+   *   5. 阶段 12：取消静音文件监听器（unmuteWatcher）
+   *   6. 关闭 loading 对话框
+   *   7. 刷新节点图（显示新获取的提交）
+   *   8. 如果出错，显示错误信息
+   */
+  private async handleFetch(): Promise<void> {
+    // 检查是否已经打开了仓库
+    if (!this.currentRepoPath) {
+      alert('请先打开一个仓库再进行 Fetch 操作');
+      return;
+    }
+
+    // 显示 loading 对话框（用户无法关闭，必须等 fetch 完成）
+    dialogSingleton.showActionRunning('正在获取远程更新');
+
+    // 阶段 12：Git 操作前静音文件监听器
+    try {
+      await repoService.muteWatcher();
+    } catch (muteErr) {
+      console.warn('[App] 静音文件监听器失败:', muteErr);
+    }
+
+    try {
+      // 调用后端执行 git fetch --all --prune
+      // 参数说明：
+      //   - remote: undefined（不传）→ 使用 --all 拉取所有远程
+      //   - prune: true → 启用 --prune，清理远程已删除的本地远程跟踪分支引用
+      //   - pruneTags: false → 不启用 --prune-tags（避免低版本 Git 兼容性问题）
+      const result = await repoService.fetch(this.currentRepoPath, undefined, true, false);
+
+      // 阶段 12：Git 操作完成后取消静音文件监听器
+      try {
+        await repoService.unmuteWatcher();
+      } catch (unmuteErr) {
+        console.warn('[App] 取消静音文件监听器失败:', unmuteErr);
+      }
+
+      // 关闭 loading 对话框
+      dialogSingleton.closeActionRunning();
+
+      // 显示 fetch 结果（可能为空字符串，表示无更新）
+      if (result && result.trim()) {
+        alert(`Fetch 完成！\n\n${result}`);
+      } else {
+        alert('Fetch 完成！（无输出信息）');
+      }
+
+      // 刷新所有组件（更新提交历史、分支信息等）
+      // fetch 后远程跟踪分支会更新，节点图需要重新加载以显示新的远程提交
+      await this.refreshAllComponents();
+    } catch (err) {
+      // 阶段 12：操作失败也要取消静音文件监听器
+      try {
+        await repoService.unmuteWatcher();
+      } catch (unmuteErr) {
+        console.warn('[App] 取消静音文件监听器失败:', unmuteErr);
+      }
+
+      // 关闭 loading 对话框（即使出错也要关闭，避免界面卡住）
+      dialogSingleton.closeActionRunning();
+      // 显示错误信息
+      console.error('Fetch 失败:', err);
+      alert(`Fetch 失败：${err}`);
+    }
+  }
+
+  /**
+   * 检测合并冲突并自动打开合并编辑器（阶段 12 集成点）
+   *
+   * 在可能产生冲突的 Git 操作（如 pull）后调用，检测仓库中是否存在合并冲突文件。
+   * 如果存在冲突，自动打开合并编辑器让用户解决第一个冲突文件。
+   *
+   * 此方法使用动态导入 merge-editor 组件，避免循环依赖。
+   *
+   * @returns true = 检测到冲突并已打开合并编辑器；false = 无冲突或无法检测
+   */
+  private async checkConflictsAfterOperation(): Promise<boolean> {
+    /* 检查是否已打开仓库 */
+    if (!this.currentRepoPath) {
+      return false;
+    }
+
+    try {
+      /* 调用后端检测冲突文件列表 */
+      const conflicts = await repoService.detectConflicts(this.currentRepoPath);
+
+      /* 有冲突文件：自动打开合并编辑器 */
+      if (conflicts.length > 0) {
+        console.log(`[App] 检测到 ${conflicts.length} 个冲突文件，自动打开合并编辑器`);
+
+        /* 动态导入合并编辑器单例（避免循环依赖） */
+        const { mergeEditor } = await import('./merge-editor.js');
+
+        /* 打开第一个冲突文件的合并编辑器 */
+        await mergeEditor.open(this.currentRepoPath, conflicts[0].path);
+
+        /* 返回 true 表示检测到冲突并已处理 */
+        return true;
+      }
+    } catch (err) {
+      /* 检测冲突失败不影响正常流程，仅记录警告 */
+      console.warn('[App] 检测合并冲突失败:', err);
+    }
+
+    /* 无冲突 */
+    return false;
+  }
+
+  /**
+   * 切换 Find Widget 搜索框的显示/隐藏（Task 5.1）
+   *
+   * 由 Ctrl+F 快捷键或工具栏"查找"按钮触发。
+   * 如果 Find Widget 未创建（未打开仓库），则忽略。
+   */
+  private toggleFindWidget(): void {
+    // 检查是否已创建 Find Widget（只有在打开仓库后才会创建）
+    if (!this.findWidget) {
+      console.log('[App] Find Widget 尚未初始化（请先打开仓库）');
+      return;
+    }
+    // 切换显示/隐藏状态
+    this.findWidget.toggle();
   }
 
   /** 切换终端面板的显示/隐藏 */
@@ -780,9 +1311,124 @@ export class App {
   private async checkGitInstallation(): Promise<void> {
     const centerBody = document.getElementById('center-body');
     if (!centerBody) return;
-    
+
     const installer = new GitInstaller(centerBody);
     await installer.checkAndHandle();
+
+    /* Task 11.4：获取 Git 版本并更新状态栏 */
+    await this.updateGitVersion();
+  }
+
+  /**
+   * 获取 Git 版本并更新状态栏（Task 11.4）
+   *
+   * 调用后端 get_git_version 命令获取系统安装的 Git 版本号，
+   * 并更新状态栏中的 Git 版本显示。
+   */
+  private async updateGitVersion(): Promise<void> {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const version: string = await invoke('get_git_version');
+      const gitVersionEl = document.getElementById('statusbar-git-version');
+      if (gitVersionEl) {
+        gitVersionEl.textContent = `Git: ${version}`;
+      }
+    } catch (err) {
+      console.error('[App] 获取 Git 版本失败:', err);
+      const gitVersionEl = document.getElementById('statusbar-git-version');
+      if (gitVersionEl) {
+        gitVersionEl.textContent = 'Git: ?';
+      }
+    }
+  }
+
+  /**
+   * 更新状态栏的分支和 ahead/behind 信息（Task 11.4）
+   *
+   * 从 branchList 获取当前分支名和 ahead/behind 计数，更新到状态栏。
+   * 在仓库打开和刷新时调用。
+   */
+  private updateStatusbarBranch(): void {
+    if (!this.branchList) return;
+
+    /* 获取当前分支名 */
+    const currentBranch: string | null = this.getCurrentBranchName();
+
+    /* 更新分支名显示 */
+    const branchEl = document.getElementById('statusbar-branch');
+    const branchNameEl = document.getElementById('statusbar-branch-name');
+    if (branchEl && branchNameEl) {
+      if (currentBranch) {
+        branchNameEl.textContent = currentBranch;
+        branchEl.style.display = 'flex';
+      } else {
+        branchEl.style.display = 'none';
+      }
+    }
+
+    /* 更新 ahead/behind 显示 */
+    const aheadBehindEl = document.getElementById('statusbar-ahead-behind');
+    const aheadBehindTextEl = document.getElementById('statusbar-ahead-behind-text');
+    if (aheadBehindEl && aheadBehindTextEl) {
+      /* 从 branchList 获取当前分支的 ahead/behind 信息 */
+      const aheadBehind: { ahead: number; behind: number } | null = this.getCurrentBranchAheadBehind();
+      if (currentBranch && aheadBehind && (aheadBehind.ahead > 0 || aheadBehind.behind > 0)) {
+        aheadBehindTextEl.textContent = `↑${aheadBehind.ahead} ↓${aheadBehind.behind}`;
+        aheadBehindEl.style.display = 'flex';
+      } else {
+        aheadBehindEl.style.display = 'none';
+      }
+    }
+  }
+
+  /**
+   * 获取当前分支的 ahead/behind 计数（Task 11.4）
+   *
+   * 从 branchList 获取当前检出分支相对于其上游分支的领先/落后提交数。
+   *
+   * @returns ahead/behind 对象，如果无法获取则返回 null
+   */
+  private getCurrentBranchAheadBehind(): { ahead: number; behind: number } | null {
+    if (!this.branchList) return null;
+    /* 调用 branchList 的方法获取当前分支信息 */
+    /* branchList 内部维护了分支列表，每个分支含 ahead/behind 字段 */
+    return this.branchList.getCurrentBranchAheadBehind();
+  }
+
+  /**
+   * 更新状态栏的提交总数和排序方式（Task 11.4）
+   *
+   * 从 commitGraph 获取已加载的提交数量，从 configService 获取排序方式，
+   * 更新到状态栏。在仓库打开和刷新时调用。
+   */
+  private updateStatusbarCommitInfo(): void {
+    /* 更新提交总数 */
+    const commitCountEl = document.getElementById('statusbar-commit-count');
+    const commitCountTextEl = document.getElementById('statusbar-commit-count-text');
+    if (commitCountEl && commitCountTextEl && this.commitGraph) {
+      const commits: ReadonlyArray<GitCommit> = this.commitGraph.getCommits();
+      if (commits.length > 0) {
+        commitCountTextEl.textContent = String(commits.length);
+        commitCountEl.style.display = 'flex';
+      } else {
+        commitCountEl.style.display = 'none';
+      }
+    }
+
+    /* 更新排序方式 */
+    const sortOrderEl = document.getElementById('statusbar-sort-order');
+    const sortOrderTextEl = document.getElementById('statusbar-sort-order-text');
+    if (sortOrderEl && sortOrderTextEl) {
+      const cfg = configService.getAppConfig().repository;
+      const orderMap: Record<string, string> = {
+        'date': '按日期',
+        'author-date': '按作者日期',
+        'topo': '拓扑排序',
+      };
+      const orderText: string = orderMap[cfg.commitOrder] || cfg.commitOrder;
+      sortOrderTextEl.textContent = orderText;
+      sortOrderEl.style.display = 'flex';
+    }
   }
 
   /**
@@ -803,10 +1449,71 @@ export class App {
     setRefreshCallback(() => this.refreshAllComponents());
     setViewCommitCallback((hash: string) => { this.showCommitDetailByHash(hash); });
 
+    // ============================================================
+    // 阶段 12：初始化合并编辑器和 Blame 视图的全局回调
+    // ============================================================
+    // setMergeEditorCallbacks：注入关闭和保存成功回调
+    //   - onClose：合并编辑器关闭时调用（刷新所有组件以更新冲突状态）
+    //   - onSaved：合并结果保存成功并 git add 后调用（刷新所有组件）
+    setMergeEditorCallbacks(
+      () => { void this.refreshAllComponents(); },
+      () => { void this.refreshAllComponents(); }
+    );
+    // setBlameViewerCallbacks：注入提交点击和关闭回调
+    //   - onCommitClick：用户在 Blame 视图中点击某行的提交哈希时调用（显示该提交的详情）
+    //   - onClose：Blame 视图关闭时调用（当前无需额外操作）
+    setBlameViewerCallbacks(
+      (hash: string) => { this.showCommitDetailByHash(hash); },
+      () => { /* Blame 视图关闭时无需额外操作 */ }
+    );
+
     // 更新状态栏
     const repoPathEl = document.getElementById('statusbar-repo-path');
     if (repoPathEl) {
       repoPathEl.textContent = info.path;
+    }
+    /* Task 11.4：更新状态栏的排序方式显示 */
+    this.updateStatusbarCommitInfo();
+
+    // ============================================================
+    // 阶段 10：Task 10.6 - 从后端恢复仓库状态
+    // ============================================================
+    // 调用 stateService.loadStateFromBackend 从 ~/.gittimeprism/state.json
+    // 加载该仓库之前保存的视图状态（列宽、分隔位置、显示选项等）
+    // 加载成功后状态会同步到 localStorage，后续组件初始化时读取
+    try {
+      const savedState = await stateService.loadStateFromBackend(info.path);
+      console.log('[App] 已从后端恢复仓库状态:', savedState);
+      // 注意：实际应用恢复（如设置列宽、滚动位置等）需要各组件支持
+      // 当前阶段仅加载状态到 localStorage，组件初始化时会自动读取
+      // 后续 Task 12.x 会在此处应用恢复的状态到各组件
+    } catch (err) {
+      console.warn('[App] 从后端恢复仓库状态失败（不影响应用使用）:', err);
+    }
+
+    // ============================================================
+    // 阶段 10：Task 10.1 - 注册仓库到后端配置文件
+    // ============================================================
+    // 调用 repoService.registerRepo 将仓库路径注册到 ~/.gittimeprism/repos.json
+    // 记录上次打开时间，便于"最近仓库"列表显示
+    try {
+      await repoService.registerRepo(info.path);
+      console.log('[App] 仓库已注册到后端配置');
+    } catch (err) {
+      console.warn('[App] 注册仓库到后端配置失败（不影响应用使用）:', err);
+    }
+
+    // ============================================================
+    // 阶段 10：Task 10.2 - 启动文件监听器
+    // ============================================================
+    // 调用 repoService.startWatcher 启动后端文件监听器
+    // 监听 .git 目录下的文件变化（config/index/HEAD/refs 等）
+    // 当检测到变化时，后端会 emit 'repo_changed' 事件，前端已注册监听
+    try {
+      await repoService.startWatcher(info.path);
+      console.log('[App] 文件监听器已启动');
+    } catch (err) {
+      console.warn('[App] 启动文件监听器失败（不影响应用使用）:', err);
     }
 
     // 显示提交输入区域
@@ -829,11 +1536,19 @@ export class App {
 
     // 初始化提交详情组件（详情面板）
     // 传入文件点击回调：点击提交详情中的文件时，在新面板中显示对比
+    // Task 13.5：传入文件历史回调：右键菜单点击"查看文件历史"时触发显示该文件的提交历史
     const detailBody = document.getElementById('detail-body');
     if (detailBody) {
-      this.commitDetail = new CommitDetail('detail-body', (filePath: string, commitHash: string) => {
-        this.showCommitFileDiff(filePath, commitHash);
-      });
+      this.commitDetail = new CommitDetail(
+        'detail-body',
+        (filePath: string, commitHash: string) => {
+          this.showCommitFileDiff(filePath, commitHash);
+        },
+        (filePath: string) => {
+          /* Task 13.5：文件历史查看回调 - 显示该文件的提交历史视图 */
+          this.showFileHistory(filePath);
+        }
+      );
       console.log('[App] 提交详情组件初始化完成');
     }
 
@@ -918,6 +1633,23 @@ export class App {
       console.log('[App] CommitGraph 组件初始化完成，开始刷新');
       await this.commitGraph.refresh();
       console.log('[App] CommitGraph 组件刷新完成');
+
+      // 初始化 Find Widget 搜索框组件（Task 5.1）
+      // 浮动在节点图上方，支持按作者/哈希/消息/分支/标签/日期/stash 搜索提交
+      // 传入回调：
+      //   - getCommits：获取当前已加载的提交列表（用于搜索）
+      //   - scrollToCommit：导航匹配项时滚动到对应提交
+      //   - onViewCommit：导航时自动加载提交详情（对应 gitgraph 的 findOpenCommitDetailsView）
+      this.findWidget = new FindWidget(
+        centerBody,
+        info.path,
+        () => this.commitGraph?.getCommits() ?? [],
+        (hash: string) => this.commitGraph?.scrollToCommit(hash),
+        (hash: string) => this.showCommitDetailByHash(hash),
+      );
+      // 从 state-service 恢复上次的状态（搜索文本、可见性、大小写、正则模式）
+      this.findWidget.restoreState();
+      console.log('[App] FindWidget 组件初始化完成');
     }
 
     // 初始化 Stash 管理组件（作为 commit-graph 的辅助组件）
@@ -1023,6 +1755,56 @@ export class App {
     } catch (err) {
       console.error('显示提交详情失败:', err);
     }
+  }
+
+  /**
+   * 导航到上/下一个提交（Task 11.3：键盘快捷键 Up/Down）
+   *
+   * 根据当前选中的提交哈希，在提交列表中找到其索引，
+   * 然后切换到上（direction=-1）或下（direction=+1）一个提交。
+   *
+   * @param direction - 导航方向：-1 表示上一个，+1 表示下一个
+   */
+  private navigateCommit(direction: number): void {
+    /* 检查是否已打开仓库和提交图 */
+    if (!this.commitGraph || !this.currentCommitHash) {
+      return;
+    }
+
+    /* 获取当前提交列表 */
+    const commits: ReadonlyArray<GitCommit> = this.commitGraph.getCommits();
+    if (commits.length === 0) {
+      return;
+    }
+
+    /* 查找当前提交的索引 */
+    let currentIndex: number = -1;
+    for (let i = 0; i < commits.length; i++) {
+      if (commits[i].hash === this.currentCommitHash) {
+        currentIndex = i;
+        break;
+      }
+    }
+
+    /* 如果当前提交不在列表中，无法导航 */
+    if (currentIndex === -1) {
+      console.log('[App] 当前提交不在已加载列表中，无法导航');
+      return;
+    }
+
+    /* 计算目标索引（边界检查） */
+    const targetIndex: number = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= commits.length) {
+      console.log('[App] 已到达提交列表边界');
+      return;
+    }
+
+    /* 切换到目标提交 */
+    const targetCommit: GitCommit = commits[targetIndex];
+    this.showCommitDetail(targetCommit);
+
+    /* 滚动到目标提交位置，使其可见 */
+    this.commitGraph.scrollToCommit(targetCommit.hash);
   }
 
   /**
@@ -1197,11 +1979,22 @@ export class App {
         const commits = this.commitGraph.getCommits();
         contextMenu.refresh(commits);
         dialogSingleton.refresh(commits);
+
+        // 刷新 Find Widget 的匹配项（Task 5.1）
+        // 节点图重新渲染后，之前的 DOM 高亮已失效，需要重新搜索并高亮
+        if (this.findWidget) {
+          this.findWidget.refresh();
+        }
+
+        /* Task 11.4：更新状态栏的提交总数显示 */
+        this.updateStatusbarCommitInfo();
       }
 
       // 刷新分支列表
       if (this.branchList) {
         await this.branchList.refresh();
+        /* Task 11.4：更新状态栏的分支和 ahead/behind 显示 */
+        this.updateStatusbarBranch();
       }
 
       // 刷新提交输入组件状态

@@ -150,22 +150,67 @@ fn can_reset(repo_path: &str) -> Result<bool, GitError> {
  * - 如果仓库没有足够的提交可以撤销（只有 0 或 1 个提交），也会返回错误
  */
 pub fn reset_commit(repo_path: &str, mode: &str) -> Result<(), GitError> {
-    // 先检查是否有足够的提交可以撤销
-    if !can_reset(repo_path)? {
-        return Err(GitError::CommandFailed {
-            exit_code: -1,
-            message: "无法撤销：仓库中没有足够的提交记录（需要至少 2 个提交才能撤销）".to_string(),
-        });
-    }
+    // 调用新的扩展版本，传入 None 表示使用默认的 HEAD~1
+    reset_commit_to(repo_path, mode, None)
+}
+
+/**
+ * 统一的 reset 入口函数（扩展版本，支持 reset 到任意 commit）
+ *
+ * 根据传入的 mode 字符串和可选的 commit 参数，执行 reset 操作。
+ * 与 reset_commit 的区别：此函数支持指定任意 commit 作为重置目标。
+ *
+ * 参数：
+ * - repo_path: Git 仓库的根目录路径
+ * - mode:      重置模式，必须是 "soft"、"mixed"、"hard" 之一（大小写敏感）
+ * - commit:    要重置到的目标 commit（可选）
+ *              - Some(commit): 重置到指定的 commit（可以是 SHA、分支名、HEAD~N 等）
+ *              - None: 重置到 HEAD~1（撤销最近一次提交，与原 reset_commit 行为一致）
+ *
+ * 返回：
+ * - Ok(())：命令执行成功
+ * - Err(GitError)：执行失败，或 mode 参数无效
+ *
+ * 错误处理：
+ * - 如果 mode 不是 "soft"、"mixed"、"hard" 之一，返回错误
+ * - 如果 commit 为 None 且仓库提交不足（只有 0 或 1 个提交），返回错误
+ *   （因为 HEAD~1 不存在）
+ * - 如果 commit 为 Some，则不做 HEAD~1 存在性检查（由 git 命令本身验证 commit 有效性）
+ *
+ * 参考实现：docs/git/src/dataSource.ts 中的 resetToCommit 方法
+ */
+pub fn reset_commit_to(
+    repo_path: &str,
+    mode: &str,
+    commit: Option<&str>,
+) -> Result<(), GitError> {
+    // 确定要重置到的目标 commit
+    // 如果 commit 参数为 None 或空字符串，使用默认的 HEAD~1
+    let target = match commit {
+        Some(c) if !c.trim().is_empty() => c,
+        // None 或空字符串：使用 HEAD~1（撤销最近一次提交）
+        _ => {
+            // 对于 HEAD~1 的情况，先检查是否有足够的提交可以撤销
+            if !can_reset(repo_path)? {
+                return Err(GitError::CommandFailed {
+                    exit_code: -1,
+                    message:
+                        "无法撤销：仓库中没有足够的提交记录（需要至少 2 个提交才能撤销）"
+                            .to_string(),
+                });
+            }
+            "HEAD~1"
+        }
+    };
 
     // 根据 mode 字符串分发到对应的具体实现函数
     match mode {
         // 软重置：撤销 commit，保留暂存
-        "soft" => reset_soft(repo_path, "HEAD~1"),
+        "soft" => reset_soft(repo_path, target),
         // 混合重置：撤销 commit 和暂存，保留工作区
-        "mixed" => reset_mixed(repo_path, "HEAD~1"),
+        "mixed" => reset_mixed(repo_path, target),
         // 硬重置：完全撤销，丢弃所有更改
-        "hard" => reset_hard(repo_path, "HEAD~1"),
+        "hard" => reset_hard(repo_path, target),
         // 其他值视为非法参数，返回错误
         _ => Err(GitError::CommandFailed {
             exit_code: -1,

@@ -75,6 +75,18 @@ import { repoService } from '../services/repo-service.js';
 import type { GitCommit } from '../utils/git-types.js';
 import { GitResetMode } from '../utils/git-types.js';
 
+// 导入 Pull Request 创建工具（Task 7.5：用于分支右键菜单"Create Pull Request"）
+// createPullRequest：生成 PR URL 并在浏览器中打开
+// buildPullRequestConfigFromRemote：从远程 URL 自动构建 PR 配置（含 Provider 检测）
+import { createPullRequest, buildPullRequestConfigFromRemote } from '../utils/pr-utils.js';
+
+// 导入配置服务（Task 7.5：用于获取仓库的远程仓库列表，以构建 PR 配置）
+// Task 13.2：读取 contextMenuActionsVisibility 配置控制菜单项显隐
+// Task 13.3：读取 dialog.* 配置作为对话框默认值
+import { configService } from '../services/config-service.js';
+// 导入上下文菜单可见性配置类型（Task 13.2）
+import type { ContextMenuActionsVisibilityConfig } from '../services/config-service.js';
+
 
 /**
  * ============================================================
@@ -202,6 +214,67 @@ function isNotImplementedError(err: unknown): boolean {
 
 /**
  * ============================================================
+ * Task 13.2 / 13.3：配置读取辅助函数
+ * ============================================================
+ */
+
+/**
+ * 获取上下文菜单可见性配置（Task 13.2）
+ *
+ * 从 configService 读取 contextMenuActionsVisibility 配置对象，
+ * 用于控制 6 类菜单中每个菜单项的显隐。
+ *
+ * 如果配置加载失败（理论上不会发生，因为 configService 有默认值），
+ * 返回一个所有项都可见的兜底配置。
+ *
+ * @returns 上下文菜单可见性配置对象
+ */
+function getContextMenuVisibilityConfig(): ContextMenuActionsVisibilityConfig {
+	/* 直接从 configService 获取完整的应用配置中的 contextMenuActionsVisibility 字段 */
+	return configService.getAppConfig().contextMenuActionsVisibility;
+}
+
+/**
+ * 获取对话框默认值（Task 13.3）
+ *
+ * 从 configService 读取 dialog.* 配置，作为对话框打开时的默认选项。
+ * 替代原本硬编码的默认值（如 false、'annotated'、GitResetMode.Mixed 等）。
+ *
+ * 支持的配置路径（点分路径）：
+ *   - 'dialog.resetCommitMode'：重置提交的默认模式（'soft'/'mixed'/'hard'）
+ *   - 'dialog.resetUncommittedMode'：重置未提交变更的默认模式（'mixed'/'hard'）
+ *   - 'dialog.createBranchCheckout'：创建分支时是否默认切换
+ *   - 'dialog.deleteBranchForce'：删除分支时是否默认强制删除
+ *   - 'dialog.addTagPushToRemote'：创建标签时是否默认推送
+ *   - 'dialog.addTagType'：创建标签的默认类型（'annotated'/'lightweight'）
+ *   - 'dialog.fetchRemotePrune'：Fetch 时是否默认启用 prune
+ *   - 'dialog.fetchRemotePruneTags'：Fetch 时是否默认启用 prune-tags
+ *   - 'dialog.mergeNoCommit'：合并时是否默认启用 --no-commit
+ *   - 'dialog.mergeNoFastForward'：合并时是否默认启用 --no-ff
+ *   - 'dialog.mergeSquash'：合并时是否默认启用 squash
+ *   - 'dialog.pullNoFastForward'：拉取时是否默认启用 --no-ff
+ *   - 'dialog.pullSquash'：拉取时是否默认启用 squash
+ *   - 'dialog.stashIncludeUntracked'：Stash 时是否默认包含未跟踪文件
+ *   - 'dialog.stashReinstateIndex'：Apply/Pop stash 时是否默认恢复暂存区
+ *
+ * @param key - 点分配置路径（如 'dialog.resetCommitMode'）
+ * @param fallback - 配置不存在时的兜底默认值
+ * @returns 配置值，或兜底默认值
+ */
+function getDialogDefault<T>(key: string, fallback: T): T {
+	/* 从 configService 读取配置值 */
+	const value: unknown = configService.getAppConfigValue(key);
+	/* 如果配置值为 undefined（理论上有默认值不会发生），返回兜底值 */
+	if (value === undefined || value === null) {
+		return fallback;
+	}
+	/* 返回配置值（类型由调用方保证） */
+	return value as T;
+}
+
+
+/**
+ * ============================================================
  * 通用执行器 runAction
  * ============================================================
  */
@@ -210,12 +283,19 @@ function isNotImplementedError(err: unknown): boolean {
  * 通用操作执行器
  *
  * 这是所有菜单动作的统一执行入口。它负责：
- *   1. 显示"操作进行中"的 loading 对话框（dialog.showActionRunning）
- *   2. 执行传入的异步操作（action 函数，通常包含 invoke 调用）
- *   3. 操作成功：关闭 loading 对话框，调用 refreshCallback 刷新节点图
- *   4. 操作失败：关闭 loading 对话框，显示错误对话框
+ *   1. 静音文件监听器（muteWatcher），避免 GitTimePrism 自身的 Git 操作触发刷新
+ *   2. 显示"操作进行中"的 loading 对话框（dialog.showActionRunning）
+ *   3. 执行传入的异步操作（action 函数，通常包含 invoke 调用）
+ *   4. 取消静音文件监听器（unmuteWatcher），恢复正常监听
+ *   5. 操作成功：关闭 loading 对话框，检测合并冲突，调用 refreshCallback 刷新节点图
+ *   6. 操作失败：关闭 loading 对话框，检测合并冲突（失败可能因冲突引起），
+ *      如果有冲突则自动打开合并编辑器；否则显示错误对话框
  *      - 如果错误表示后端命令未实现，显示"此功能正在开发中"
  *      - 其他错误显示操作名称和错误原因
+ *
+ * 阶段 12 集成点：
+ *   - mute/unmute 文件监听（阶段 10 已实现 watcher，此处包裹所有 Git 操作）
+ *   - 合并冲突自动检测 + 合并编辑器自动打开（阶段 8 已实现 MergeEditor）
  *
  * @param actionName - 操作名称，显示在 loading 对话框中（如 "拉取"、"推送"、"创建标签"）
  * @param msg - 操作的描述信息（用于日志记录，不显示给用户）
@@ -232,12 +312,30 @@ export async function runAction(
 	/* 显示 loading 对话框，告知用户操作正在进行 */
 	dialog.showActionRunning(actionName);
 
+	/* 阶段 12：Git 操作前静音文件监听器，避免自身操作触发 repo_changed 事件导致重复刷新 */
+	try {
+		await repoService.muteWatcher();
+	} catch (muteErr) {
+		/* 静音失败不影响操作执行，仅记录警告 */
+		console.warn('[ContextMenuActions] 静音文件监听器失败:', muteErr);
+	}
+
 	try {
 		/* 执行传入的异步操作 */
 		await action();
 
+		/* 操作成功：取消静音文件监听器（1.5 秒内的事件仍被忽略） */
+		try {
+			await repoService.unmuteWatcher();
+		} catch (unmuteErr) {
+			console.warn('[ContextMenuActions] 取消静音文件监听器失败:', unmuteErr);
+		}
+
 		/* 操作成功：关闭 loading 对话框 */
 		dialog.closeActionRunning();
+
+		/* 阶段 12：检测合并冲突，如果有冲突文件则自动打开合并编辑器 */
+		await checkConflictsAndOpenMergeEditor(actionName);
 
 		/* 刷新节点图和其他组件 */
 		if (refreshCallback) {
@@ -246,10 +344,29 @@ export async function runAction(
 
 		console.log(`[ContextMenuActions] 操作完成: ${actionName}`);
 	} catch (err) {
+		/* 操作失败：也要取消静音文件监听器 */
+		try {
+			await repoService.unmuteWatcher();
+		} catch (unmuteErr) {
+			console.warn('[ContextMenuActions] 取消静音文件监听器失败:', unmuteErr);
+		}
+
 		/* 操作失败：先关闭 loading 对话框 */
 		dialog.closeActionRunning();
 
 		console.error(`[ContextMenuActions] 操作失败: ${actionName}`, err);
+
+		/* 阶段 12：检测合并冲突（操作失败可能是因为产生了冲突，如 merge/rebase/pull 冲突） */
+		const hasConflicts: boolean = await checkConflictsAndOpenMergeEditor(actionName);
+
+		/* 如果检测到冲突并已打开合并编辑器，不再显示错误对话框（冲突是预期内的结果） */
+		if (hasConflicts) {
+			/* 有冲突已被处理，刷新组件显示冲突状态 */
+			if (refreshCallback) {
+				await refreshCallback();
+			}
+			return;
+		}
 
 		/* 判断是否是后端命令未实现的错误 */
 		if (isNotImplementedError(err)) {
@@ -270,6 +387,63 @@ export async function runAction(
 			);
 		}
 	}
+}
+
+/**
+ * 检测合并冲突并自动打开合并编辑器（阶段 12 集成点）
+ *
+ * 在可能产生冲突的 Git 操作（merge/rebase/pull/cherry-pick/revert）后调用，
+ * 检测仓库中是否存在合并冲突文件。如果存在冲突，自动打开合并编辑器
+ * 让用户解决第一个冲突文件。
+ *
+ * 此函数使用动态导入 merge-editor 组件，避免循环依赖。
+ *
+ * @param actionName - 操作名称（用于判断是否需要检测冲突）
+ * @returns true = 检测到冲突并已打开合并编辑器；false = 无冲突或不需要检测
+ */
+async function checkConflictsAndOpenMergeEditor(actionName: string): Promise<boolean> {
+	/* 只有可能产生冲突的操作才检测，避免不必要的后端调用 */
+	/* 可能产生冲突的操作：合并、变基、拉取、拣选、还原 */
+	const conflictProneKeywords: string[] = ['合并', '变基', '拉取', '拣选', '还原', 'merge', 'rebase', 'pull', 'cherry', 'revert'];
+	const actionLower: string = actionName.toLowerCase();
+	const isConflictProne: boolean = conflictProneKeywords.some(
+		(keyword: string) => actionLower.includes(keyword.toLowerCase())
+	);
+
+	/* 不是可能产生冲突的操作，跳过检测 */
+	if (!isConflictProne) {
+		return false;
+	}
+
+	/* 没有仓库路径，无法检测 */
+	if (!currentRepoPath) {
+		return false;
+	}
+
+	try {
+		/* 调用后端检测冲突文件列表 */
+		const conflicts = await repoService.detectConflicts(currentRepoPath);
+
+		/* 有冲突文件：自动打开合并编辑器 */
+		if (conflicts.length > 0) {
+			console.log(`[ContextMenuActions] 检测到 ${conflicts.length} 个冲突文件，自动打开合并编辑器`);
+
+			/* 动态导入合并编辑器单例（避免循环依赖） */
+			const { mergeEditor } = await import('./merge-editor.js');
+
+			/* 打开第一个冲突文件的合并编辑器 */
+			await mergeEditor.open(currentRepoPath, conflicts[0].path);
+
+			/* 返回 true 表示检测到冲突并已处理 */
+			return true;
+		}
+	} catch (err) {
+		/* 检测冲突失败不影响正常流程，仅记录警告 */
+		console.warn('[ContextMenuActions] 检测合并冲突失败:', err);
+	}
+
+	/* 无冲突 */
+	return false;
 }
 
 
@@ -300,6 +474,20 @@ export function getCommitContextMenuActions(
 	/* 提取提交哈希，后续多个菜单项需要用到 */
 	const hash: string = commit.hash;
 	/* 提取提交消息（第一行，即 subject），用于复制 */
+
+	/* Task 13.2：从 configService 读取提交菜单的可见性配置 */
+	const vis = getContextMenuVisibilityConfig().commit;
+
+	/* Task 13.3：从 configService 读取对话框默认值 */
+	/* addTag 对话框的默认类型（annotated / lightweight） */
+	const defaultTagType: string = getDialogDefault<string>('dialog.addTagType', 'annotated');
+	/* merge 对话框的默认选项 */
+	const defaultMergeSquash: boolean = getDialogDefault<boolean>('dialog.mergeSquash', false);
+	const defaultMergeNoFastForward: boolean = getDialogDefault<boolean>('dialog.mergeNoFastForward', false);
+	const defaultMergeNoCommit: boolean = getDialogDefault<boolean>('dialog.mergeNoCommit', false);
+	/* reset 对话框的默认模式 */
+	const defaultResetMode: string = getDialogDefault<string>('dialog.resetCommitMode', GitResetMode.Mixed);
+
 	const subject: string = commit.message;
 
 	/* 返回菜单项的二维数组 */
@@ -309,7 +497,8 @@ export function getCommitContextMenuActions(
 			{
 				/* 添加标签：让用户输入标签名和选择类型，然后在当前提交上创建标签 */
 				title: 'Add Tag...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.addTag,
 				onClick: () => {
 					/* 显示表单对话框，包含：
 					 *   1. 标签名输入框（TextRef 类型，会自动验证 Git 引用名称合法性）
@@ -327,6 +516,7 @@ export function getCommitContextMenuActions(
 								info: '标签名称只能包含字母、数字、连字符和点'
 							},
 							/* 标签类型选择：单选按钮组 */
+							/* Task 13.3：默认值从 dialog.addTagType 配置读取 */
 							{
 								type: DialogInputType.Radio,
 								name: '类型',
@@ -334,7 +524,7 @@ export function getCommitContextMenuActions(
 									{ name: '附注标签（包含创建者、日期、消息等元数据）', value: 'annotated' },
 									{ name: '轻量标签（只是指向提交的简单指针）', value: 'lightweight' }
 								],
-								default: 'annotated'
+								default: defaultTagType
 							},
 							/* 标签消息输入：仅附注标签会使用此消息 */
 							{
@@ -373,7 +563,8 @@ export function getCommitContextMenuActions(
 			{
 				/* 创建分支：让用户输入分支名，从当前提交创建新分支并切换过去 */
 				title: 'Create Branch...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.createBranch,
 				onClick: () => {
 					/* 显示引用名输入对话框（TextRef 类型，自动验证分支名合法性） */
 					dialog.showRefInput(
@@ -383,15 +574,17 @@ export function getCommitContextMenuActions(
 						(branchName: string) => {
 							/* 调用 runAction 执行创建分支操作 */
 							runAction('创建分支', `createBranch ${branchName} from ${hash}`, async () => {
-								/* 尝试调用后端的 create_branch 命令 */
-								/* 注意：后端的 create_branch 命令尚未实现（Task 6.2），
-								 * 这里通过 invoke 直接调用，如果失败会显示"此功能正在开发中" */
-								await invoke('create_branch', {
-									repoPath: currentRepoPath,
-									name: branchName,
-									hash: hash,
-									checkout: true
-								});
+								/* Task 6.2 已实现 create_branch 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、分支名、提交哈希、是否切换、是否强制 */
+								/* Task 13.3：是否切换从 dialog.createBranchCheckout 配置读取 */
+								const checkout: boolean = getDialogDefault<boolean>('dialog.createBranchCheckout', true);
+								await repoService.createBranch(
+									currentRepoPath,
+									branchName,
+									hash,
+									checkout,
+									false  /* force: 不强制创建 */
+								);
 							});
 						},
 						target
@@ -405,22 +598,21 @@ export function getCommitContextMenuActions(
 			{
 				/* 检出：将 HEAD 切换到该提交（进入 detached HEAD 状态） */
 				title: 'Checkout',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.checkout,
 				onClick: () => {
 					/* 调用 runAction 执行检出操作 */
 					runAction('检出提交', `checkout ${hash}`, async () => {
-						/* 后端的 checkout_commit 命令尚未实现（Task 6.2） */
-						await invoke('checkout_commit', {
-							repoPath: currentRepoPath,
-							hash: hash
-						});
+						/* Task 6.2 已实现 checkout_commit 命令，通过 repoService 调用 */
+						await repoService.checkoutCommit(currentRepoPath, hash);
 					});
 				}
 			},
 			{
 				/* 拣选：将该提交的变更应用到当前分支 */
 				title: 'Cherry Pick',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.cherryPick,
 				onClick: () => {
 					/* 显示复选框对话框，让用户选择拣选选项 */
 					dialog.showCheckbox(
@@ -430,15 +622,15 @@ export function getCommitContextMenuActions(
 						'拣选',
 						(noCommit: boolean) => {
 							runAction('拣选提交', `cherrypick ${hash}`, async () => {
-								/* 后端的 cherrypick 命令尚未实现（Task 6.1） */
-								await invoke('cherrypick', {
-									repoPath: currentRepoPath,
-									hash: hash,
-									noCommit: noCommit,
-									recordOrigin: false,
-									sign: false,
-									mainline: 0
-								});
+								/* Task 6.1 已实现 cherrypick 命令，通过 repoService 调用 */
+								await repoService.cherrypick(
+									currentRepoPath,
+									hash,
+									noCommit,
+									false,  /* recordOrigin: 不附加来源标记 */
+									false,  /* sign: 不签名 */
+									0       /* mainline: 不指定父提交索引 */
+								);
 							});
 						},
 						target
@@ -448,23 +640,25 @@ export function getCommitContextMenuActions(
 			{
 				/* 还原：创建一个反向提交，撤销该提交的变更 */
 				title: 'Revert',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.revert,
 				onClick: () => {
 					runAction('还原提交', `revert ${hash}`, async () => {
-						/* 后端的 revert 命令尚未实现（Task 6.1） */
-						await invoke('revert', {
-							repoPath: currentRepoPath,
-							hash: hash,
-							sign: false,
-							mainline: 0
-						});
+						/* Task 6.1 已实现 revert 命令，通过 repoService 调用 */
+						await repoService.revert(
+							currentRepoPath,
+							hash,
+							false,  /* sign: 不签名 */
+							0       /* mainline: 不指定父提交索引 */
+						);
 					});
 				}
 			},
 			{
 				/* 丢弃：从历史中移除该提交（改写历史，危险操作） */
 				title: 'Drop',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.drop,
 				onClick: () => {
 					/* 显示确认对话框，因为丢弃提交是危险操作 */
 					dialog.showConfirmation(
@@ -472,12 +666,12 @@ export function getCommitContextMenuActions(
 						'丢弃',
 						() => {
 							runAction('丢弃提交', `drop ${hash}`, async () => {
-								/* 后端的 drop_commit 命令尚未实现（Task 6.1） */
-								await invoke('drop_commit', {
-									repoPath: currentRepoPath,
-									hash: hash,
-									sign: false
-								});
+								/* Task 6.1 已实现 drop_commit 命令，通过 repoService 调用 */
+								await repoService.dropCommit(
+									currentRepoPath,
+									hash,
+									false  /* sign: 不签名 */
+								);
 							});
 						},
 						target
@@ -487,26 +681,28 @@ export function getCommitContextMenuActions(
 			{
 				/* 合并：将该提交所在分支合并到当前分支 */
 				title: 'Merge...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.merge,
 				onClick: () => {
 					/* 显示表单对话框，让用户选择合并选项 */
+					/* Task 13.3：默认值从 dialog.merge* 配置读取 */
 					dialog.showForm(
 						`合并提交 ${hash.substring(0, 7)} 到当前分支`,
 						[
 							{
 								type: DialogInputType.Checkbox,
 								name: '压缩合并（Squash）—— 将所有提交合并为一个',
-								value: false
+								value: defaultMergeSquash
 							},
 							{
 								type: DialogInputType.Checkbox,
 								name: '禁止快进（No Fast Forward）—— 强制创建合并提交',
-								value: false
+								value: defaultMergeNoFastForward
 							},
 							{
 								type: DialogInputType.Checkbox,
 								name: '不自动提交（No Commit）—— 合并但不创建提交',
-								value: false
+								value: defaultMergeNoCommit
 							}
 						],
 						'合并',
@@ -516,15 +712,15 @@ export function getCommitContextMenuActions(
 							const noCommit: boolean = values[2] as boolean;
 
 							runAction('合并', `merge ${hash}`, async () => {
-								/* 后端的 merge 命令尚未实现（Task 6.1） */
-								await invoke('merge', {
-									repoPath: currentRepoPath,
-									obj: hash,
-									squash: squash,
-									noFastForward: noFastForward,
-									noCommit: noCommit,
-									sign: false
-								});
+								/* Task 6.1 已实现 merge 命令，通过 repoService 调用 */
+								await repoService.merge(
+									currentRepoPath,
+									hash,
+									squash,
+									noFastForward,
+									noCommit,
+									false  /* sign: 不签名 */
+								);
 							});
 						},
 						target
@@ -534,7 +730,8 @@ export function getCommitContextMenuActions(
 			{
 				/* 变基：将当前分支的提交变基到该提交之上 */
 				title: 'Rebase...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.rebase,
 				onClick: () => {
 					/* 显示表单对话框，让用户选择变基选项 */
 					dialog.showForm(
@@ -557,14 +754,15 @@ export function getCommitContextMenuActions(
 							const interactive: boolean = values[1] as boolean;
 
 							runAction('变基', `rebase ${hash}`, async () => {
-								/* 后端的 rebase 命令尚未实现（Task 6.1） */
-								await invoke('rebase', {
-									repoPath: currentRepoPath,
-									obj: hash,
-									ignoreDate: ignoreDate,
-									sign: false,
-									interactive: interactive
-								});
+								/* Task 6.1 已实现 rebase 命令，通过 repoService 调用 */
+								/* 注意：交互式变基由后端返回特殊标记，前端可选择在 PTY 终端启动 */
+								await repoService.rebase(
+									currentRepoPath,
+									hash,
+									ignoreDate,
+									false,        /* sign: 不签名 */
+									interactive
+								);
 							});
 						},
 						target
@@ -574,7 +772,8 @@ export function getCommitContextMenuActions(
 			{
 				/* 重置：将当前分支重置到该提交（支持 Soft/Mixed/Hard 三种模式） */
 				title: 'Reset...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.reset,
 				onClick: () => {
 					/* 显示下拉选择对话框，让用户选择重置模式 */
 					const resetOptions: ReadonlyArray<DialogSelectInputOption> = [
@@ -583,21 +782,17 @@ export function getCommitContextMenuActions(
 						{ name: 'Hard —— 丢弃所有变更（危险操作）', value: GitResetMode.Hard }
 					];
 
+					/* Task 13.3：默认模式从 dialog.resetCommitMode 配置读取 */
 					dialog.showSelect(
 						`将当前分支重置到提交 ${hash.substring(0, 7)}`,
-						GitResetMode.Mixed,
+						defaultResetMode,
 						resetOptions,
 						'重置',
 						(mode: string) => {
 							runAction('重置', `reset ${mode} to ${hash}`, async () => {
-								/* 尝试调用后端的 reset_commit 命令，传入目标提交哈希 */
-								/* 注意：当前后端的 reset_commit 只支持 HEAD~1（Task 6.3 将扩展支持任意提交），
-								 * 如果后端不接受 commit 参数，会忽略它并重置到 HEAD~1 */
-								await invoke('reset_commit', {
-									repoPath: currentRepoPath,
-									mode: mode,
-									commit: hash
-								});
+								/* Task 6.3 已扩展 reset_commit 命令支持任意 commit，通过 repoService 调用 */
+								/* 传入目标提交哈希，后端会重置到指定的 commit */
+								await repoService.resetCommit(currentRepoPath, mode, hash);
 							});
 						},
 						target
@@ -611,7 +806,8 @@ export function getCommitContextMenuActions(
 			{
 				/* 复制提交哈希到剪贴板 */
 				title: 'Copy Hash',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.copyHash,
 				onClick: () => {
 					copyToClipboard(hash);
 				}
@@ -619,7 +815,8 @@ export function getCommitContextMenuActions(
 			{
 				/* 复制提交标题（消息第一行）到剪贴板 */
 				title: 'Copy Subject',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.copySubject,
 				onClick: () => {
 					copyToClipboard(subject);
 				}
@@ -654,13 +851,22 @@ export function getBranchContextMenuActions(
 	branch: string,
 	target: ContextMenuTarget | null
 ): ContextMenuActions {
+	/* Task 13.2：从 configService 读取分支菜单的可见性配置 */
+	const vis = getContextMenuVisibilityConfig().branch;
+
+	/* Task 13.3：从 configService 读取对话框默认值 */
+	const defaultMergeSquash: boolean = getDialogDefault<boolean>('dialog.mergeSquash', false);
+	const defaultMergeNoFastForward: boolean = getDialogDefault<boolean>('dialog.mergeNoFastForward', false);
+	const defaultMergeNoCommit: boolean = getDialogDefault<boolean>('dialog.mergeNoCommit', false);
+
 	return [
 		/* ===== 第 1 组：切换分支 ===== */
 		[
 			{
 				/* 切换到该分支：执行 git checkout <branch> */
 				title: 'Checkout',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.checkout,
 				onClick: () => {
 					runAction('切换分支', `checkout ${branch}`, async () => {
 						/* repoService.checkoutBranch 已实现 */
@@ -675,7 +881,8 @@ export function getBranchContextMenuActions(
 			{
 				/* 重命名分支：让用户输入新分支名 */
 				title: 'Rename...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.rename,
 				onClick: () => {
 					dialog.showRefInput(
 						`将分支 "${branch}" 重命名为：`,
@@ -683,12 +890,9 @@ export function getBranchContextMenuActions(
 						'重命名',
 						(newName: string) => {
 							runAction('重命名分支', `rename ${branch} -> ${newName}`, async () => {
-								/* 后端的 rename_branch 命令尚未实现（Task 6.2） */
-								await invoke('rename_branch', {
-									repoPath: currentRepoPath,
-									oldName: branch,
-									newName: newName
-								});
+								/* Task 6.2 已实现 rename_branch 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、旧分支名、新分支名 */
+								await repoService.renameBranch(currentRepoPath, branch, newName);
 							});
 						},
 						target
@@ -698,19 +902,18 @@ export function getBranchContextMenuActions(
 			{
 				/* 删除分支：显示确认对话框 */
 				title: 'Delete...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.delete,
 				onClick: () => {
 					dialog.showConfirmation(
 						`确定要删除分支 "${branch}" 吗？\n\n如果分支包含未合并的提交，删除可能导致数据丢失。`,
 						'删除',
 						() => {
 							runAction('删除分支', `delete ${branch}`, async () => {
-								/* 后端的 delete_branch 命令尚未实现（Task 6.2） */
-								await invoke('delete_branch', {
-									repoPath: currentRepoPath,
-									name: branch,
-									force: false
-								});
+								/* Task 6.2 已实现 delete_branch 命令，通过 repoService 调用 */
+								/* Task 13.3：是否强制删除从 dialog.deleteBranchForce 配置读取 */
+								const force: boolean = getDialogDefault<boolean>('dialog.deleteBranchForce', false);
+								await repoService.deleteBranch(currentRepoPath, branch, force);
 							});
 						},
 						target
@@ -724,25 +927,27 @@ export function getBranchContextMenuActions(
 			{
 				/* 合并该分支到当前分支 */
 				title: 'Merge...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.merge,
 				onClick: () => {
+					/* Task 13.3：默认值从 dialog.merge* 配置读取 */
 					dialog.showForm(
 						`合并分支 "${branch}" 到当前分支`,
 						[
 							{
 								type: DialogInputType.Checkbox,
 								name: '压缩合并（Squash）',
-								value: false
+								value: defaultMergeSquash
 							},
 							{
 								type: DialogInputType.Checkbox,
 								name: '禁止快进（No Fast Forward）',
-								value: false
+								value: defaultMergeNoFastForward
 							},
 							{
 								type: DialogInputType.Checkbox,
 								name: '不自动提交（No Commit）',
-								value: false
+								value: defaultMergeNoCommit
 							}
 						],
 						'合并',
@@ -752,15 +957,16 @@ export function getBranchContextMenuActions(
 							const noCommit: boolean = values[2] as boolean;
 
 							runAction('合并', `merge ${branch}`, async () => {
-								/* 后端的 merge 命令尚未实现（Task 6.1） */
-								await invoke('merge', {
-									repoPath: currentRepoPath,
-									obj: branch,
-									squash: squash,
-									noFastForward: noFastForward,
-									noCommit: noCommit,
-									sign: false
-								});
+								/* Task 6.1 已实现 merge 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、合并对象（分支名）、是否压缩、是否禁止快进、是否不提交、是否签名 */
+								await repoService.merge(
+									currentRepoPath,
+									branch,
+									squash,
+									noFastForward,
+									noCommit,
+									false  /* sign: 不签名 */
+								);
 							});
 						},
 						target
@@ -770,7 +976,8 @@ export function getBranchContextMenuActions(
 			{
 				/* 将当前分支变基到该分支 */
 				title: 'Rebase...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.rebase,
 				onClick: () => {
 					dialog.showForm(
 						`将当前分支变基到 "${branch}" 之上`,
@@ -792,14 +999,15 @@ export function getBranchContextMenuActions(
 							const interactive: boolean = values[1] as boolean;
 
 							runAction('变基', `rebase ${branch}`, async () => {
-								/* 后端的 rebase 命令尚未实现（Task 6.1） */
-								await invoke('rebase', {
-									repoPath: currentRepoPath,
-									obj: branch,
-									ignoreDate: ignoreDate,
-									sign: false,
-									interactive: interactive
-								});
+								/* Task 6.1 已实现 rebase 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、变基对象（分支名）、是否忽略日期、是否签名、是否交互式 */
+								await repoService.rebase(
+									currentRepoPath,
+									branch,
+									ignoreDate,
+									false,        /* sign: 不签名 */
+									interactive
+								);
 							});
 						},
 						target
@@ -809,7 +1017,8 @@ export function getBranchContextMenuActions(
 			{
 				/* 推送该分支到远程仓库 */
 				title: 'Push...',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.push,
 				onClick: () => {
 					/* 显示下拉选择对话框，让用户选择推送模式 */
 					const pushOptions: ReadonlyArray<DialogSelectInputOption> = [
@@ -825,10 +1034,19 @@ export function getBranchContextMenuActions(
 						'推送',
 						(pushMode: string) => {
 							runAction('推送', `push ${branch} (${pushMode})`, async () => {
-								/* repoService.push 已实现（基础版本） */
-								/* 注意：当前 push 方法不支持 force/force-with-lease 选项（Task 6.4 将扩展） */
-								/* 如果用户选择了强制推送，这里仍然调用普通 push，实际效果取决于后端实现 */
-								await repoService.push(currentRepoPath, 'origin', branch);
+								/* Task 6.4 已扩展 push 命令支持 force/force-with-lease/set-upstream，通过 repoService 调用 */
+								/* 根据 pushMode 设置 force 和 forceWithLease 参数 */
+								/* setUpstream=true 以便首次推送时建立跟踪关系 */
+								const force: boolean = pushMode === 'force';
+								const forceWithLease: boolean = pushMode === 'force-with-lease';
+								await repoService.pushWithOptions(
+									currentRepoPath,
+									'origin',
+									branch,
+									true,            /* setUpstream: 建立跟踪关系 */
+									force,
+									forceWithLease
+								);
 							});
 						},
 						target
@@ -840,17 +1058,35 @@ export function getBranchContextMenuActions(
 		/* ===== 第 4 组：创建 Pull Request ===== */
 		[
 			{
-				/* 创建 Pull Request：打开浏览器到 PR 创建页面 */
+				/* 创建 Pull Request：根据远程仓库 URL 自动检测 Provider 并打开 PR 创建页面 */
 				title: 'Create Pull Request',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.createPullRequest,
 				onClick: () => {
 					runAction('创建 Pull Request', `createPR ${branch}`, async () => {
-						/* 创建 PR 需要配置系统提供远程仓库信息（Task 5.4 实现） */
-						/* 这里通过 invoke 调用一个尚未实现的命令，触发"此功能正在开发中"提示 */
-						await invoke('create_pull_request', {
-							repoPath: currentRepoPath,
-							branch: branch
-						});
+						/* Task 7.5：从 configService 获取仓库配置（含远程仓库列表） */
+						const repoConfig = configService.getRepoConfig();
+						if (!repoConfig || repoConfig.remotes.length === 0) {
+							throw new Error('仓库没有配置远程仓库，无法创建 Pull Request');
+						}
+
+						/* 优先使用 origin 远程，否则使用第一个远程 */
+						const originRemote = repoConfig.remotes.find((r) => r.name === 'origin');
+						const remote = originRemote ?? repoConfig.remotes[0];
+						const remoteUrl = remote.url;
+						if (!remoteUrl) {
+							throw new Error(`远程仓库 "${remote.name}" 没有配置 URL`);
+						}
+
+						/* 从远程 URL 自动构建 PR 配置（含 Provider 自动检测） */
+						/* 目标分支默认使用当前检出的分支（即 branch 参数） */
+						const prConfig = buildPullRequestConfigFromRemote(remoteUrl, branch, branch);
+						if (!prConfig) {
+							throw new Error(`无法解析远程仓库 URL: ${remoteUrl}`);
+						}
+
+						/* 生成 PR URL 并在浏览器中打开 */
+						await createPullRequest(prConfig);
 					});
 				}
 			}
@@ -861,7 +1097,8 @@ export function getBranchContextMenuActions(
 			{
 				/* 复制分支名到剪贴板 */
 				title: 'Copy Name',
-				visible: true,
+				/* Task 13.2：从配置读取可见性 */
+				visible: vis.copyName,
 				onClick: () => {
 					copyToClipboard(branch);
 				}
@@ -922,13 +1159,21 @@ export function getRemoteBranchContextMenuActions(
 	/* 解析远程分支名，提取远程仓库名和分支名 */
 	const { remote, branch } = parseRemoteBranch(remoteBranch);
 
+	/* Task 13.2：从 configService 读取远程分支菜单的可见性配置 */
+	const vis = getContextMenuVisibilityConfig().remoteBranch;
+
+	/* Task 13.3：从 configService 读取对话框默认值 */
+	const defaultMergeSquash: boolean = getDialogDefault<boolean>('dialog.mergeSquash', false);
+	const defaultMergeNoFastForward: boolean = getDialogDefault<boolean>('dialog.mergeNoFastForward', false);
+	const defaultMergeNoCommit: boolean = getDialogDefault<boolean>('dialog.mergeNoCommit', false);
+
 	return [
 		/* ===== 第 1 组：检出 ===== */
 		[
 			{
 				/* 检出远程分支：创建本地分支跟踪该远程分支 */
 				title: 'Checkout',
-				visible: true,
+				visible: vis.checkout,
 				onClick: () => {
 					runAction('检出远程分支', `checkout ${remoteBranch}`, async () => {
 						/* 尝试通过 checkoutBranch 检出远程分支 */
@@ -944,19 +1189,16 @@ export function getRemoteBranchContextMenuActions(
 			{
 				/* 删除远程分支：执行 git push <remote> --delete <branch> */
 				title: 'Delete',
-				visible: true,
+				visible: vis.delete,
 				onClick: () => {
 					dialog.showConfirmation(
 						`确定要删除远程分支 "${remoteBranch}" 吗？\n\n这将影响所有协作者。`,
 						'删除',
 						() => {
 							runAction('删除远程分支', `delete ${remoteBranch}`, async () => {
-								/* 后端的 delete_remote_branch 命令尚未实现（Task 6.2） */
-								await invoke('delete_remote_branch', {
-									repoPath: currentRepoPath,
-									remote: remote,
-									branch: branch
-								});
+								/* Task 6.2 已实现 delete_remote_branch 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、远程仓库名、分支名 */
+								await repoService.deleteRemoteBranch(currentRepoPath, remote, branch);
 							});
 						},
 						target
@@ -970,23 +1212,19 @@ export function getRemoteBranchContextMenuActions(
 			{
 				/* 拉取到本地分支：从远程获取并创建/更新本地分支 */
 				title: 'Fetch into local',
-				visible: true,
+				visible: vis.fetchIntoLocal,
 				onClick: () => {
 					runAction('拉取到本地分支', `fetchIntoLocal ${remoteBranch}`, async () => {
-						/* 后端的 fetch_into_local_branch 命令尚未实现（Task 5.2） */
-						await invoke('fetch_into_local_branch', {
-							repoPath: currentRepoPath,
-							remote: remote,
-							branch: branch,
-							localBranch: branch
-						});
+						/* Task 5.2 已实现 fetch_into_local_branch 命令，通过 repoService 调用 */
+						/* 参数：仓库路径、远程仓库名、远程分支名、本地分支名（这里与远程分支同名） */
+						await repoService.fetchIntoLocalBranch(currentRepoPath, remote, branch, branch);
 					});
 				}
 			},
 			{
 				/* 合并该远程分支到当前分支 */
 				title: 'Merge...',
-				visible: true,
+				visible: vis.merge,
 				onClick: () => {
 					dialog.showForm(
 						`合并远程分支 "${remoteBranch}" 到当前分支`,
@@ -994,17 +1232,17 @@ export function getRemoteBranchContextMenuActions(
 							{
 								type: DialogInputType.Checkbox,
 								name: '压缩合并（Squash）',
-								value: false
+								value: defaultMergeSquash
 							},
 							{
 								type: DialogInputType.Checkbox,
 								name: '禁止快进（No Fast Forward）',
-								value: false
+								value: defaultMergeNoFastForward
 							},
 							{
 								type: DialogInputType.Checkbox,
 								name: '不自动提交（No Commit）',
-								value: false
+								value: defaultMergeNoCommit
 							}
 						],
 						'合并',
@@ -1014,15 +1252,16 @@ export function getRemoteBranchContextMenuActions(
 							const noCommit: boolean = values[2] as boolean;
 
 							runAction('合并', `merge ${remoteBranch}`, async () => {
-								/* 后端的 merge 命令尚未实现（Task 6.1） */
-								await invoke('merge', {
-									repoPath: currentRepoPath,
-									obj: remoteBranch,
-									squash: squash,
-									noFastForward: noFastForward,
-									noCommit: noCommit,
-									sign: false
-								});
+								/* Task 6.1 已实现 merge 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、合并对象（远程分支名）、是否压缩、是否禁止快进、是否不提交、是否签名 */
+								await repoService.merge(
+									currentRepoPath,
+									remoteBranch,
+									squash,
+									noFastForward,
+									noCommit,
+									false  /* sign: 不签名 */
+								);
 							});
 						},
 						target
@@ -1032,7 +1271,7 @@ export function getRemoteBranchContextMenuActions(
 			{
 				/* 拉取：从远程获取最新提交并合并到当前分支 */
 				title: 'Pull',
-				visible: true,
+				visible: vis.pull,
 				onClick: () => {
 					runAction('拉取', `pull ${remoteBranch}`, async () => {
 						/* repoService.pull 已实现 */
@@ -1045,15 +1284,35 @@ export function getRemoteBranchContextMenuActions(
 		/* ===== 第 4 组：创建 Pull Request ===== */
 		[
 			{
-				/* 创建 Pull Request */
+				/* 创建 Pull Request：根据远程仓库 URL 自动检测 Provider 并打开 PR 创建页面 */
 				title: 'Create Pull Request',
-				visible: true,
+				visible: vis.createPullRequest,
 				onClick: () => {
 					runAction('创建 Pull Request', `createPR ${remoteBranch}`, async () => {
-						await invoke('create_pull_request', {
-							repoPath: currentRepoPath,
-							branch: branch
-						});
+						/* Task 7.5：从 configService 获取仓库配置（含远程仓库列表） */
+						const repoConfig = configService.getRepoConfig();
+						if (!repoConfig || repoConfig.remotes.length === 0) {
+							throw new Error('仓库没有配置远程仓库，无法创建 Pull Request');
+						}
+
+						/* 优先使用 origin 远程，否则使用第一个远程 */
+						const originRemote = repoConfig.remotes.find((r) => r.name === 'origin');
+						const remote = originRemote ?? repoConfig.remotes[0];
+						const remoteUrl = remote.url;
+						if (!remoteUrl) {
+							throw new Error(`远程仓库 "${remote.name}" 没有配置 URL`);
+						}
+
+						/* 从远程 URL 自动构建 PR 配置（含 Provider 自动检测） */
+						/* 远程分支格式为 "remote/branch"，提取纯分支名作为源分支 */
+						const pureBranchName = branch.includes('/') ? branch.split('/').slice(1).join('/') : branch;
+						const prConfig = buildPullRequestConfigFromRemote(remoteUrl, pureBranchName, pureBranchName);
+						if (!prConfig) {
+							throw new Error(`无法解析远程仓库 URL: ${remoteUrl}`);
+						}
+
+						/* 生成 PR URL 并在浏览器中打开 */
+						await createPullRequest(prConfig);
 					});
 				}
 			}
@@ -1064,7 +1323,7 @@ export function getRemoteBranchContextMenuActions(
 			{
 				/* 复制远程分支名到剪贴板 */
 				title: 'Copy Name',
-				visible: true,
+				visible: vis.copyName,
 				onClick: () => {
 					copyToClipboard(remoteBranch);
 				}
@@ -1097,13 +1356,16 @@ export function getTagContextMenuActions(
 	tag: string,
 	target: ContextMenuTarget | null
 ): ContextMenuActions {
+	/* Task 13.2：从 configService 读取标签菜单的可见性配置 */
+	const vis = getContextMenuVisibilityConfig().tag;
+
 	return [
 		/* ===== 第 1 组：查看和删除 ===== */
 		[
 			{
 				/* 查看详情：显示该标签指向的提交的详情 */
 				title: 'View Details',
-				visible: true,
+				visible: vis.viewDetails,
 				onClick: () => {
 					/* 由于菜单生成时只有标签名，需要异步查找标签指向的提交哈希 */
 					/* 使用 repoService.getTags() 获取所有标签信息，找到匹配的提交 */
@@ -1152,15 +1414,12 @@ export function getTagContextMenuActions(
 			{
 				/* 推送标签到远程仓库 */
 				title: 'Push',
-				visible: true,
+				visible: vis.push,
 				onClick: () => {
 					runAction('推送标签', `pushTag ${tag}`, async () => {
-						/* 后端的 push_tag 命令尚未实现（Task 6.4） */
-						await invoke('push_tag', {
-							repoPath: currentRepoPath,
-							remote: 'origin',
-							tag: tag
-						});
+						/* Task 6.4 已实现 push_tag 命令，通过 repoService 调用 */
+						/* 参数：仓库路径、远程仓库名（默认 origin）、标签名 */
+						await repoService.pushTag(currentRepoPath, 'origin', tag);
 					});
 				}
 			}
@@ -1171,7 +1430,7 @@ export function getTagContextMenuActions(
 			{
 				/* 复制标签名到剪贴板 */
 				title: 'Copy Name',
-				visible: true,
+				visible: vis.copyName,
 				onClick: () => {
 					copyToClipboard(tag);
 				}
@@ -1206,28 +1465,33 @@ export function getStashContextMenuActions(
 	stashHash: string,
 	target: ContextMenuTarget | null
 ): ContextMenuActions {
+	/* Task 13.2：从 configService 读取 Stash 菜单的可见性配置 */
+	const vis = getContextMenuVisibilityConfig().stash;
+
+	/* Task 13.3：从 configService 读取对话框默认值 */
+	/* Apply/Pop stash 时是否默认恢复暂存区索引（--index） */
+	const defaultReinstateIndex: boolean = getDialogDefault<boolean>('dialog.stashReinstateIndex', false);
+
 	return [
 		/* ===== 第 1 组：应用、弹出、丢弃 ===== */
 		[
 			{
 				/* 应用 stash：将 stash 的变更应用到工作区，但不删除 stash */
 				title: 'Apply...',
-				visible: true,
+				visible: vis.apply,
 				onClick: () => {
 					/* 显示复选框对话框，让用户选择是否恢复暂存区 */
+					/* Task 13.3：默认值从 dialog.stashReinstateIndex 配置读取 */
 					dialog.showCheckbox(
 						`应用 stash "${stashSelector}"？`,
 						'恢复暂存区索引（Reinstate Index）—— 尝试恢复暂存区的状态',
-						false,
+						defaultReinstateIndex,
 						'应用',
 						(reinstateIndex: boolean) => {
 							runAction('应用 Stash', `applyStash ${stashSelector}`, async () => {
-								/* 后端的 apply_stash 命令尚未实现（Task 4.1） */
-								await invoke('apply_stash', {
-									repoPath: currentRepoPath,
-									selector: stashSelector,
-									index: reinstateIndex
-								});
+								/* Task 4.1 已实现 apply_stash 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、stash 选择器、是否恢复暂存区索引 */
+								await repoService.applyStash(currentRepoPath, stashSelector, reinstateIndex);
 							});
 						},
 						target
@@ -1237,21 +1501,18 @@ export function getStashContextMenuActions(
 			{
 				/* 弹出 stash：应用 stash 并删除它 */
 				title: 'Pop...',
-				visible: true,
+				visible: vis.pop,
 				onClick: () => {
 					dialog.showCheckbox(
 						`弹出 stash "${stashSelector}"？\n\n这将应用 stash 并删除它。`,
 						'恢复暂存区索引（Reinstate Index）',
-						false,
+						defaultReinstateIndex,
 						'弹出',
 						(reinstateIndex: boolean) => {
 							runAction('弹出 Stash', `popStash ${stashSelector}`, async () => {
-								/* 后端的 pop_stash 命令尚未实现（Task 4.1） */
-								await invoke('pop_stash', {
-									repoPath: currentRepoPath,
-									selector: stashSelector,
-									index: reinstateIndex
-								});
+								/* Task 4.1 已实现 pop_stash 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、stash 选择器、是否恢复暂存区索引 */
+								await repoService.popStash(currentRepoPath, stashSelector, reinstateIndex);
 							});
 						},
 						target
@@ -1261,18 +1522,16 @@ export function getStashContextMenuActions(
 			{
 				/* 丢弃 stash：直接删除 stash，不应用变更 */
 				title: 'Drop...',
-				visible: true,
+				visible: vis.drop,
 				onClick: () => {
 					dialog.showConfirmation(
 						`确定要丢弃 stash "${stashSelector}" 吗？\n\n这将永久删除此 stash，无法恢复。`,
 						'丢弃',
 						() => {
 							runAction('丢弃 Stash', `dropStash ${stashSelector}`, async () => {
-								/* 后端的 drop_stash 命令尚未实现（Task 4.1） */
-								await invoke('drop_stash', {
-									repoPath: currentRepoPath,
-									selector: stashSelector
-								});
+								/* Task 4.1 已实现 drop_stash 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、stash 选择器 */
+								await repoService.dropStash(currentRepoPath, stashSelector);
 							});
 						},
 						target
@@ -1286,7 +1545,7 @@ export function getStashContextMenuActions(
 			{
 				/* 从 stash 创建分支：在 stash 基于的提交上创建新分支并应用 stash 变更 */
 				title: 'Create Branch...',
-				visible: true,
+				visible: vis.createBranch,
 				onClick: () => {
 					dialog.showRefInput(
 						`从 stash "${stashSelector}" 创建新分支：`,
@@ -1294,12 +1553,9 @@ export function getStashContextMenuActions(
 						'创建分支',
 						(branchName: string) => {
 							runAction('从 Stash 创建分支', `branchFromStash ${stashSelector} -> ${branchName}`, async () => {
-								/* 后端的 branch_from_stash 命令尚未实现（Task 4.1） */
-								await invoke('branch_from_stash', {
-									repoPath: currentRepoPath,
-									branch: branchName,
-									selector: stashSelector
-								});
+								/* Task 4.1 已实现 branch_from_stash 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、新分支名、stash 选择器 */
+								await repoService.branchFromStash(currentRepoPath, branchName, stashSelector);
 							});
 						},
 						target
@@ -1313,7 +1569,7 @@ export function getStashContextMenuActions(
 			{
 				/* 复制 stash 选择器（如 "stash@{0}"）到剪贴板 */
 				title: 'Copy Name',
-				visible: true,
+				visible: vis.copyName,
 				onClick: () => {
 					copyToClipboard(stashSelector);
 				}
@@ -1321,7 +1577,7 @@ export function getStashContextMenuActions(
 			{
 				/* 复制 stash 哈希到剪贴板 */
 				title: 'Copy Hash',
-				visible: true,
+				visible: vis.copyHash,
 				onClick: () => {
 					copyToClipboard(stashHash);
 				}
@@ -1351,22 +1607,32 @@ export function getStashContextMenuActions(
 export function getUncommittedChangesContextMenuActions(
 	target: ContextMenuTarget | null
 ): ContextMenuActions {
+	/* Task 13.2：从 configService 读取未提交变更菜单的可见性配置 */
+	const vis = getContextMenuVisibilityConfig().uncommitted;
+
+	/* Task 13.3：从 configService 读取对话框默认值 */
+	/* Stash 时是否默认包含未跟踪文件 */
+	const defaultIncludeUntracked: boolean = getDialogDefault<boolean>('dialog.stashIncludeUntracked', true);
+	/* 重置未提交变更的默认模式 */
+	const defaultResetUncommittedMode: string = getDialogDefault<string>('dialog.resetUncommittedMode', GitResetMode.Mixed);
+
 	return [
 		/* ===== 第 1 组：暂存、重置、清理 ===== */
 		[
 			{
 				/* 暂存变更：执行 git stash push，将工作区变更保存到 stash */
 				title: 'Stash...',
-				visible: true,
+				visible: vis.stash,
 				onClick: () => {
 					/* 显示表单对话框，让用户选择选项和输入消息 */
+					/* Task 13.3：默认值从 dialog.stashIncludeUntracked 配置读取 */
 					dialog.showForm(
 						'暂存未提交的变更（Stash）',
 						[
 							{
 								type: DialogInputType.Checkbox,
 								name: '包含未跟踪文件（Include Untracked）',
-								value: false
+								value: defaultIncludeUntracked
 							},
 							{
 								type: DialogInputType.Text,
@@ -1381,12 +1647,14 @@ export function getUncommittedChangesContextMenuActions(
 							const message: string = values[1] as string;
 
 							runAction('暂存变更', `pushStash`, async () => {
-								/* 后端的 push_stash 命令尚未实现（Task 4.1） */
-								await invoke('push_stash', {
-									repoPath: currentRepoPath,
-									includeUntracked: includeUntracked,
-									message: message
-								});
+								/* Task 4.1 已实现 push_stash 命令，通过 repoService 调用 */
+								/* 参数：仓库路径、是否包含未跟踪文件、可选的描述消息 */
+								/* 如果消息为空字符串，传 undefined 让后端不使用 -m 选项 */
+								await repoService.pushStash(
+									currentRepoPath,
+									includeUntracked,
+									message.trim() === '' ? undefined : message
+								);
 							});
 						},
 						target
@@ -1394,9 +1662,9 @@ export function getUncommittedChangesContextMenuActions(
 				}
 			},
 			{
-				/* 重置：将当前分支重置到 HEAD~1（撤销最近一次提交） */
+				/* 重置：将当前分支重置到 HEAD（撤销未提交的变更） */
 				title: 'Reset...',
-				visible: true,
+				visible: vis.reset,
 				onClick: () => {
 					/* 显示下拉选择对话框，让用户选择重置模式 */
 					const resetOptions: ReadonlyArray<DialogSelectInputOption> = [
@@ -1405,16 +1673,18 @@ export function getUncommittedChangesContextMenuActions(
 						{ name: 'Hard —— 丢弃所有变更（危险操作）', value: GitResetMode.Hard }
 					];
 
+					/* Task 13.3：默认模式从 dialog.resetUncommittedMode 配置读取 */
 					dialog.showSelect(
 						'重置未提交的变更',
-						GitResetMode.Mixed,
+						defaultResetUncommittedMode,
 						resetOptions,
 						'重置',
 						(mode: string) => {
 							runAction('重置', `reset ${mode}`, async () => {
-								/* repoService.resetCommit 已实现 */
-								/* 注意：resetCommit 只支持重置到 HEAD~1，对于 UNCOMMITTED 节点这是正确的行为 */
-								await repoService.resetCommit(currentRepoPath, mode);
+								/* Task 6.3 已扩展 reset_commit 命令支持任意 commit，通过 repoService 调用 */
+								/* 对于未提交变更，重置到 HEAD（传 'HEAD' 作为 commit 参数） */
+								/* 这样 Soft/Mixed/Hard 模式分别保留/重置暂存区/丢弃所有工作区变更 */
+								await repoService.resetCommit(currentRepoPath, mode, 'HEAD');
 							});
 						},
 						target
@@ -1424,7 +1694,7 @@ export function getUncommittedChangesContextMenuActions(
 			{
 				/* 清理：删除未跟踪的文件和目录 */
 				title: 'Clean...',
-				visible: true,
+				visible: vis.clean,
 				onClick: () => {
 					/* 显示确认对话框，因为清理是危险操作 */
 					dialog.showConfirmation(
@@ -1450,7 +1720,7 @@ export function getUncommittedChangesContextMenuActions(
 			{
 				/* 打开 SCM：在外部工具中打开仓库（如 VS Code 的 SCM 视图） */
 				title: 'Open SCM',
-				visible: true,
+				visible: vis.openScm,
 				onClick: () => {
 					runAction('打开 SCM', `openSCM`, async () => {
 						/* 后端的 open_scm 命令尚未实现 */

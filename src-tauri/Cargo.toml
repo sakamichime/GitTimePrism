@@ -50,6 +50,31 @@ thiserror = "2"
 base64 = "0.22"
 # portable-pty 库，提供跨平台的伪终端(PTY)支持，用于内嵌终端功能
 portable-pty = "0.8"
+# encoding_rs 库，提供多种字符编码的解码/编码支持（Task 9.7：文件编码）
+# 用于读取非 UTF-8 编码的文件内容（如 GBK/Big5/Shift-JIS/ISO-8859-1 等）
+encoding_rs = "0.8"
+# notify 库，提供跨平台的文件系统变化监听（阶段 10 文件监听扩展）
+# 用于监听 .git 目录下 config/index/HEAD/refs 等文件变化，触发前端刷新
+notify = "6"
+# reqwest 库，提供 HTTP 客户端功能（阶段 10 头像管理）
+# 用于从 GitHub / GitLab / Gravatar 三个源获取用户头像图片
+# features = ["json"] 启用 JSON 响应解析（GitHub API 返回 JSON）
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+# tokio 库，提供异步运行时（阶段 10 头像管理）
+# reqwest 异步 API 依赖 tokio 运行时
+tokio = { version = "1", features = ["full"] }
+# md-5 库，提供 MD5 哈希计算（阶段 10 头像管理）
+# 用于计算 email 的 MD5 哈希以构造 Gravatar URL（Gravatar 用 MD5 作为头像标识）
+md-5 = "0.10"
+# dirs 库，提供跨平台的用户目录路径获取（阶段 10 仓库管理 / 状态持久化 / 头像缓存）
+# 用于获取 ~/.gittimeprism/ 目录路径（存储 repos.json / state.json / avatars/ 等）
+dirs = "5"
+# chrono 库，提供日期时间处理（阶段 10 状态持久化）
+# 用于 Code Review 状态的 90 天过期判断
+chrono = { version = "0.4", features = ["serde"] }
+# hex 库，提供字节与十六进制字符串互转（阶段 10 头像管理）
+# 用于将 MD5 计算结果（字节）转为十六进制字符串以构造 Gravatar URL
+hex = "0.4"
 
 # Windows 平台特定依赖
 [target.'cfg(windows)'.dependencies]

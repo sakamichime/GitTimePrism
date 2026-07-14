@@ -1,0 +1,486 @@
+/*
+ * Blame 视图样式（Task 8.5：Blame 行级别溯源信息显示）
+ *
+ * 此样式表为 Blame 视图组件（blame-viewer.ts）提供完整的视觉样式：
+ * 1. 模态遮罩层（Blame 视图作为浮层显示）
+ * 2. 标题栏（文件名 + 关闭按钮）
+ * 3. 工具栏（刷新按钮）
+ * 4. 内容区（行号 + commit 信息列 + 代码内容列）
+ *
+ * 配色说明：
+ * - 行号列：灰色背景
+ * - commit 信息列：根据 commit hash 着色（不同 commit 用不同颜色块）
+ * - 代码内容列：白色背景，等宽字体
+ * - 边界提交（boundary commit）：使用更浅的色调
+ *
+ * 使用 CSS 变量：
+ * - 依赖 variables.css 中定义的颜色变量
+ * - 在浅色/深色主题下自动适配
+ */
+
+/* ============================================================
+ * 模态遮罩层
+ * ============================================================ */
+
+/**
+ * Blame 视图的全屏模态遮罩
+ *
+ * 覆盖整个窗口，半透明黑色背景，让用户聚焦在 Blame 视图上。
+ */
+.blame-viewer-overlay {
+  /* 固定定位，覆盖整个视口 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 半透明黑色背景 */
+  background-color: rgba(0, 0, 0, 0.6);
+  /* 高层级，确保覆盖其他元素 */
+  z-index: 10000;
+  /* 弹性布局，居中显示视图主体 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 动画过渡 */
+  animation: blame-viewer-fade-in 0.2s ease;
+}
+
+/**
+ * 淡入动画
+ */
+@keyframes blame-viewer-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================================
+ * 视图主体
+ * ============================================================ */
+
+/**
+ * Blame 视图主容器
+ *
+ * 占据视口的大部分空间（90% 宽高），白色背景，圆角阴影。
+ * 内部从上到下依次为：标题栏、工具栏、内容区。
+ */
+.blame-viewer-container {
+  /* 尺寸：占视口的 90% */
+  width: 90vw;
+  height: 90vh;
+  /* 背景和圆角 */
+  background-color: var(--bg-primary, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  /* 弹性布局，纵向排列 */
+  display: flex;
+  flex-direction: column;
+  /* 防止内容溢出 */
+  overflow: hidden;
+  /* 动画过渡 */
+  animation: blame-viewer-slide-up 0.3s ease;
+}
+
+/**
+ * 从下滑入动画
+ */
+@keyframes blame-viewer-slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ============================================================
+ * 标题栏
+ * ============================================================ */
+
+/**
+ * Blame 视图标题栏
+ *
+ * 显示文件名和关闭按钮。
+ */
+.blame-viewer-header {
+  /* 横向布局 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* 内边距和底边框 */
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  /* 标题栏背景 */
+  background-color: var(--bg-secondary, #f5f5f5);
+}
+
+/**
+ * 标题文字（文件名）
+ */
+.blame-viewer-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333333);
+  /* 文件名可能很长，使用省略号 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 允许占满剩余空间 */
+  flex: 1;
+}
+
+/**
+ * 标题栏中的辅助信息（如总行数）
+ */
+.blame-viewer-info {
+  font-size: 12px;
+  color: var(--text-secondary, #666666);
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+/**
+ * 关闭按钮
+ */
+.blame-viewer-close-btn {
+  /* 重置按钮样式 */
+  background: none;
+  border: none;
+  /* 字号 */
+  font-size: 20px;
+  /* 颜色 */
+  color: var(--text-secondary, #666666);
+  /* 鼠标悬停效果 */
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  /* 过渡动画 */
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.blame-viewer-close-btn:hover {
+  background-color: var(--bg-hover, #e8e8e8);
+  color: var(--text-primary, #333333);
+}
+
+/* ============================================================
+ * 工具栏
+ * ============================================================ */
+
+/**
+ * 工具栏容器
+ *
+ * 包含刷新按钮等操作
+ */
+.blame-viewer-toolbar {
+  /* 横向布局 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 内边距 */
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--bg-primary, #ffffff);
+}
+
+/**
+ * 工具栏按钮
+ */
+.blame-viewer-btn {
+  /* 尺寸 */
+  padding: 6px 12px;
+  /* 字号 */
+  font-size: 12px;
+  /* 边框和背景 */
+  border: 1px solid var(--border-color, #d0d0d0);
+  background-color: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #333333);
+  /* 圆角和指针 */
+  border-radius: 4px;
+  cursor: pointer;
+  /* 过渡动画 */
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.blame-viewer-btn:hover {
+  background-color: var(--bg-hover, #e8e8e8);
+  border-color: var(--accent-primary, #0066cc);
+}
+
+.blame-viewer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+ * 内容区（表格布局）
+ * ============================================================ */
+
+/**
+ * Blame 内容区容器
+ *
+ * 使用表格布局，每行包含：
+ * - 行号列（窄）
+ * - commit 信息列（中等宽度，含 hash/author/date）
+ * - 代码内容列（占满剩余空间）
+ */
+.blame-viewer-content {
+  /* 占满剩余空间 */
+  flex: 1;
+  /* 允许垂直滚动 */
+  overflow-y: auto;
+  /* 防止溢出 */
+  min-height: 0;
+  /* 字体 */
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  /* 背景色 */
+  background-color: var(--bg-primary, #ffffff);
+}
+
+/**
+ * 单行 Blame 信息
+ *
+ * 使用 CSS Grid 实现三列布局
+ */
+.blame-line {
+  /* 网格布局：行号 | commit 信息 | 代码内容 */
+  display: grid;
+  /* 列宽：行号 50px | commit 信息 280px | 代码内容 1fr */
+  grid-template-columns: 50px 280px 1fr;
+  /* 行高对齐 */
+  align-items: stretch;
+  /* 边框 */
+  border-bottom: 1px solid var(--border-color-light, #f0f0f0);
+  /* 鼠标指针 */
+  cursor: pointer;
+  /* 过渡动画 */
+  transition: background-color 0.15s;
+}
+
+.blame-line:hover {
+  /* 悬停高亮 */
+  background-color: var(--bg-hover, #f5f5f5);
+}
+
+/* ============================================================
+ * 行号列
+ * ============================================================ */
+
+/**
+ * 行号单元格
+ *
+ * 灰色背景，右对齐，等宽字体
+ */
+.blame-line-number {
+  /* 内边距 */
+  padding: 0 8px;
+  /* 右对齐 */
+  text-align: right;
+  /* 颜色 */
+  color: var(--text-secondary, #999999);
+  background-color: var(--bg-secondary, #f5f5f5);
+  /* 不允许选中 */
+  user-select: none;
+  /* 边框 */
+  border-right: 1px solid var(--border-color, #e0e0e0);
+  /* 不收缩 */
+  flex-shrink: 0;
+}
+
+/* ============================================================
+ * Commit 信息列
+ * ============================================================ */
+
+/**
+ * Commit 信息单元格
+ *
+ * 显示 commit hash（短）、作者、日期。
+ * 不同 commit 使用不同颜色块标识，便于识别同一 commit 的连续行。
+ */
+.blame-line-info {
+  /* 内边距 */
+  padding: 0 8px;
+  /* 弹性布局，纵向 */
+  display: flex;
+  flex-direction: column;
+  /* 内容溢出处理 */
+  overflow: hidden;
+  /* 边框 */
+  border-right: 1px solid var(--border-color, #e0e0e0);
+  /* 默认背景色（不同 commit 会通过 JS 设置不同的背景色） */
+  background-color: var(--bg-tertiary, #fafafa);
+  /* 不收缩 */
+  flex-shrink: 0;
+}
+
+/**
+ * Commit hash（短哈希）
+ */
+.blame-line-hash {
+  /* 字号 */
+  font-size: 11px;
+  /* 颜色（蓝色调，提示可点击跳转） */
+  color: #0066cc;
+  /* 等宽字体 */
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  /* 不换行 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* 字重 */
+  font-weight: 600;
+}
+
+/**
+ * 作者名字
+ */
+.blame-line-author {
+  /* 字号 */
+  font-size: 11px;
+  /* 颜色 */
+  color: var(--text-primary, #333333);
+  /* 不换行 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/**
+ * 日期
+ */
+.blame-line-date {
+  /* 字号 */
+  font-size: 10px;
+  /* 颜色 */
+  color: var(--text-secondary, #666666);
+  /* 不换行 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/**
+ * 边界提交（boundary commit）
+ *
+ * 文件历史中最早可见的提交，使用更浅的色调
+ */
+.blame-line.boundary .blame-line-info {
+  /* 更浅的背景色 */
+  background-color: var(--bg-secondary, #f0f0f0);
+  /* 更浅的文字颜色 */
+  opacity: 0.7;
+}
+
+.blame-line.boundary .blame-line-hash {
+  /* 边界提交的 hash 使用灰色，表示不可继续追溯 */
+  color: var(--text-secondary, #999999);
+}
+
+/* ============================================================
+ * 代码内容列
+ * ============================================================ */
+
+/**
+ * 代码内容单元格
+ *
+ * 显示该行的实际代码内容
+ */
+.blame-line-content {
+  /* 内边距 */
+  padding: 0 12px;
+  /* 颜色 */
+  color: var(--text-primary, #333333);
+  /* 保留空白和换行 */
+  white-space: pre;
+  /* 不允许换行（保持代码原样） */
+  word-wrap: normal;
+  /* 横向滚动 */
+  overflow-x: auto;
+  /* 最小宽度 */
+  min-width: 0;
+}
+
+/* ============================================================
+ * 空状态和加载状态
+ * ============================================================ */
+
+/**
+ * 空状态提示（无 Blame 数据时显示）
+ */
+.blame-viewer-empty {
+  /* 居中显示 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* 占满空间 */
+  width: 100%;
+  height: 100%;
+  /* 字号和颜色 */
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+  /* 内边距 */
+  padding: 32px;
+}
+
+/**
+ * 加载中提示
+ */
+.blame-viewer-loading {
+  /* 居中显示 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 占满空间 */
+  width: 100%;
+  height: 100%;
+  /* 字号和颜色 */
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+}
+
+/**
+ * 错误信息提示
+ */
+.blame-viewer-error {
+  /* 内边距 */
+  padding: 16px;
+  /* 错误色调 */
+  background-color: rgba(204, 0, 0, 0.1);
+  color: #cc0000;
+  /* 字号 */
+  font-size: 13px;
+  /* 圆角 */
+  border-radius: 4px;
+  /* 外边距 */
+  margin: 16px;
+}
+
+/* ============================================================
+ * 响应式（小屏幕适配）
+ * ============================================================ */
+
+/**
+ * 屏幕宽度小于 768px 时，隐藏 commit 信息列，只显示行号和代码内容
+ */
+@media (max-width: 768px) {
+  .blame-viewer-container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .blame-line {
+    /* 改为两列布局：行号 | 代码内容 */
+    grid-template-columns: 40px 1fr;
+  }
+
+  .blame-line-info {
+    /* 隐藏 commit 信息列 */
+    display: none;
+  }
+}

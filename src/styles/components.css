@@ -353,6 +353,42 @@
   flex: 1;            /* 占据所有剩余空间 */
 }
 
+/* Task 11.4：状态栏分隔符 - 在不同信息组之间显示竖线 */
+.statusbar-separator {
+  color: var(--text-muted);    /* 弱化颜色 */
+  opacity: 0.5;                /* 半透明 */
+  user-select: none;           /* 不可选中 */
+}
+
+/* Task 11.4：状态栏图标样式 */
+.statusbar-icon {
+  font-size: var(--font-size-xs);  /* 超小字号 */
+  opacity: 0.8;                     /* 轻微透明 */
+}
+
+/* Task 11.4：状态栏分支名样式 - 高亮显示 */
+#statusbar-branch-name {
+  font-weight: 500;                            /* 中等粗细 */
+  color: var(--text-primary);                  /* 主要文字色 */
+}
+
+/* Task 11.4：状态栏 ahead/behind 样式 - 颜色区分 */
+#statusbar-ahead-behind-text {
+  font-size: var(--font-size-xs);  /* 超小字号 */
+}
+
+/* Task 11.4：状态栏提交总数样式 */
+#statusbar-commit-count-text {
+  font-weight: 500;                /* 中等粗细 */
+  color: var(--text-primary);      /* 主要文字色 */
+}
+
+/* Task 11.4：状态栏排序方式样式 */
+#statusbar-sort-order-text {
+  color: var(--text-muted);        /* 弱化颜色 */
+  font-style: italic;              /* 斜体 */
+}
+
 /* ============================================================
  * 终端面板 (.terminal-panel)
  * ============================================================
@@ -1059,6 +1095,81 @@
   font-size: var(--font-size-xs);             /* 超小字号 */
 }
 
+/* ============================================================
+ * GPG 签名状态样式（阶段 9：Task 9.5）
+ * 在提交详情头部显示 GPG 签名状态，不同状态用不同颜色区分：
+ * - valid（有效）：绿色
+ * - unknown（未知可信度）：黄色
+ * - expired（过期）：橙色
+ * - revoked（密钥吊销）：红色
+ * - unchecked（无法检查）：灰色
+ * - bad（签名无效）：红色
+ * ============================================================ */
+
+/* 签名行容器 */
+.commit-detail-signature-row {
+  align-items: center;                         /* 垂直居中对齐 */
+}
+
+/* 签名值容器（包含图标和文字） */
+.commit-signature {
+  display: inline-flex;                        /* 行内弹性布局，让图标和文字水平排列 */
+  align-items: center;                         /* 垂直居中对齐 */
+  gap: 4px;                                    /* 图标和文字之间的间距 */
+  padding: 2px 8px;                            /* 内边距 */
+  border-radius: 4px;                          /* 圆角 */
+  font-size: var(--font-size-sm);              /* 小字号 */
+  font-weight: 500;                            /* 中等粗细 */
+  cursor: help;                                /* 帮助光标（提示可悬停查看详情） */
+}
+
+/* 签名图标 */
+.commit-signature-icon {
+  font-size: var(--font-size-sm);              /* 小字号，与文字一致 */
+  line-height: 1;                              /* 紧凑行高 */
+}
+
+/* 签名文字 */
+.commit-signature-text {
+  line-height: 1;                              /* 紧凑行高 */
+}
+
+/* 签名有效（G - GoodAndValid）：绿色 */
+.commit-signature-valid {
+  color: var(--success, #28a745);              /* 绿色文字 */
+  background-color: rgba(40, 167, 69, 0.12);   /* 浅绿色背景 */
+}
+
+/* 签名可信度未知（U - GoodWithUnknownValidity）：黄色 */
+.commit-signature-unknown {
+  color: var(--warning, #ffc107);              /* 黄色文字 */
+  background-color: rgba(255, 193, 7, 0.12);   /* 浅黄色背景 */
+}
+
+/* 签名已过期（X/Y - GoodButExpired/GoodButMadeByExpiredKey）：橙色 */
+.commit-signature-expired {
+  color: var(--warning, #fd7e14);              /* 橙色文字 */
+  background-color: rgba(253, 126, 20, 0.12);  /* 浅橙色背景 */
+}
+
+/* 签名密钥已吊销（R - GoodButMadeByRevokedKey）：红色 */
+.commit-signature-revoked {
+  color: var(--error, #dc3545);                /* 红色文字 */
+  background-color: rgba(220, 53, 69, 0.12);   /* 浅红色背景 */
+}
+
+/* 无法检查签名（E - CannotBeChecked）：灰色 */
+.commit-signature-unchecked {
+  color: var(--text-muted, #6c757d);           /* 灰色文字 */
+  background-color: rgba(108, 117, 125, 0.12); /* 浅灰色背景 */
+}
+
+/* 签名无效（B - Bad）：红色 */
+.commit-signature-bad {
+  color: var(--error, #dc3545);                /* 红色文字 */
+  background-color: rgba(220, 53, 69, 0.18);   /* 浅红色背景（比 revoked 稍深） */
+}
+
 /* 提交消息正文区域 */
 .commit-detail-message-body {
   margin-top: 12px;                           /* 与上方信息的间距 */
@@ -1206,10 +1317,27 @@
 /* 单个分支项 */
 .branch-item {
   display: flex;                              /* 弹性布局 */
-  align-items: center;                        /* 垂直居中 */
+  flex-direction: column;                     /* 垂直排列（主行 + 提交消息行） */
   padding: 8px 12px;                          /* 内边距 */
   cursor: pointer;                            /* 鼠标变为手型 */
   transition: background var(--transition-fast); /* 背景色过渡动画 */
+}
+
+/* 分支项主行容器（Task 13.6：包含分支名和 ahead/behind 信息） */
+.branch-item-main {
+  display: flex;                              /* 弹性布局 */
+  align-items: center;                        /* 垂直居中 */
+}
+
+/* 分支项最新提交摘要（Task 13.6：在分支名下方显示最新提交消息） */
+.branch-item-msg {
+  margin-top: 2px;                            /* 与分支名的间距 */
+  font-size: var(--font-size-xs);             /* 超小字号 */
+  color: var(--text-muted);                   /* 弱化文字色 */
+  white-space: nowrap;                        /* 不换行 */
+  overflow: hidden;                           /* 超出隐藏 */
+  text-overflow: ellipsis;                    /* 省略号 */
+  max-width: 100%;                            /* 最大宽度 100% */
 }
 
 /* 分支项悬停效果 */
@@ -2653,4 +2781,334 @@ body.column-resizing * {
   text-align: center;                          /* 文字居中 */
   color: var(--text-muted);                    /* 弱化文字色 */
   font-size: var(--font-size-md);              /* 中等字号 */
+}
+
+/* ============================================================
+ * 提交对比视图样式 (.commit-comparison-*)
+ * ============================================================
+ * 对比模式（showComparison）显示两提交之间的文件变更列表。
+ * 头部显示 from→to 的短哈希，下方是文件树/列表。
+ * ============================================================ */
+
+/* 对比模式头部容器 */
+.commit-comparison-header {
+  background: var(--bg-secondary);             /* 与普通头部区分的背景色 */
+}
+
+/* 对比信息容器（包含 from→to 哈希） */
+.commit-comparison-info {
+  display: flex;                               /* 弹性布局 */
+  align-items: center;                         /* 垂直居中 */
+  gap: 8px;                                    /* 元素间距 */
+  margin-top: 8px;                             /* 与标题的间距 */
+  font-family: var(--font-mono);               /* 等宽字体（哈希更易读） */
+  font-size: var(--font-size-sm);              /* 小字号 */
+}
+
+/* 对比哈希（from / to）显示 */
+.commit-comparison-hash {
+  padding: 2px 6px;                            /* 内边距 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  background: rgba(255, 255, 255, 0.06);       /* 半透明背景 */
+  color: var(--text-primary);                  /* 主要文字色 */
+}
+
+/* 对比箭头（→） */
+.commit-comparison-arrow {
+  color: var(--text-muted);                    /* 弱化颜色 */
+  font-weight: 600;                            /* 加粗 */
+}
+
+/* ============================================================
+ * 文件区域工具栏（视图切换 + Code Review 按钮）
+ * ============================================================ */
+
+/* 文件区域工具栏容器 */
+.commit-detail-files-toolbar {
+  display: flex;                               /* 弹性布局 */
+  align-items: center;                         /* 垂直居中 */
+  justify-content: space-between;              /* 两端对齐：左侧标题，右侧按钮 */
+  flex-wrap: wrap;                             /* 空间不够时换行 */
+  gap: 8px;                                    /* 元素间距 */
+  margin-bottom: 12px;                         /* 与文件列表的间距 */
+}
+
+/* 工具栏右侧按钮容器 */
+.commit-detail-files-actions {
+  display: flex;                               /* 弹性布局 */
+  align-items: center;                         /* 垂直居中 */
+  gap: 6px;                                    /* 按钮间距 */
+  flex-wrap: wrap;                             /* 空间不够时换行 */
+}
+
+/* 视图切换按钮和 Code Review 按钮的基础样式 */
+.cdv-view-btn,
+.cdv-code-review-btn {
+  padding: 4px 10px;                           /* 内边距 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--text-secondary);                /* 次要文字色 */
+  background: transparent;                     /* 透明背景 */
+  border: 1px solid var(--border);             /* 边框 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  cursor: pointer;                             /* 鼠标变手型 */
+  transition: background var(--transition-fast),
+              color var(--transition-fast),
+              border-color var(--transition-fast); /* 过渡动画 */
+}
+
+/* 按钮 hover 效果 */
+.cdv-view-btn:hover,
+.cdv-code-review-btn:hover {
+  background: rgba(255, 255, 255, 0.06);       /* 半透明白色背景 */
+  color: var(--text-primary);                  /* 主要文字色 */
+  border-color: var(--text-muted);             /* 边框变亮 */
+}
+
+/* 按钮激活状态（当前选中的视图或 Code Review 进行中） */
+.cdv-view-btn.active,
+.cdv-code-review-btn.active {
+  background: var(--accent);                   /* 主题强调色背景 */
+  color: var(--bg-primary);                    /* 反色文字（深色背景上用浅色字） */
+  border-color: var(--accent);                 /* 强调色边框 */
+}
+
+/* Code Review 按钮激活状态用红色（警示色，表示审查进行中） */
+.cdv-code-review-btn.active {
+  background: var(--error, #f44);              /* 红色背景 */
+  border-color: var(--error, #f44);            /* 红色边框 */
+  color: #fff;                                 /* 白色文字 */
+}
+
+/* Code Review 进度指示文字 */
+.code-review-progress {
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--text-muted);                    /* 弱化文字色 */
+  padding: 4px 8px;                            /* 内边距 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  background: rgba(255, 255, 255, 0.04);       /* 半透明背景 */
+  white-space: nowrap;                         /* 不换行 */
+}
+
+/* ============================================================
+ * 文件视图容器（文件树/列表的统一容器）
+ * ============================================================ */
+
+/* 文件视图容器 */
+.commit-file-view {
+  max-height: 400px;                           /* 最大高度（超出滚动） */
+  overflow-y: auto;                            /* 允许纵向滚动 */
+  border: 1px solid var(--border);             /* 边框 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  padding: 4px;                                /* 内边距 */
+  background: var(--bg-tertiary);              /* 背景色 */
+}
+
+/* ============================================================
+ * 文件树样式 (.file-tree-*)
+ * ============================================================
+ * 文件树（FileTree 视图）使用嵌套 <ul><li> 结构。
+ * - 文件夹可折叠/展开（点击 .file-tree-folder-label 切换）
+ * - 文件夹图标：📂（展开）/ 📁（折叠）
+ * - 文件图标：📄（修改）/ ➕（新增）/ 🗑️（删除）/ ✂️（重命名）
+ * - 未审文件（Code Review 期间）添加 .unreviewed 类，加粗显示
+ * ============================================================ */
+
+/* 文件树基础样式（<ul>） */
+.file-tree,
+.file-tree-children {
+  list-style: none;                            /* 去除默认列表项标记 */
+  margin: 0;                                   /* 去除默认外边距 */
+  padding: 0;                                  /* 去除默认内边距 */
+}
+
+/* 顶层文件树容器 */
+.file-tree {
+  font-size: var(--font-size-sm);              /* 小字号 */
+  font-family: var(--font-mono);               /* 等宽字体（路径更易读） */
+}
+
+/* 子文件夹内容缩进 */
+.file-tree-children {
+  padding-left: 18px;                          /* 左侧缩进（层级感） */
+}
+
+/* 文件夹和文件项（<li>） */
+.file-tree-folder,
+.file-tree-file,
+.file-list-item {
+  position: relative;                          /* 相对定位（用于子元素绝对定位） */
+}
+
+/* 文件夹标签（可点击的文件夹行） */
+.file-tree-folder-label {
+  display: flex;                               /* 弹性布局 */
+  align-items: center;                         /* 垂直居中 */
+  gap: 4px;                                    /* 图标和名称的间距 */
+  padding: 3px 6px;                            /* 内边距 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  cursor: pointer;                             /* 鼠标变手型（可点击折叠/展开） */
+  color: var(--text-primary);                  /* 主要文字色 */
+  transition: background var(--transition-fast); /* 背景过渡 */
+  user-select: none;                           /* 禁止选中文字（避免双击时选中） */
+}
+
+/* 文件夹标签 hover 效果 */
+.file-tree-folder-label:hover {
+  background: rgba(255, 255, 255, 0.06);       /* 半透明白色背景 */
+}
+
+/* 文件夹切换图标（📂/📁） */
+.file-tree-toggle {
+  font-size: 14px;                             /* 图标大小 */
+  flex-shrink: 0;                              /* 不允许被压缩 */
+  width: 16px;                                 /* 固定宽度（保证对齐） */
+  text-align: center;                          /* 文字居中 */
+}
+
+/* 文件夹/文件名 */
+.file-tree-name {
+  flex: 1;                                     /* 占据剩余空间 */
+  overflow: hidden;                            /* 超出隐藏 */
+  text-overflow: ellipsis;                     /* 显示省略号 */
+  white-space: nowrap;                         /* 不换行 */
+}
+
+/* 文件项（<li class="file-tree-file">） */
+.file-tree-file,
+.file-list-item {
+  display: flex;                               /* 弹性布局 */
+  align-items: center;                         /* 垂直居中 */
+  gap: 4px;                                    /* 元素间距 */
+  padding: 3px 6px;                            /* 内边距 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  cursor: pointer;                             /* 鼠标变手型（可点击查看 diff） */
+  color: var(--text-primary);                  /* 主要文字色 */
+  transition: background var(--transition-fast); /* 背景过渡 */
+}
+
+/* 文件项 hover 效果 */
+.file-tree-file:hover,
+.file-list-item:hover {
+  background: rgba(255, 255, 255, 0.06);       /* 半透明白色背景 */
+}
+
+/* 文件图标 */
+.file-tree-file-icon {
+  font-size: 14px;                             /* 图标大小 */
+  flex-shrink: 0;                              /* 不允许被压缩 */
+  width: 16px;                                 /* 固定宽度（与文件夹图标对齐） */
+  text-align: center;                          /* 文字居中 */
+}
+
+/* 文件状态文字（新增/修改/删除/重命名） */
+.file-tree-file-status {
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--text-muted);                    /* 弱化文字色 */
+  margin-left: 4px;                            /* 左间距 */
+  padding: 1px 4px;                            /* 内边距 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  background: rgba(255, 255, 255, 0.04);       /* 半透明背景 */
+  flex-shrink: 0;                              /* 不允许被压缩 */
+}
+
+/* 文件行数统计（+x / -y） */
+.file-tree-file-stats {
+  display: flex;                               /* 弹性布局 */
+  gap: 6px;                                    /* 新增和删除的间距 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  font-weight: 500;                            /* 中等字重 */
+  margin-left: auto;                           /* 推到右侧 */
+  padding-left: 8px;                           /* 左间距 */
+  flex-shrink: 0;                              /* 不允许被压缩 */
+}
+
+/* ============================================================
+ * Code Review 未审文件样式（加粗显示）
+ * ============================================================ */
+
+/* 未审文件加粗显示（Code Review 期间） */
+.file-tree-file.unreviewed,
+.file-list-item.unreviewed {
+  font-weight: 700;                            /* 加粗 */
+  color: var(--text-primary);                  /* 主要文字色（保持高亮） */
+}
+
+/* 未审文件夹加粗显示（包含未审文件） */
+.file-tree-folder-label.unreviewed {
+  font-weight: 700;                            /* 加粗 */
+  color: var(--text-primary);                  /* 主要文字色 */
+}
+
+/* 已审文件弱化显示（可选：Code Review 期间已审文件稍微变暗） */
+.file-tree-file:not(.unreviewed) {
+  /* 不做特殊处理，保持默认样式 */
+}
+
+/* ============================================================
+ * 文件树空状态提示
+ * ============================================================ */
+
+/* 空状态容器（无文件变更时显示） */
+.file-tree-empty {
+  padding: 16px;                               /* 内边距 */
+  text-align: center;                          /* 文字居中 */
+}
+
+/* 空状态提示文字 */
+.file-tree-empty-msg {
+  color: var(--text-muted);                    /* 弱化文字色 */
+  font-size: var(--font-size-sm);              /* 小字号 */
+  font-style: italic;                          /* 斜体（提示性文字） */
+  list-style: none;                            /* 去除列表标记 */
+}
+
+/* ============================================================
+ * 文件列表视图（FileList）特殊样式
+ * ============================================================ */
+
+/* 文件列表容器（与文件树共用 .file-tree 基础样式） */
+.file-list {
+  padding: 0;                                  /* 去除内边距 */
+}
+
+/* 文件列表项（平铺显示，无缩进） */
+.file-list .file-list-item {
+  padding-left: 8px;                           /* 左内边距 */
+}
+
+/* ============================================================
+ * 折叠状态样式（文件夹折叠时添加 .collapsed 类）
+ * ============================================================ */
+
+/* 折叠的文件夹项（可选：添加视觉提示） */
+.file-tree-folder.collapsed > .file-tree-folder-label {
+  opacity: 0.85;                               /* 略微降低不透明度 */
+}
+
+/* ============================================================
+ * 右键菜单激活状态（文件被右键时高亮）
+ * ============================================================ */
+
+/* 被右键的文件/文件夹添加 contextMenuActive 类时高亮 */
+.file-tree-file.contextMenuActive,
+.file-list-item.contextMenuActive,
+.file-tree-folder-label.contextMenuActive {
+  background: var(--accent);                   /* 强调色背景 */
+  color: var(--bg-primary);                    /* 反色文字 */
+}
+
+/* ============================================================
+ * diff 新增/删除行数颜色（共用样式）
+ * ============================================================ */
+
+/* 新增行数（绿色） */
+.diff-additions {
+  color: #4ec9b0;                              /* 绿色（参考 VS Code 配色） */
+  font-weight: 500;                            /* 中等字重 */
+}
+
+/* 删除行数（红色） */
+.diff-deletions {
+  color: #f48771;                              /* 红色（参考 VS Code 配色） */
+  font-weight: 500;                            /* 中等字重 */
 }

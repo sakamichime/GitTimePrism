@@ -30,7 +30,15 @@ use super::stash::{get_stashes, StashInfo};
  *
  * 包含节点图的 ASCII 线条、提交哈希、父提交列表和提交消息。
  * 此结构体保留是为了不破坏旧版前端代码。
+ *
+ * Task 13.8：已标记为 deprecated（弃用）。
+ * 新代码应使用 AnnotatedCommit 结构体（带 ref 注解的新版节点图数据结构）。
+ * AnnotatedCommit 提供 heads/tags/remotes/stash 注解字段，支持前端 Canvas 渲染。
  */
+#[deprecated(
+    since = "0.1.0",
+    note = "使用 AnnotatedCommit 代替。新版节点图改用 Canvas 渲染，不再需要 ASCII 线条字段。"
+)]
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct GraphCommit {
     /// 节点图的 ASCII 线条（如 "* ", "| ", "|\\", "|/" 等）
@@ -59,7 +67,16 @@ pub struct GraphCommit {
 
 /**
  * 旧版完整的提交节点图数据（保持向后兼容）
+ *
+ * Task 13.8：已标记为 deprecated（弃用）。
+ * 新代码应使用 AnnotatedCommitGraph 结构体（带 ref 注解的新版节点图返回数据）。
+ * AnnotatedCommitGraph 包含 head 引用和 more_commits_available 标志，支持增量加载。
  */
+#[deprecated(
+    since = "0.1.0",
+    note = "使用 AnnotatedCommitGraph 代替。新版节点图返回数据包含 head 引用和 more_commits_available 标志。"
+)]
+#[allow(deprecated)]
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct CommitGraph {
     /// 所有提交节点列表（按时间倒序，最新的在前）
@@ -309,6 +326,10 @@ pub struct AnnotatedCommitGraph {
  * 此函数保留是为了不破坏旧版前端代码。
  * 新代码应使用 get_annotated_commit_graph。
  *
+ * Task 13.8：已标记为 deprecated（弃用）。
+ * 新版节点图使用 get_annotated_commit_graph 函数，返回带 ref 注解的 AnnotatedCommitGraph，
+ * 支持前端 Canvas 渲染、增量加载（more_commits_available）和 stash/UNCOMMITTED 注入。
+ *
  * 参数：
  * - repo_path: 仓库根目录路径
  * - count: 要获取的提交数量（0 表示全部）
@@ -317,6 +338,11 @@ pub struct AnnotatedCommitGraph {
  * - Ok(CommitGraph) - 查询成功
  * - Err(GitError) - 查询失败
  */
+#[deprecated(
+    since = "0.1.0",
+    note = "使用 get_annotated_commit_graph 代替。新版节点图返回带 ref 注解的 AnnotatedCommitGraph。"
+)]
+#[allow(deprecated)]
 pub fn get_commit_graph(repo_path: &str, count: u32) -> Result<CommitGraph, GitError> {
     // 构建 format 字符串
     // 使用 § (U+00A7) 作为字段分隔符，不会出现在正常提交数据中
@@ -700,7 +726,11 @@ fn annotate_remotes(
  *
  * 返回值：
  * - Vec<GraphCommit> - 解析后的提交节点列表
+ *
+ * Task 13.8：GraphCommit 已标记为 deprecated。
+ * 此函数仅被已弃用的 get_commit_graph 调用，使用 #[allow(deprecated)] 抑制弃用警告。
  */
+#[allow(deprecated)]
 fn parse_graph_output(output: &str) -> Vec<GraphCommit> {
     let mut commits: Vec<GraphCommit> = Vec::new();
 
@@ -768,7 +798,11 @@ fn extract_graph_line(prefix: &str) -> String {
 
 /**
  * 解析提交数据字段（旧版，保持向后兼容）
+ *
+ * Task 13.8：GraphCommit 已标记为 deprecated。
+ * 此函数仅被已弃用的 get_commit_graph 调用，使用 #[allow(deprecated)] 抑制弃用警告。
  */
+#[allow(deprecated)]
 fn parse_commit_data(graph_line: &str, data: &str) -> Option<GraphCommit> {
     // 去掉开头的 § 分隔符
     let data = data.strip_prefix('§')?;

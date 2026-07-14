@@ -1,0 +1,650 @@
+/*
+ * 合并编辑器样式（Task 8.5：合并冲突解决 UI）
+ *
+ * 此样式表为合并编辑器组件（merge-editor.ts）提供完整的视觉样式：
+ * 1. 三栏布局（Ours / Merged / Theirs）的网格布局
+ * 2. 冲突块高亮（ours 蓝色调 / theirs 红色调）
+ * 3. 工具栏按钮（接受 ours / 接受 theirs / 上一个冲突 / 下一个冲突）
+ * 4. 进度指示（X / Y 冲突已解决）
+ * 5. 模态遮罩层（合并编辑器作为浮层显示）
+ *
+ * 配色说明：
+ * - Ours（我们的版本）：使用蓝色调（--accent-primary / 蓝色边框）
+ * - Theirs（他们的版本）：使用红色调（--error / 红色边框）
+ * - Merged（合并结果）：使用绿色调（--success / 绿色边框）
+ *
+ * 使用 CSS 变量：
+ * - 此样式表依赖 variables.css 中定义的颜色变量（如 --bg-primary、--text-primary 等）
+ * - 在浅色/深色主题下自动适配
+ */
+
+/* ============================================================
+ * 模态遮罩层
+ * ============================================================ */
+
+/**
+ * 合并编辑器的全屏模态遮罩
+ *
+ * 覆盖整个窗口，半透明黑色背景，让用户聚焦在合并编辑器上。
+ * 点击遮罩层不会关闭编辑器（避免误操作丢失修改）。
+ */
+.merge-editor-overlay {
+  /* 固定定位，覆盖整个视口 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 半透明黑色背景 */
+  background-color: rgba(0, 0, 0, 0.6);
+  /* 高层级，确保覆盖其他元素 */
+  z-index: 10000;
+  /* 弹性布局，居中显示编辑器主体 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 动画过渡 */
+  animation: merge-editor-fade-in 0.2s ease;
+}
+
+/**
+ * 淡入动画
+ */
+@keyframes merge-editor-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================================
+ * 编辑器主体
+ * ============================================================ */
+
+/**
+ * 合并编辑器主容器
+ *
+ * 占据视口的大部分空间（90% 宽高），白色背景，圆角阴影。
+ * 内部从上到下依次为：标题栏、工具栏、三栏内容区、底部操作栏。
+ */
+.merge-editor-container {
+  /* 尺寸：占视口的 90% */
+  width: 90vw;
+  height: 90vh;
+  /* 背景和圆角 */
+  background-color: var(--bg-primary, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  /* 弹性布局，纵向排列 */
+  display: flex;
+  flex-direction: column;
+  /* 防止内容溢出 */
+  overflow: hidden;
+  /* 动画过渡 */
+  animation: merge-editor-slide-up 0.3s ease;
+}
+
+/**
+ * 从下滑入动画
+ */
+@keyframes merge-editor-slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ============================================================
+ * 标题栏
+ * ============================================================ */
+
+/**
+ * 合并编辑器标题栏
+ *
+ * 显示文件名和关闭按钮。
+ */
+.merge-editor-header {
+  /* 横向布局 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* 内边距和底边框 */
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  /* 标题栏背景 */
+  background-color: var(--bg-secondary, #f5f5f5);
+}
+
+/**
+ * 标题文字（文件名）
+ */
+.merge-editor-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333333);
+  /* 文件名可能很长，使用省略号 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 允许占满剩余空间 */
+  flex: 1;
+}
+
+/**
+ * 标题栏中的冲突数标签
+ */
+.merge-editor-conflict-count {
+  font-size: 12px;
+  color: var(--text-secondary, #666666);
+  margin-left: 12px;
+  /* 不收缩，保持可读 */
+  flex-shrink: 0;
+}
+
+/**
+ * 关闭按钮
+ */
+.merge-editor-close-btn {
+  /* 重置按钮样式 */
+  background: none;
+  border: none;
+  /* 字号 */
+  font-size: 20px;
+  /* 颜色 */
+  color: var(--text-secondary, #666666);
+  /* 鼠标悬停效果 */
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  /* 过渡动画 */
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.merge-editor-close-btn:hover {
+  background-color: var(--bg-hover, #e8e8e8);
+  color: var(--text-primary, #333333);
+}
+
+/* ============================================================
+ * 工具栏
+ * ============================================================ */
+
+/**
+ * 工具栏容器
+ *
+ * 包含操作按钮：接受所有 ours / 接受所有 theirs / 上一个冲突 / 下一个冲突
+ */
+.merge-editor-toolbar {
+  /* 横向布局 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 内边距 */
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--bg-primary, #ffffff);
+  /* 允许换行（小屏幕时按钮可能需要换行） */
+  flex-wrap: wrap;
+}
+
+/**
+ * 工具栏按钮基础样式
+ */
+.merge-editor-btn {
+  /* 尺寸 */
+  padding: 6px 12px;
+  /* 字号 */
+  font-size: 12px;
+  /* 边框和背景 */
+  border: 1px solid var(--border-color, #d0d0d0);
+  background-color: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #333333);
+  /* 圆角和指针 */
+  border-radius: 4px;
+  cursor: pointer;
+  /* 过渡动画 */
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.merge-editor-btn:hover {
+  background-color: var(--bg-hover, #e8e8e8);
+  border-color: var(--accent-primary, #0066cc);
+}
+
+.merge-editor-btn:disabled {
+  /* 禁用状态：灰色 + 不可点击 */
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/**
+ * 接受所有 ours 按钮（蓝色调）
+ */
+.merge-editor-btn.btn-accept-all-ours {
+  background-color: rgba(0, 102, 204, 0.1);
+  border-color: #0066cc;
+  color: #0066cc;
+}
+
+.merge-editor-btn.btn-accept-all-ours:hover {
+  background-color: rgba(0, 102, 204, 0.2);
+}
+
+/**
+ * 接受所有 theirs 按钮（红色调）
+ */
+.merge-editor-btn.btn-accept-all-theirs {
+  background-color: rgba(204, 0, 0, 0.1);
+  border-color: #cc0000;
+  color: #cc0000;
+}
+
+.merge-editor-btn.btn-accept-all-theirs:hover {
+  background-color: rgba(204, 0, 0, 0.2);
+}
+
+/**
+ * 保存按钮（绿色调，表示完成操作）
+ */
+.merge-editor-btn.btn-save {
+  background-color: #2da44e;
+  border-color: #2da44e;
+  color: #ffffff;
+}
+
+.merge-editor-btn.btn-save:hover {
+  background-color: #28a745;
+}
+
+/**
+ * 工具栏分隔符
+ */
+.merge-editor-divider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-color, #e0e0e0);
+  margin: 0 4px;
+}
+
+/**
+ * 进度指示
+ *
+ * 显示 "X / Y 冲突已解决"
+ */
+.merge-editor-progress {
+  font-size: 12px;
+  color: var(--text-secondary, #666666);
+  /* 推到右侧 */
+  margin-left: auto;
+}
+
+.merge-editor-progress .progress-resolved {
+  color: #2da44e;
+  font-weight: 600;
+}
+
+.merge-editor-progress .progress-total {
+  color: var(--text-secondary, #666666);
+}
+
+/* ============================================================
+ * 三栏内容区
+ * ============================================================ */
+
+/**
+ * 三栏内容区容器
+ *
+ * 使用 CSS Grid 创建三栏布局：Ours / Merged / Theirs
+ * 每栏占 1/3 宽度。
+ */
+.merge-editor-content {
+  /* 网格布局：三列等宽 */
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  /* 占满剩余空间 */
+  flex: 1;
+  /* 防止内容溢出 */
+  overflow: hidden;
+  /* 最小高度 */
+  min-height: 0;
+}
+
+/**
+ * 单栏容器（Ours / Merged / Theirs 共用）
+ */
+.merge-editor-pane {
+  /* 弹性布局，纵向排列 */
+  display: flex;
+  flex-direction: column;
+  /* 边框分隔 */
+  border-right: 1px solid var(--border-color, #e0e0e0);
+  /* 防止溢出 */
+  overflow: hidden;
+  min-width: 0;
+}
+
+.merge-editor-pane:last-child {
+  /* 最后一栏不需要右边框 */
+  border-right: none;
+}
+
+/**
+ * 栏标题
+ */
+.merge-editor-pane-header {
+  /* 内边距 */
+  padding: 8px 12px;
+  /* 字号 */
+  font-size: 12px;
+  font-weight: 600;
+  /* 底边框 */
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  /* 不收缩 */
+  flex-shrink: 0;
+}
+
+/**
+ * Ours 栏标题（蓝色调）
+ */
+.merge-editor-pane.ours .merge-editor-pane-header {
+  background-color: rgba(0, 102, 204, 0.1);
+  color: #0066cc;
+  border-bottom-color: rgba(0, 102, 204, 0.3);
+}
+
+/**
+ * Merged 栏标题（绿色调）
+ */
+.merge-editor-pane.merged .merge-editor-pane-header {
+  background-color: rgba(45, 164, 78, 0.1);
+  color: #2da44e;
+  border-bottom-color: rgba(45, 164, 78, 0.3);
+}
+
+/**
+ * Theirs 栏标题（红色调）
+ */
+.merge-editor-pane.theirs .merge-editor-pane-header {
+  background-color: rgba(204, 0, 0, 0.1);
+  color: #cc0000;
+  border-bottom-color: rgba(204, 0, 0, 0.3);
+}
+
+/* ============================================================
+ * 代码内容区
+ * ============================================================ */
+
+/**
+ * 代码显示/编辑区
+ *
+ * 使用 <pre> 显示代码，保持原有格式。
+ * Merged 栏使用 <textarea> 允许编辑。
+ */
+.merge-editor-code {
+  /* 字体 */
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  /* 内边距 */
+  padding: 8px 0;
+  /* 占满剩余空间 */
+  flex: 1;
+  /* 允许垂直滚动 */
+  overflow-y: auto;
+  /* 白色背景 */
+  background-color: var(--bg-primary, #ffffff);
+  /* 防止水平溢出 */
+  white-space: pre;
+  /* 最小尺寸 */
+  min-height: 0;
+}
+
+/**
+ * Merged 栏的可编辑区
+ */
+.merge-editor-textarea {
+  /* 字体（与代码区保持一致） */
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  /* 内边距 */
+  padding: 8px 12px;
+  /* 占满剩余空间 */
+  flex: 1;
+  /* 允许垂直滚动 */
+  overflow-y: auto;
+  /* 边框和背景 */
+  border: none;
+  background-color: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #333333);
+  /* 不重置大小（避免破坏三栏布局） */
+  resize: none;
+  /* 焦点轮廓 */
+  outline: none;
+  /* 最小尺寸 */
+  min-height: 0;
+  /* 保留空白和换行 */
+  white-space: pre;
+  /* 自动换行关闭，使用水平滚动 */
+  word-wrap: normal;
+}
+
+.merge-editor-textarea:focus {
+  /* 焦点状态：高亮边框 */
+  box-shadow: inset 0 0 0 2px rgba(45, 164, 78, 0.3);
+}
+
+/* ============================================================
+ * 冲突块高亮（Ours / Theirs 颜色编码）
+ * ============================================================ */
+
+/**
+ * Ours 冲突块（蓝色调）
+ *
+ * 包含 <<<<<<< 和 ======= 之间的内容
+ */
+.conflict-block-ours {
+  background-color: rgba(0, 102, 204, 0.08);
+  border-left: 3px solid #0066cc;
+  padding-left: 4px;
+  margin-left: -4px;
+}
+
+/**
+ * Theirs 冲突块（红色调）
+ *
+ * 包含 ======= 和 >>>>>>> 之间的内容
+ */
+.conflict-block-theirs {
+  background-color: rgba(204, 0, 0, 0.08);
+  border-left: 3px solid #cc0000;
+  padding-left: 4px;
+  margin-left: -4px;
+}
+
+/**
+ * 冲突标记行（<<<<<<< / ======= / >>>>>>>）
+ *
+ * 使用灰色斜体显示，让用户能识别但不过于突兀
+ */
+.conflict-marker {
+  color: var(--text-secondary, #666666);
+  font-style: italic;
+  background-color: rgba(128, 128, 128, 0.1);
+  /* 标记行的字体可以稍小 */
+  font-size: 12px;
+}
+
+/**
+ * 当前冲突块高亮
+ *
+ * 用户导航到某个冲突块时，该块高亮显示
+ */
+.conflict-block-current {
+  box-shadow: inset 0 0 0 1px rgba(255, 165, 0, 0.5);
+  background-color: rgba(255, 165, 0, 0.05);
+}
+
+/**
+ * 已解决的冲突块
+ */
+.conflict-block-resolved {
+  opacity: 0.5;
+  /* 已解决的块使用绿色边框 */
+  border-left-color: #2da44e;
+}
+
+/* ============================================================
+ * 单段操作按钮
+ * ============================================================ */
+
+/**
+ * 在每个冲突段上方显示的操作按钮组
+ *
+ * 包含"接受此段 ours"和"接受此段 theirs"按钮
+ */
+.conflict-actions {
+  /* 横向布局 */
+  display: flex;
+  gap: 4px;
+  /* 内边距 */
+  padding: 4px 8px;
+  /* 浮在冲突块上方 */
+  background-color: var(--bg-secondary, #f5f5f5);
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+  /* 字号 */
+  font-size: 11px;
+}
+
+/**
+ * 单段接受按钮
+ */
+.conflict-action-btn {
+  /* 重置按钮样式 */
+  background: none;
+  border: 1px solid var(--border-color, #d0d0d0);
+  /* 字号和颜色 */
+  font-size: 11px;
+  color: var(--text-primary, #333333);
+  /* 圆角和指针 */
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 2px 6px;
+  /* 过渡动画 */
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.conflict-action-btn:hover {
+  background-color: var(--bg-hover, #e8e8e8);
+}
+
+.conflict-action-btn.accept-ours {
+  color: #0066cc;
+  border-color: #0066cc;
+}
+
+.conflict-action-btn.accept-ours:hover {
+  background-color: rgba(0, 102, 204, 0.1);
+}
+
+.conflict-action-btn.accept-theirs {
+  color: #cc0000;
+  border-color: #cc0000;
+}
+
+.conflict-action-btn.accept-theirs:hover {
+  background-color: rgba(204, 0, 0, 0.1);
+}
+
+/* ============================================================
+ * 空状态和加载状态
+ * ============================================================ */
+
+/**
+ * 空状态提示（无冲突文件时显示）
+ */
+.merge-editor-empty {
+  /* 居中显示 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* 占满空间 */
+  width: 100%;
+  height: 100%;
+  /* 字号和颜色 */
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+  /* 内边距 */
+  padding: 32px;
+}
+
+/**
+ * 加载中提示
+ */
+.merge-editor-loading {
+  /* 居中显示 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 占满空间 */
+  width: 100%;
+  height: 100%;
+  /* 字号和颜色 */
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+}
+
+/* ============================================================
+ * 错误提示
+ * ============================================================ */
+
+/**
+ * 错误信息提示框
+ */
+.merge-editor-error {
+  /* 内边距 */
+  padding: 16px;
+  /* 错误色调 */
+  background-color: rgba(204, 0, 0, 0.1);
+  color: #cc0000;
+  /* 字号 */
+  font-size: 13px;
+  /* 圆角 */
+  border-radius: 4px;
+  /* 外边距 */
+  margin: 16px;
+}
+
+/* ============================================================
+ * 响应式（小屏幕适配）
+ * ============================================================ */
+
+/**
+ * 屏幕宽度小于 768px 时，三栏改为垂直排列
+ * 用户可以滚动查看 Ours / Merged / Theirs
+ */
+@media (max-width: 768px) {
+  .merge-editor-container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .merge-editor-content {
+    /* 改为单列布局 */
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+  }
+
+  .merge-editor-pane {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+  }
+
+  .merge-editor-pane:last-child {
+    border-bottom: none;
+  }
+}

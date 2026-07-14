@@ -358,3 +358,239 @@ pub fn get_branches(repo_path: &str) -> Result<BranchList, GitError> {
         remote: remote_branches,
     })
 }
+
+/**
+ * 重命名分支
+ *
+ * 执行 `git branch -m <old> <new>` 命令，将分支从 oldName 重命名为 newName。
+ * -m 选项表示 "move"（移动），即使分支已存在也会强制重命名（实际上 -m 不强制，
+ * 需要使用 -M 才能强制。这里使用 -m 保持安全）。
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ * - old_name: 旧的分支名称
+ * - new_name: 新的分支名称
+ *
+ * 返回值：
+ * - Ok(()) - 重命名成功
+ * - Err(GitError) - 重命名失败（例如旧分支不存在、新分支名已存在等）
+ *
+ * 参考实现：docs/git/src/dataSource.ts 中的 renameBranch 方法
+ */
+pub fn rename_branch(repo_path: &str, old_name: &str, new_name: &str) -> Result<(), GitError> {
+    // 验证参数不为空
+    if old_name.trim().is_empty() || new_name.trim().is_empty() {
+        return Err(GitError::InvalidPath("分支名称不能为空".to_string()));
+    }
+
+    // 执行 git branch -m <old> <new>
+    // -m: move/rename 分支
+    run_git(repo_path, &["branch", "-m", old_name, new_name])?;
+    Ok(())
+}
+
+/**
+ * 删除本地分支
+ *
+ * 执行 `git branch -d <name>` 或 `git branch -D <name>` 命令。
+ * - -d: 安全删除（delete），仅当分支已被合并时才能删除
+ * - -D: 强制删除（force delete），即使分支未被合并也会删除
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ * - name: 要删除的分支名称
+ * - force: 是否强制删除（true 使用 -D，false 使用 -d）
+ *
+ * 返回值：
+ * - Ok(()) - 删除成功
+ * - Err(GitError) - 删除失败（例如分支不存在、分支未被合并且 force=false 等）
+ *
+ * 参考实现：docs/git/src/dataSource.ts 中的 deleteBranch 方法
+ */
+pub fn delete_branch(repo_path: &str, name: &str, force: bool) -> Result<(), GitError> {
+    // 验证分支名不为空
+    if name.trim().is_empty() {
+        return Err(GitError::InvalidPath("分支名称不能为空".to_string()));
+    }
+
+    // 根据 force 参数选择 -d 或 -D
+    // -d: 安全删除（仅当分支已合并）
+    // -D: 强制删除（即使分支未合并）
+    let flag = if force { "-D" } else { "-d" };
+
+    // 执行 git branch <flag> <name>
+    run_git(repo_path, &["branch", flag, name])?;
+    Ok(())
+}
+
+/**
+ * 删除远程分支
+ *
+ * 先尝试执行 `git push <remote> --delete <branch>` 删除远程分支。
+ * 如果远程分支不存在（错误消息包含 "remote ref does not exist"），
+ * 则兜底执行 `git branch -d -r <remote>/<branch>` 删除本地的远程跟踪引用。
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ * - remote: 远程仓库名（如 "origin"）
+ * - branch: 要删除的远程分支名（不含 remote 前缀）
+ *
+ * 返回值：
+ * - Ok(()) - 删除成功（远程分支或本地远程跟踪引用已删除）
+ * - Err(GitError) - 删除失败
+ *
+ * 参考实现：docs/git/src/dataSource.ts 中的 deleteRemoteBranch 方法
+ */
+pub fn delete_remote_branch(
+    repo_path: &str,
+    remote: &str,
+    branch: &str,
+) -> Result<(), GitError> {
+    // 验证参数不为空
+    if remote.trim().is_empty() || branch.trim().is_empty() {
+        return Err(GitError::InvalidPath("远程仓库名和分支名不能为空".to_string()));
+    }
+
+    // 第一步：尝试执行 git push <remote> --delete <branch>
+    // 这是删除远程分支的标准方式
+    let push_result = run_git(repo_path, &["push", remote, "--delete", branch]);
+
+    match push_result {
+        // 推送删除成功：直接返回成功
+        Ok(_) => Ok(()),
+        // 推送删除失败：检查是否是因为远程分支不存在
+        Err(ref e) => {
+            // 将错误信息转为字符串
+            let err_msg = e.to_string();
+
+            // 检查错误消息是否包含 "remote ref does not exist"
+            // 这种情况表示远程分支已经被删除了，但本地的远程跟踪引用还在
+            // 使用正则表达式风格的字符串匹配（与 gitgraph 实现保持一致）
+            let remote_ref_not_exist = err_msg
+                .to_lowercase()
+                .contains("remote ref does not exist");
+
+            if remote_ref_not_exist {
+                // 远程分支不存在，兜底删除本地的远程跟踪引用
+                // 执行 git branch -d -r <remote>/<branch>
+                // -d: 删除
+                // -r: 远程跟踪分支
+                let tracking_branch = format!("{}/{}", remote, branch);
+                run_git(repo_path, &["branch", "-d", "-r", &tracking_branch])?;
+                Ok(())
+            } else {
+                // 其他错误：直接返回原始错误
+                Err(push_result.err().unwrap())
+            }
+        }
+    }
+}
+
+/**
+ * 检出到指定提交（进入 detached HEAD 状态）
+ *
+ * 执行 `git checkout <hash>` 命令，将 HEAD 指向指定的提交。
+ * 由于提交不是分支，检出到提交会进入 "detached HEAD"（分离头指针）状态。
+ *
+ * 在 detached HEAD 状态下：
+ * - HEAD 直接指向一个提交，而不是分支
+ * - 可以正常提交，但提交不会关联到任何分支
+ * - 切换到其他分支后，detached HEAD 上的提交可能会丢失（除非创建了新分支或标签）
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ * - hash: 要检出的提交哈希值
+ *
+ * 返回值：
+ * - Ok(()) - 检出成功
+ * - Err(GitError) - 检出失败（例如提交不存在、有未提交的变更等）
+ *
+ * 参考实现：docs/git/src/dataSource.ts 中的 checkoutCommit 方法
+ */
+pub fn checkout_commit(repo_path: &str, hash: &str) -> Result<(), GitError> {
+    // 验证提交哈希不为空
+    if hash.trim().is_empty() {
+        return Err(GitError::InvalidPath("提交哈希不能为空".to_string()));
+    }
+
+    // 执行 git checkout <hash>
+    run_git(repo_path, &["checkout", hash])?;
+    Ok(())
+}
+
+/**
+ * 创建新分支
+ *
+ * 根据参数选择不同的创建方式：
+ * 1. checkout=true, force=false: 执行 `git checkout -b <name> <hash>`
+ *    （创建分支并立即切换）
+ * 2. checkout=false, force=false: 执行 `git branch <name> <hash>`
+ *    （仅创建分支，不切换）
+ * 3. force=true: 执行 `git branch -f <name> <hash>`
+ *    （强制创建分支，覆盖同名分支），然后如果 checkout=true 再执行 checkout
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ * - name: 新分支的名称
+ * - hash: 新分支要指向的提交哈希（如果为空则使用当前 HEAD）
+ * - checkout: 创建后是否立即切换到新分支
+ * - force: 是否强制创建（覆盖同名分支）
+ *
+ * 返回值：
+ * - Ok(()) - 创建成功
+ * - Err(GitError) - 创建失败（例如分支已存在且 force=false 等）
+ *
+ * 参考实现：docs/git/src/dataSource.ts 中的 createBranch 方法
+ */
+pub fn create_branch(
+    repo_path: &str,
+    name: &str,
+    hash: &str,
+    checkout: bool,
+    force: bool,
+) -> Result<(), GitError> {
+    // 验证分支名不为空
+    if name.trim().is_empty() {
+        return Err(GitError::InvalidPath("分支名称不能为空".to_string()));
+    }
+
+    // 根据 checkout 和 force 参数选择不同的创建方式
+    if checkout && !force {
+        // 创建分支并立即切换（非强制模式）
+        // 执行 git checkout -b <name> <hash>
+        // -b: 创建新分支并切换
+        // 注意：checkout -b 不支持 -f 选项，所以 force=true 时走另一个分支
+        if hash.is_empty() {
+            // hash 为空时，使用当前 HEAD
+            run_git(repo_path, &["checkout", "-b", name])?;
+        } else {
+            run_git(repo_path, &["checkout", "-b", name, hash])?;
+        }
+    } else {
+        // 仅创建分支，不切换
+        // 执行 git branch [-f] <name> <hash>
+        if force {
+            // 强制创建：覆盖同名分支
+            if hash.is_empty() {
+                run_git(repo_path, &["branch", "-f", name])?;
+            } else {
+                run_git(repo_path, &["branch", "-f", name, hash])?;
+            }
+        } else {
+            // 普通创建
+            if hash.is_empty() {
+                run_git(repo_path, &["branch", name])?;
+            } else {
+                run_git(repo_path, &["branch", name, hash])?;
+            }
+        }
+
+        // 如果需要切换到新创建的分支
+        if checkout && force {
+            // force 模式下创建后需要手动 checkout
+            run_git(repo_path, &["checkout", name])?;
+        }
+    }
+
+    Ok(())
+}

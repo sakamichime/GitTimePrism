@@ -34,6 +34,9 @@
 // 导入 CodeReview 类型：描述一次代码审查的状态
 // （来自 git-types.ts，与 gitgraph 项目的类型定义对齐）
 import type { CodeReview } from '../utils/git-types.js';
+// 导入 invoke 函数：用于调用 Tauri 后端 IPC 命令（阶段 10：Task 10.6 集成后端状态持久化）
+// invoke 是 Tauri 提供的跨进程通信函数，前端通过它调用 Rust 后端的 #[tauri::command] 函数
+import { invoke } from '@tauri-apps/api/core';
 
 
 /**
@@ -124,6 +127,135 @@ export interface GlobalState {
   repoStates: { [repoPath: string]: WebViewState };
   /** 最后打开的仓库路径；如果没有则为 null */
   lastOpenedRepo: string | null;
+}
+
+
+/**
+ * ============================================================
+ * 阶段 10：Task 10.6 - 后端状态类型定义（与 Rust 后端 state.rs 对应）
+ * ============================================================
+ * 后端 Rust 结构体使用 snake_case 字段命名（serde 默认），
+ * 前端使用 camelCase 命名。以下类型与后端 JSON 序列化格式一一对应，
+ * 用于 invoke() 调用时的类型注解。前后端字段映射通过转换函数处理。
+ */
+
+/**
+ * 后端仓库状态（与 Rust 后端 RepoState 结构体对应）
+ *
+ * 字段使用 snake_case 命名，与 Rust serde 默认序列化格式一致。
+ * 前端 WebViewState 与此后端类型的字段映射通过 convertBackendStateToFrontend
+ * 和 convertFrontendStateToBackend 两个函数处理。
+ */
+interface BackendRepoState {
+  /** 各列的宽度配置（像素） */
+  column_widths: { graph: number; date: number; author: number; commit: number };
+  /** 提交详情视图的分隔位置（百分比，0-100） */
+  cdv_divider: number;
+  /** 隐藏的远程仓库名列表 */
+  hide_remotes: string[];
+  /** 是否显示远程分支 */
+  show_remote_branches: boolean;
+  /** 是否显示 stash */
+  show_stashes: boolean;
+  /** 是否显示标签 */
+  show_tags: boolean;
+  /** 滚动位置（像素） */
+  scroll_top: number;
+  /** 查找窗口状态 */
+  find_widget_state: {
+    text: string;
+    current_hash: string | null;
+    visible: boolean;
+    is_case_sensitive: boolean;
+    is_regex: boolean;
+  };
+  /** Code Review 状态（键为审查 ID） */
+  code_review_state: Record<string, unknown>;
+}
+
+/**
+ * 后端全局状态（与 Rust 后端 GlobalState 结构体对应）
+ */
+interface BackendGlobalState {
+  /** 当前主题 */
+  theme: string;
+  /** 最近打开的仓库列表 */
+  recent_repos: string[];
+  /** 键盘快捷键配置 */
+  keyboard_shortcuts: Record<string, string>;
+  /** 应用设置 */
+  settings: Record<string, unknown>;
+}
+
+
+/**
+ * 将后端 RepoState 转换为前端 WebViewState
+ *
+ * 处理 snake_case → camelCase 的字段名转换。
+ * 如果后端字段缺失或类型不匹配，使用默认值（确保向后兼容）。
+ *
+ * @param backend - 后端返回的 RepoState（snake_case 字段）
+ * @returns 前端使用的 WebViewState（camelCase 字段）
+ */
+function convertBackendStateToFrontend(backend: BackendRepoState): WebViewState {
+  // 先创建默认状态，再用后端值覆盖（确保新增字段有默认值）
+  const defaultState = createDefaultWebViewState();
+  return {
+    columnWidths: {
+      graph: backend.column_widths?.graph ?? defaultState.columnWidths.graph,
+      date: backend.column_widths?.date ?? defaultState.columnWidths.date,
+      author: backend.column_widths?.author ?? defaultState.columnWidths.author,
+      commit: backend.column_widths?.commit ?? defaultState.columnWidths.commit,
+    },
+    cdvDivider: backend.cdv_divider ?? defaultState.cdvDivider,
+    hideRemotes: backend.hide_remotes ?? defaultState.hideRemotes,
+    showRemoteBranches: backend.show_remote_branches ?? defaultState.showRemoteBranches,
+    showStashes: backend.show_stashes ?? defaultState.showStashes,
+    showTags: backend.show_tags ?? defaultState.showTags,
+    scrollTop: backend.scroll_top ?? defaultState.scrollTop,
+    findWidget: {
+      text: backend.find_widget_state?.text ?? defaultState.findWidget.text,
+      currentHash: backend.find_widget_state?.current_hash ?? defaultState.findWidget.currentHash,
+      visible: backend.find_widget_state?.visible ?? defaultState.findWidget.visible,
+      isCaseSensitive: backend.find_widget_state?.is_case_sensitive ?? defaultState.findWidget.isCaseSensitive,
+      isRegex: backend.find_widget_state?.is_regex ?? defaultState.findWidget.isRegex,
+    },
+    settingsWidget: defaultState.settingsWidget,
+    codeReview: defaultState.codeReview,
+  };
+}
+
+/**
+ * 将前端 WebViewState 转换为后端 RepoState
+ *
+ * 处理 camelCase → snake_case 的字段名转换。
+ *
+ * @param frontend - 前端 WebViewState（camelCase 字段）
+ * @returns 后端使用的 RepoState（snake_case 字段）
+ */
+function convertFrontendStateToBackend(frontend: WebViewState): BackendRepoState {
+  return {
+    column_widths: {
+      graph: frontend.columnWidths.graph,
+      date: frontend.columnWidths.date,
+      author: frontend.columnWidths.author,
+      commit: frontend.columnWidths.commit,
+    },
+    cdv_divider: frontend.cdvDivider,
+    hide_remotes: frontend.hideRemotes,
+    show_remote_branches: frontend.showRemoteBranches,
+    show_stashes: frontend.showStashes,
+    show_tags: frontend.showTags,
+    scroll_top: frontend.scrollTop,
+    find_widget_state: {
+      text: frontend.findWidget.text,
+      current_hash: frontend.findWidget.currentHash,
+      visible: frontend.findWidget.visible,
+      is_case_sensitive: frontend.findWidget.isCaseSensitive,
+      is_regex: frontend.findWidget.isRegex,
+    },
+    code_review_state: frontend.codeReview as unknown as Record<string, unknown>,
+  };
 }
 
 
@@ -502,5 +634,144 @@ export const stateService = {
     removeFromLocalStorage(key);
     // 异步从磁盘删除（设置默认值，因为 Tauri Store 没有 delete 方法时用 set null 替代）
     void persistToDisk(key, null);
+  },
+
+
+  /* ============================================================
+   * 阶段 10：Task 10.6 - 后端状态持久化集成
+   * ============================================================
+   * 以下方法通过 Tauri IPC 调用 Rust 后端的 state.rs 模块，
+   * 实现状态的磁盘持久化（~/.gittimeprism/state.json）。
+   *
+   * 工作流程：
+   *   1. 启动时 / 切换仓库时：调用 loadStateFromBackend 从后端加载状态
+   *   2. 状态变化时：调用 saveStateToBackend 异步保存到后端
+   *   3. Code Review 操作时：调用 touchCodeReview 更新活跃时间戳
+   *
+   * 与 localStorage 的关系：
+   *   - 后端是真正的磁盘持久化（state.json 文件）
+   *   - localStorage 作为前端快速缓存（避免每次读取都发起 IPC 调用）
+   *   - loadStateFromBackend 会同步更新 localStorage，保持一致性
+   */
+
+  /**
+   * 从后端加载仓库状态
+   *
+   * 调用 get_repo_state 命令从 ~/.gittimeprism/state.json 读取指定仓库的状态。
+   * 后端会自动清理过期的 Code Review（90 天过期）。
+   * 加载成功后同步更新 localStorage，保持前后端一致性。
+   *
+   * 此方法是异步的，应在应用启动或切换仓库时调用。
+   * 如果后端调用失败（如后端未就绪），降级为从 localStorage 读取。
+   *
+   * @param repoPath - 仓库路径
+   * @returns 该仓库的 WebViewState；如后端失败则从 localStorage 读取
+   */
+  async loadStateFromBackend(repoPath: string): Promise<WebViewState> {
+    try {
+      // 调用后端 get_repo_state 命令（参数名为 snake_case，与 Tauri 命令参数对应）
+      const backendState = await invoke<BackendRepoState>('get_repo_state', { repoPath });
+      // 将后端 snake_case 转换为前端 camelCase
+      const frontendState = convertBackendStateToFrontend(backendState);
+      // 同步到 localStorage（保持一致性，方便后续同步读取）
+      const key = `${REPO_STATE_KEY_PREFIX}:${repoPath}`;
+      saveToLocalStorage(key, frontendState);
+      console.log(`[state-service] 已从后端加载仓库状态: ${repoPath}`);
+      return frontendState;
+    } catch (err) {
+      // 后端调用失败，降级为从 localStorage 读取
+      console.warn(`[state-service] 从后端加载仓库状态失败，降级使用 localStorage:`, err);
+      return this.loadState(repoPath);
+    }
+  },
+
+  /**
+   * 保存仓库状态到后端
+   *
+   * 将 WebViewState 转换为后端 RepoState 格式，调用 save_repo_state 命令
+   * 持久化到 ~/.gittimeprism/state.json。
+   * 保存前会清理过期的 Code Review 状态。
+   * 同时同步写入 localStorage，保持前后端一致性。
+   *
+   * 此方法是异步的，调用方无需 await（fire-and-forget）。
+   *
+   * @param repoPath - 仓库路径
+   * @param state - 要保存的 WebViewState
+   */
+  async saveStateToBackend(repoPath: string, state: WebViewState): Promise<void> {
+    // 第一步：同步写入 localStorage（保证读取时能立即看到最新值）
+    const key = `${REPO_STATE_KEY_PREFIX}:${repoPath}`;
+    saveToLocalStorage(key, state);
+    // 第二步：异步保存到后端磁盘
+    try {
+      // 将前端 camelCase 转换为后端 snake_case
+      const backendState = convertFrontendStateToBackend(state);
+      // 调用后端 save_repo_state 命令
+      await invoke<void>('save_repo_state', { repoPath, state: backendState });
+      console.log(`[state-service] 已保存仓库状态到后端: ${repoPath}`);
+    } catch (err) {
+      // 后端保存失败不影响 localStorage 的数据（已写入）
+      console.warn(`[state-service] 保存仓库状态到后端失败（localStorage 数据已保存）:`, err);
+    }
+  },
+
+  /**
+   * 从后端加载全局状态
+   *
+   * 调用 get_global_state 命令读取全局状态（主题、最近仓库列表、快捷键配置）。
+   * 加载成功后同步更新 localStorage。
+   *
+   * @returns 后端的全局状态；如后端失败则返回 localStorage 中的全局状态
+   */
+  async loadGlobalStateFromBackend(): Promise<BackendGlobalState | null> {
+    try {
+      // 调用后端 get_global_state 命令（无参数）
+      const backendGlobalState = await invoke<BackendGlobalState>('get_global_state');
+      console.log('[state-service] 已从后端加载全局状态');
+      return backendGlobalState;
+    } catch (err) {
+      // 后端调用失败，返回 null（调用方降级处理）
+      console.warn('[state-service] 从后端加载全局状态失败:', err);
+      return null;
+    }
+  },
+
+  /**
+   * 保存全局状态到后端
+   *
+   * 调用 save_global_state 命令将全局状态持久化到 ~/.gittimeprism/state.json。
+   * 此操作不会影响已保存的仓库状态。
+   *
+   * @param backendGlobalState - 后端格式的全局状态
+   */
+  async saveGlobalStateToBackend(backendGlobalState: BackendGlobalState): Promise<void> {
+    try {
+      // 调用后端 save_global_state 命令
+      await invoke<void>('save_global_state', { state: backendGlobalState });
+      console.log('[state-service] 已保存全局状态到后端');
+    } catch (err) {
+      console.warn('[state-service] 保存全局状态到后端失败:', err);
+    }
+  },
+
+  /**
+   * 更新 Code Review 的 lastActive 时间戳
+   *
+   * 当用户在 Code Review 中查看文件或导航时，调用此方法更新 lastActive。
+   * 这样可以保持 Code Review 的活跃状态，避免被 90 天过期清理。
+   *
+   * 此方法是异步的，调用方无需 await。
+   *
+   * @param repoPath - 仓库路径
+   * @param reviewId - Code Review 的唯一标识符
+   */
+  async touchCodeReview(repoPath: string, reviewId: string): Promise<void> {
+    try {
+      // 调用后端 touch_code_review 命令
+      await invoke<void>('touch_code_review', { repoPath, reviewId });
+    } catch (err) {
+      // 失败不影响功能（Code Review 仍可使用，只是 lastActive 未更新）
+      console.warn(`[state-service] 更新 Code Review 活跃时间戳失败:`, err);
+    }
   },
 };

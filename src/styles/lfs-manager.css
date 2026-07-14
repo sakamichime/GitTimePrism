@@ -1,0 +1,229 @@
+/**
+ * LFS 管理器样式（阶段 9：Task 9.9）
+ *
+ * 定义 LFS 管理对话框的视觉样式，包括：
+ * - 遮罩层（覆盖整个窗口的半透明背景）
+ * - 对话框容器（居中显示的模态窗口）
+ * - LFS 操作按钮区（初始化/拉取/推送）
+ * - 跟踪规则列表（模式 + 锁定标记 + 移除按钮）
+ * - 文件锁列表（路径 + 锁定者 + 锁定时间）
+ * - 添加跟踪规则表单
+ */
+
+/* 遮罩层：覆盖整个窗口的半透明背景 */
+.lfs-manager-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+/* 对话框容器：居中显示的模态窗口 */
+.lfs-manager-dialog {
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-surface);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* 对话框头部：标题和关闭按钮 */
+.lfs-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bg-surface);
+}
+
+/* 对话框标题 */
+.lfs-manager-title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+/* 关闭按钮 */
+.lfs-manager-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.lfs-manager-close-btn:hover {
+  color: var(--text-primary);
+}
+
+/* 对话框主体：可滚动区域 */
+.lfs-manager-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 区块容器 */
+.lfs-manager-section {
+  margin-bottom: 24px;
+}
+
+/* 区块标题 */
+.lfs-manager-section-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* LFS 操作按钮区（初始化/拉取/推送） */
+.lfs-manager-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 加载中/空状态提示 */
+.lfs-manager-loading,
+.lfs-manager-empty,
+.lfs-manager-error {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 16px;
+}
+
+.lfs-manager-error {
+  color: var(--error);
+}
+
+/* 跟踪规则列表项 */
+.lfs-pattern-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-surface);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+/* 跟踪规则信息区 */
+.lfs-pattern-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 跟踪规则代码 */
+.lfs-pattern-code {
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--accent-muted);
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+/* 锁定标记徽章 */
+.lfs-lock-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+/* 跟踪规则操作区 */
+.lfs-pattern-actions {
+  margin-left: 12px;
+}
+
+/* 添加跟踪规则表单 */
+.lfs-track-form {
+  margin-top: 12px;
+}
+
+/* 跟踪规则表单分组（输入框 + 按钮水平排列） */
+.lfs-track-form-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.lfs-track-form-group .form-input {
+  flex: 1;
+}
+
+/* 文件锁列表项 */
+.lfs-lock-item {
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-surface);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+/* 文件锁信息区 */
+.lfs-lock-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 文件锁路径 */
+.lfs-lock-path {
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+/* 文件锁锁定者 */
+.lfs-lock-owner {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 文件锁锁定时间 */
+.lfs-lock-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 表单输入框（复用 submodule-manager 中的样式，但确保独立可用） */
+.form-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--bg-surface);
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+}
+
+/* 小按钮 */
+.btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
