@@ -323,7 +323,7 @@ export class CommitGraph {
    * 用于打开对比视图。当前阶段仅触发事件，由 app.ts 决定如何处理。
    * 默认实现是调用 onCommitSelect，子类或调用方可以覆盖。
    */
-  private readonly onCommitCtrlClick: (commit: GitCommit) => void;
+  private onCommitCtrlClick: (commit: GitCommit) => void;
 
   /**
    * 双击 ref 标签的回调函数
@@ -334,7 +334,7 @@ export class CommitGraph {
    * @param refName - ref 名称（如 'main'、'v1.0.0'、'origin/main'）
    * @param commit - 该 ref 指向的提交
    */
-  private readonly onRefDoubleClick: (refType: 'branch' | 'tag' | 'remote', refName: string, commit: GitCommit) => void;
+  private onRefDoubleClick: (refType: 'branch' | 'tag' | 'remote', refName: string, commit: GitCommit) => void;
 
   /**
    * 右键菜单回调函数
@@ -345,7 +345,7 @@ export class CommitGraph {
    * @param data - 相关数据（提交或 ref 名称）
    * @param event - 鼠标事件（用于定位菜单）
    */
-  private readonly onContextMenu: (target: 'commit' | 'branch' | 'tag' | 'remote', data: GitCommit | string, event: MouseEvent) => void;
+  private onContextMenu: (target: 'commit' | 'branch' | 'tag' | 'remote', data: GitCommit | string, event: MouseEvent) => void;
 
   /** 当前节点图数据（含 commits 数组、head 哈希、是否还有更多提交标志） */
   private graphData: AnnotatedCommitGraph | null = null;
@@ -1208,12 +1208,13 @@ export class CommitGraph {
       /* 行右键事件 */
       row.addEventListener('contextmenu', (event: Event) => {
         const mouseEvent = event as MouseEvent;
+        /* 阻止默认右键菜单（无论是否找到提交都先阻止浏览器默认菜单） */
+        mouseEvent.preventDefault();
+
         const hash = row.getAttribute('data-hash') || '';
         const commit = this.graphData?.commits.find(c => c.hash === hash);
         if (!commit) return;
 
-        /* 阻止默认右键菜单 */
-        mouseEvent.preventDefault();
         /* 触发右键菜单回调 */
         this.onContextMenu('commit', commit, mouseEvent);
       });
@@ -1688,7 +1689,7 @@ export class CommitGraph {
    * @param callback - Ctrl+点击回调函数
    */
   public setOnCommitCtrlClick(callback: (commit: GitCommit) => void): void {
-    (this as unknown as { onCommitCtrlClick: (commit: GitCommit) => void }).onCommitCtrlClick = callback;
+    this.onCommitCtrlClick = callback;
   }
 
   /**
@@ -1699,7 +1700,7 @@ export class CommitGraph {
    * @param callback - 双击 ref 回调函数
    */
   public setOnRefDoubleClick(callback: (refType: 'branch' | 'tag' | 'remote', refName: string, commit: GitCommit) => void): void {
-    (this as unknown as { onRefDoubleClick: (refType: 'branch' | 'tag' | 'remote', refName: string, commit: GitCommit) => void }).onRefDoubleClick = callback;
+    this.onRefDoubleClick = callback;
   }
 
   /**
@@ -1710,7 +1711,7 @@ export class CommitGraph {
    * @param callback - 右键菜单回调函数
    */
   public setOnContextMenu(callback: (target: 'commit' | 'branch' | 'tag' | 'remote', data: GitCommit | string, event: MouseEvent) => void): void {
-    (this as unknown as { onContextMenu: (target: 'commit' | 'branch' | 'tag' | 'remote', data: GitCommit | string, event: MouseEvent) => void }).onContextMenu = callback;
+    this.onContextMenu = callback;
   }
 
   /**

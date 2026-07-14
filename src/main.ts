@@ -46,6 +46,12 @@ import { listen } from '@tauri-apps/api/event';
  * 按顺序执行初始化步骤
  */
 async function bootstrap() {
+  // 第零步：全局屏蔽浏览器默认右键菜单
+  // 本应用使用自定义右键菜单（context-menu.ts），浏览器默认菜单不应出现
+  document.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+  });
+
   // 第一步：初始化国际化服务（加载语言包、检测系统语言）
   await initI18n();
 
