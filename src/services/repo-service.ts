@@ -16,6 +16,17 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 
+// 导入与 gitgraph 项目对齐的新增类型定义（引用、Stash、提交详情、提交对比、节点图）
+// 这些类型用于描述带 ref 注解的提交节点图等新功能的数据结构
+import type {
+  RefMap,
+  GitStash,
+  GitCommitDetails,
+  CommitComparison,
+  GraphQueryParams,
+  AnnotatedCommitGraph,
+} from '../utils/git-types';
+
 /**
  * 仓库信息结构
  * 与 Rust 后端的 RepoInfo 结构体字段一一对应
@@ -398,14 +409,56 @@ export const repoService = {
   },
 
   /**
-   * 获取提交节点图
-   * 返回带有 ASCII 图形线的提交历史，用于可视化展示分支和合并关系
-   * 
+   * 获取提交节点图（新版，与 gitgraph 项目对齐）
+   *
+   * 改为调用 get_annotated_commit_graph 命令，返回带 ref 注解的提交列表
+   * （AnnotatedCommitGraph，包含 commits + head + moreCommitsAvailable）。
+   *
+   * 与旧版（getCommitGraphLegacy）的区别：
+   *   - 旧版返回 ASCII 图形线（graph_line 字段），前端解析字符画线
+   *   - 新版返回结构化注解（heads/tags/remotes/stash），前端基于 parents
+   *     数组自行计算分支布局，并能显示分支/标签/远程/stash 注解
+   *
+   * 内部构造 GraphQueryParams 查询参数，使用合理的默认值：
+   *   - 显示所有分支、显示标签、显示远程分支、显示未提交变更虚拟节点
+   *   - 不包含 reflog、不只跟随第一父提交、不启用 mailmap、默认排序
+   *
+   * @param repoPath - 仓库路径
+   * @param count - 要获取的提交数量（默认 50）
+   * @returns 带注解的节点图（commits 数组 + head 哈希 + moreCommitsAvailable 标志）
+   */
+  async getCommitGraph(repoPath: string, count: number = 50): Promise<AnnotatedCommitGraph> {
+    // 构造查询参数：使用合理的默认值，显示完整的分支/标签/远程注解
+    const params: GraphQueryParams = {
+      branches: null,               // null 表示显示所有分支的提交
+      maxCommits: count,            // 最大返回提交数量
+      showTags: true,               // 在提交上注解标签
+      showRemoteBranches: true,     // 包含远程分支
+      includeReflogs: false,        // 不包含 reflog 中提到的提交
+      onlyFirstParent: false,       // 不只跟随第一个 parent（显示完整合并历史）
+      ordering: 'default',          // 使用默认提交排序
+      remotes: [],                  // 已知的 remote 名称列表（空数组，后端自动获取）
+      hideRemotes: [],              // 不隐藏任何 remote
+      useMailmap: false,            // 不启用 mailmap 替换
+      showUncommittedChanges: true, // 当 HEAD 在已加载提交中时注入 UNCOMMITTED 虚拟节点
+    };
+    return await invoke<AnnotatedCommitGraph>('get_annotated_commit_graph', { repoPath, params });
+  },
+
+  /**
+   * 获取提交节点图（旧版，保留向后兼容）
+   *
+   * 调用旧的 get_commit_graph 命令，返回带 ASCII 图形线（graph_line 字段）
+   * 的提交历史。新代码应优先使用 getCommitGraph（新版）或 getAnnotatedCommitGraph。
+   *
+   * 此方法保留是为了兼容可能仍依赖 ASCII graph_line 字段的旧代码，
+   * 以及在需要快速回退时使用。
+   *
    * @param repoPath - 仓库路径
    * @param count - 要获取的提交数量（0 表示全部，默认 50）
-   * @returns 节点图数据（包含提交节点列表和总数）
+   * @returns 旧版节点图数据（包含 ASCII 图形线的提交节点列表和总数）
    */
-  async getCommitGraph(repoPath: string, count: number = 50): Promise<CommitGraph> {
+  async getCommitGraphLegacy(repoPath: string, count: number = 50): Promise<CommitGraph> {
     return await invoke<CommitGraph>('get_commit_graph', { repoPath, count });
   },
 
@@ -585,5 +638,168 @@ export const repoService = {
    */
   async getFileContentAtCommit(repoPath: string, commitHash: string, filePath: string): Promise<string> {
     return await invoke<string>('get_file_content_at_commit', { repoPath, commitHash, filePath });
+  },
+
+  /**
+   * 获取仓库中的所有引用（heads/tags/remotes/HEAD）
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git show-ref -d --head` 命令，返回结构化的 RefMap。
+   * 包含本地分支、标签（含 annotated）、远程分支和 HEAD 引用。
+   *
+   * @param repoPath - 仓库路径
+   * @param hideRemotes - 可选，要隐藏的 remote 名称列表（如 ['upstream']）
+   * @returns 引用集合（heads + tags + remotes + head）
+   */
+  async getRefs(repoPath: string, hideRemotes?: string[]): Promise<RefMap> {
+    return await invoke<RefMap>('get_refs', { repoPath, hideRemotes: hideRemotes ?? [] });
+  },
+
+  /**
+   * 获取仓库中的所有 stash（暂存）记录
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git reflog --format=... refs/stash --` 命令，
+   * 返回所有 stash 记录列表（按 stash@{0}, stash@{1}, ... 顺序）。
+   *
+   * @param repoPath - 仓库路径
+   * @returns stash 记录列表（无 stash 时返回空数组）
+   */
+  async getStashes(repoPath: string): Promise<GitStash[]> {
+    return await invoke<GitStash[]>('get_stashes', { repoPath });
+  },
+
+  /**
+   * 应用指定的 stash（保留 stash 记录）
+   *
+   * 执行 `git stash apply [--index] {selector}` 命令。
+   * 与 popStash 的区别：apply 不会从 stash 列表中删除该 stash，
+   * 用户需要手动调用 dropStash 删除。
+   *
+   * @param repoPath - 仓库路径
+   * @param selector - stash 选择器（如 "stash@{0}"）
+   * @param index - 是否使用 --index 选项尝试恢复暂存区状态
+   */
+  async applyStash(repoPath: string, selector: string, index: boolean): Promise<void> {
+    await invoke<void>('apply_stash', { repoPath, selector, index });
+  },
+
+  /**
+   * 弹出指定的 stash（应用后自动删除）
+   *
+   * 执行 `git stash pop [--index] {selector}` 命令。
+   * pop = apply + drop，如果应用过程中产生冲突，stash 不会被删除。
+   *
+   * @param repoPath - 仓库路径
+   * @param selector - stash 选择器（如 "stash@{0}"）
+   * @param index - 是否使用 --index 选项尝试恢复暂存区状态
+   */
+  async popStash(repoPath: string, selector: string, index: boolean): Promise<void> {
+    await invoke<void>('pop_stash', { repoPath, selector, index });
+  },
+
+  /**
+   * 删除指定的 stash（不应用变更）
+   *
+   * 执行 `git stash drop {selector}` 命令。
+   * 直接从 stash 列表中删除该 stash，不影响当前工作区。此操作不可逆。
+   *
+   * @param repoPath - 仓库路径
+   * @param selector - stash 选择器（如 "stash@{0}"）
+   */
+  async dropStash(repoPath: string, selector: string): Promise<void> {
+    await invoke<void>('drop_stash', { repoPath, selector });
+  },
+
+  /**
+   * 将当前未提交的变更保存为新的 stash
+   *
+   * 执行 `git stash push [--include-untracked] [--message {msg}]` 命令。
+   * 该命令会：
+   *   1. 保存当前工作区和暂存区的变更到新的 stash
+   *   2. 重置工作区和暂存区到 HEAD 状态（clean working tree）
+   *
+   * @param repoPath - 仓库路径
+   * @param includeUntracked - 是否包含未跟踪文件（--include-untracked 选项）
+   * @param message - 可选的 stash 描述消息；为空或不传时使用 git 默认消息
+   */
+  async pushStash(repoPath: string, includeUntracked: boolean, message?: string): Promise<void> {
+    // message 为 undefined 时传 null 给后端（Rust 端使用 Option<String> 接收）
+    await invoke<void>('push_stash', {
+      repoPath,
+      includeUntracked,
+      message: message ?? null,
+    });
+  },
+
+  /**
+   * 从 stash 创建新分支并切换过去
+   *
+   * 执行 `git stash branch {branchName} {selector}` 命令。
+   * 该命令会：
+   *   1. 基于 stash 的 base commit 创建新分支
+   *   2. 切换到新分支
+   *   3. 应用 stash 中的变更到工作区
+   *   4. 如果应用成功，从 stash 列表中删除该 stash
+   *
+   * 适用场景：当 stash 的 base commit 已落后当前分支很多提交时，
+   * 直接 apply 可能产生大量冲突；使用 branch 可以在干净环境中处理 stash 变更。
+   *
+   * @param repoPath - 仓库路径
+   * @param branchName - 要创建的新分支名称（不能与已有分支重名）
+   * @param selector - stash 选择器（如 "stash@{0}"）
+   */
+  async branchFromStash(repoPath: string, branchName: string, selector: string): Promise<void> {
+    await invoke<void>('branch_from_stash', { repoPath, branchName, selector });
+  },
+
+  /**
+   * 获取单个提交的完整详情（含 GPG 签名和文件变更）
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 执行 `git show --quiet --format=... {hash}` 命令，
+   * 解析 12 字段输出（含 GPG 签名信息），
+   * 并调用 diff 命令获取文件变更列表，返回完整的提交详情。
+   *
+   * @param repoPath - 仓库路径
+   * @param commitHash - 要查询详情的提交哈希值
+   * @param hasParents - 此提交是否有父提交（true=普通提交，false=初始提交）
+   * @param useMailmap - 可选，是否启用 mailmap（默认 false）
+   * @returns 提交详情（含作者、提交者、签名、文件变更等）
+   */
+  async getCommitDetails(repoPath: string, commitHash: string, hasParents: boolean, useMailmap?: boolean): Promise<GitCommitDetails> {
+    return await invoke<GitCommitDetails>('get_commit_details', { repoPath, commitHash, hasParents, useMailmap: useMailmap ?? false });
+  },
+
+  /**
+   * 获取两个提交之间的对比结果（文件差异）
+   *
+   * 与 gitgraph 项目对齐的新增命令。
+   * 复用 get_diff_name_status + get_diff_num_stat 生成文件变更列表。
+   * 当 toHash 为 '*'（UNCOMMITTED 虚拟节点）时，表示与工作区对比。
+   *
+   * @param repoPath - 仓库路径
+   * @param fromHash - 对比的起始提交哈希
+   * @param toHash - 对比的目标提交哈希（'*' 表示与工作区对比）
+   * @returns 提交对比结果（包含文件变更列表）
+   */
+  async getCommitComparison(repoPath: string, fromHash: string, toHash: string): Promise<CommitComparison> {
+    return await invoke<CommitComparison>('get_commit_comparison', { repoPath, fromHash, toHash });
+  },
+
+  /**
+   * 获取带 ref 注解的提交节点图（新版，与 gitgraph 项目对齐）
+   *
+   * 通过并行调用 get_log_enhanced + get_refs + get_stashes 三路数据，
+   * 组装出带 heads/tags/remotes/stash 注解的提交列表。
+   * 当 HEAD 在已加载提交中且 showUncommittedChanges=true 时，
+   * 会在列表头部注入虚拟 UNCOMMITTED 节点（hash 为 '*'）。
+   *
+   * @param repoPath - 仓库路径
+   * @param params - 查询参数（见 GraphQueryParams 类型）
+   * @returns 带注解的节点图（commits + head + moreCommitsAvailable）
+   */
+  async getAnnotatedCommitGraph(repoPath: string, params: GraphQueryParams): Promise<AnnotatedCommitGraph> {
+    return await invoke<AnnotatedCommitGraph>('get_annotated_commit_graph', { repoPath, params });
   },
 };

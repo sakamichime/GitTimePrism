@@ -789,10 +789,13 @@
  * ============================================================ */
 
 /* 节点图容器 */
+/* position: relative 让内部的 Canvas 和 tooltip 可以相对此容器绝对定位 */
 .commit-graph-container {
+  position: relative;                         /* 相对定位，作为绝对定位子元素的定位上下文 */
   display: flex;                              /* 弹性布局 */
   flex-direction: column;                     /* 垂直排列 */
   height: 100%;                               /* 高度占满 */
+  overflow: hidden;                           /* 隐藏超出部分，滚动由内部 scroll-area 处理 */
 }
 
 /* 节点图头部 */
@@ -2196,4 +2199,458 @@
 
 .diff-line-empty .diff-line-number {
   color: transparent;                         /* 隐藏空行的行号 */
+}
+
+/* ============================================================
+ * Canvas 节点图组件（Task 2.8）
+ * ============================================================
+ * 这组样式用于 Canvas + HTML 表格混合结构的提交节点图。
+ *
+ * DOM 结构（来自 commit-graph.ts）：
+ *   <div class="commit-graph-container">
+ *     <div class="commit-graph-scroll-area">
+ *       <table class="commit-graph-table">
+ *         <colgroup>
+ *           <col class="graph-col">
+ *           <col class="date-col">
+ *           <col class="author-col">
+ *           <col class="commit-col">
+ *         </colgroup>
+ *         <thead>
+ *           <tr>
+ *             <th class="graph-header">图形</th>
+ *             <th class="date-header column-resizable">日期<span class="resize-handle"></span></th>
+ *             <th class="author-header column-resizable">作者<span class="resize-handle"></span></th>
+ *             <th class="commit-header column-resizable">提交<span class="resize-handle"></span></th>
+ *           </tr>
+ *         </thead>
+ *         <tbody>
+ *           <tr class="commit-row">
+ *             <td class="graph-cell"></td>
+ *             <td class="date-cell">日期</td>
+ *             <td class="author-cell">作者</td>
+ *             <td class="commit-cell">
+ *               <span class="commit-hash">短哈希</span>
+ *               <span class="ref-label annotation-branch">分支名</span>
+ *               <span class="commit-message">提交消息</span>
+ *             </td>
+ *           </tr>
+ *         </tbody>
+ *       </table>
+ *       <canvas class="commit-graph-canvas"></canvas>
+ *     </div>
+ *     <div class="commit-graph-load-more">
+ *       <button class="load-more-btn">加载更多提交</button>
+ *     </div>
+ *     <div class="commit-graph-tooltip">...</div>
+ *   </div>
+ *
+ * Canvas 绝对定位在表格下层（z-index 较低），
+ * 表格的 graph-cell 透明，让 Canvas 上的节点和分支线可见。
+ * ============================================================ */
+
+/* ---- 滚动区域 ---- */
+
+/* 节点图滚动区域 - 包含表格和 Canvas，可纵向滚动 */
+/* position: relative 作为 Canvas 绝对定位的参考系 */
+.commit-graph-scroll-area {
+  position: relative;                          /* 相对定位，Canvas 以此为定位上下文 */
+  flex: 1;                                     /* 占据容器中除"加载更多"按钮外的所有空间 */
+  overflow: auto;                              /* 内容超出时允许滚动（纵向+横向） */
+}
+
+/* ---- Canvas 图形层 ---- */
+
+/* Canvas 元素 - 绝对定位在表格下层 */
+/* Canvas 的宽高由 graph-canvas.ts 在 render() 中动态设置 */
+/* pointer-events: none 让鼠标事件穿透到上层的表格，由表格处理交互 */
+.commit-graph-canvas {
+  position: absolute;                          /* 绝对定位，覆盖在表格 graph-col 区域 */
+  top: 0;                                      /* 顶部对齐 */
+  left: 0;                                     /* 左侧对齐 */
+  z-index: 1;                                  /* 层级低于表格（表格 z-index: 2） */
+  pointer-events: none;                        /* 鼠标事件穿透到上层表格 */
+}
+
+/* ---- 表格层 ---- */
+
+/* 提交表格 - 覆盖在 Canvas 上层，显示文字信息 */
+/* border-collapse 让单元格无间距，与 Canvas 行高对齐 */
+.commit-graph-table {
+  position: relative;                          /* 相对定位，层级高于 Canvas */
+  z-index: 2;                                  /* 层级高于 Canvas，让表格接收鼠标事件 */
+  width: 100%;                                 /* 宽度占满 */
+  border-collapse: collapse;                   /* 合并边框，单元格无间距 */
+  table-layout: fixed;                         /* 固定布局，使用 colgroup 中定义的列宽 */
+}
+
+/* 表格通用单元格重置 - 去除默认内外边距 */
+.commit-graph-table,
+.commit-graph-table tbody,
+.commit-graph-table tr,
+.commit-graph-table th,
+.commit-graph-table td {
+  margin: 0;                                   /* 去除外边距 */
+  padding: 0;                                  /* 去除内边距（由各列单独设置） */
+}
+
+/* 表头单元格 - 列标题行 */
+.commit-graph-table thead th {
+  height: 32px;                                /* 表头高度 32px（与 commit-graph.ts 中 HEADER_HEIGHT_PX 一致） */
+  padding: 0 8px;                              /* 左右内边距 */
+  font-size: var(--font-size-sm);              /* 小字号 */
+  font-weight: 600;                            /* 加粗 */
+  color: var(--text-secondary);                /* 次要文字色 */
+  background: var(--bg-tertiary);              /* 背景色（与表头栏一致） */
+  border-bottom: 1px solid var(--border);      /* 底部边框，与内容区分隔 */
+  text-align: left;                            /* 左对齐 */
+  white-space: nowrap;                         /* 不换行 */
+  user-select: none;                           /* 禁止选中表头文字 */
+  position: relative;                          /* 相对定位，让 resize-handle 可以绝对定位 */
+}
+
+/* 图形列表头 - 不显示文字（Canvas 在下方） */
+.commit-graph-table .graph-header {
+  text-align: center;                          /* 居中对齐 */
+  min-width: 40px;                             /* 最小宽度 */
+}
+
+/* ---- 表格行 ---- */
+
+/* 单个提交行 - 每行对应一个提交 */
+/* 行高必须与 commit-graph.ts 中 GRID_Y（28px）一致，让 Canvas 节点与表格行对齐 */
+.commit-row {
+  height: 28px;                                /* 行高 28px（等于 GRID_Y） */
+  cursor: pointer;                             /* 鼠标变为手型，提示可点击 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+}
+
+/* 提交行悬停效果 - 半透明高亮背景 */
+.commit-row:hover {
+  background: rgba(255, 255, 255, 0.05);       /* 半透明白色背景 */
+}
+
+/* 提交行选中状态（可通过 JS 添加 .selected 类） */
+.commit-row.selected {
+  background: var(--accent-muted);             /* 半透明强调色背景 */
+}
+
+/* ---- 表格单元格 ---- */
+
+/* 图形列单元格 - 透明，让下层的 Canvas 节点和分支线可见 */
+/* pointer-events: none 让鼠标事件穿透到 Canvas（用于节点悬停检测） */
+.commit-graph-table .graph-cell {
+  background: transparent;                     /* 透明背景，露出 Canvas */
+  pointer-events: none;                        /* 鼠标事件穿透 */
+  padding: 0;                                  /* 无内边距 */
+}
+
+/* 日期列单元格 */
+.commit-graph-table .date-cell {
+  padding: 0 8px;                              /* 左右内边距 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--text-muted);                    /* 弱化文字色 */
+  white-space: nowrap;                         /* 不换行 */
+  overflow: hidden;                            /* 超出隐藏 */
+  text-overflow: ellipsis;                     /* 显示省略号 */
+}
+
+/* 作者列单元格 */
+.commit-graph-table .author-cell {
+  padding: 0 8px;                              /* 左右内边距 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--text-secondary);                /* 次要文字色 */
+  white-space: nowrap;                         /* 不换行 */
+  overflow: hidden;                            /* 超出隐藏 */
+  text-overflow: ellipsis;                     /* 显示省略号 */
+}
+
+/* 提交列单元格 - 包含哈希、ref 标签和提交消息 */
+.commit-graph-table .commit-cell {
+  padding: 0 8px;                              /* 左右内边距 */
+  font-size: var(--font-size-sm);              /* 小字号 */
+  color: var(--text-primary);                  /* 主要文字色 */
+  white-space: nowrap;                         /* 不换行 */
+  overflow: hidden;                            /* 超出隐藏 */
+  text-overflow: ellipsis;                     /* 显示省略号 */
+}
+
+/* 提交列中的提交消息文字 */
+.commit-graph-table .commit-cell .commit-message {
+  color: var(--text-primary);                  /* 主要文字色 */
+  font-size: var(--font-size-sm);              /* 小字号 */
+}
+
+/* 提交列中的短哈希 */
+.commit-graph-table .commit-cell .commit-hash {
+  font-family: var(--font-mono);               /* 等宽字体 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--accent);                        /* 强调色（蓝色） */
+  margin-right: 8px;                           /* 与后面元素的间距 */
+  cursor: pointer;                             /* 鼠标变为手型 */
+}
+
+/* ============================================================
+ * 列宽调整手柄（Task 2.8）
+ * ============================================================
+ * 表头右侧的可拖拽手柄，用户拖动它可以调整列宽。
+ * 手柄默认很窄（4px），悬停时变宽（6px）并变色。
+ * 拖拽过程中，全局鼠标变为 col-resize 样式。
+ * ============================================================ */
+
+/* 可调整列宽的表头 - 标记此列可以拖拽调整宽度 */
+.column-resizable {
+  cursor: default;                             /* 默认鼠标样式（手柄区域单独设置 col-resize） */
+}
+
+/* 列宽调整手柄 - 位于表头右侧的细长条 */
+/* position: absolute 让手柄覆盖在表头右侧边缘 */
+.resize-handle {
+  position: absolute;                          /* 绝对定位 */
+  top: 0;                                      /* 顶部对齐 */
+  right: 0;                                    /* 右侧对齐 */
+  width: 4px;                                  /* 默认宽度 4px */
+  height: 100%;                                /* 高度占满表头 */
+  cursor: col-resize;                          /* 鼠标变为水平调整大小图标 */
+  background: transparent;                     /* 默认透明 */
+  transition: width var(--transition-fast),
+              background var(--transition-fast); /* 宽度和背景色过渡动画 */
+  z-index: 3;                                  /* 层级高于表头，确保可点击 */
+}
+
+/* 手柄悬停效果 - 变宽并变为强调色 */
+.resize-handle:hover {
+  width: 6px;                                  /* 变宽到 6px */
+  background: var(--accent);                   /* 强调色背景 */
+}
+
+/* 列宽拖拽中的全局样式 - 鼠标始终显示 col-resize */
+/* 通过 JS 在拖拽开始时给 body 添加 .column-resizing 类 */
+body.column-resizing,
+body.column-resizing * {
+  cursor: col-resize !important;               /* 所有元素都显示 col-resize 鼠标样式 */
+  user-select: none !important;                /* 禁止选中文本 */
+}
+
+/* ---- 列头右键菜单 ---- */
+
+/* 列头右键菜单 - 右键点击表头时弹出的菜单（如切换列可见性） */
+.col-header-menu {
+  position: fixed;                             /* 固定定位，相对于视口 */
+  z-index: 10001;                              /* 层级高于普通右键菜单 */
+  background: var(--bg-secondary);             /* 次要背景色 */
+  border: 1px solid var(--border);             /* 边框 */
+  border-radius: var(--radius-md);             /* 中等圆角 */
+  box-shadow: var(--shadow-lg);                /* 大阴影 */
+  min-width: 160px;                            /* 最小宽度 */
+  padding: 4px 0;                              /* 上下内边距 */
+  /* 毛玻璃效果 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* ============================================================
+ * 节点悬停 Tooltip（Task 2.8）
+ * ============================================================
+ * 鼠标悬停在 Canvas 节点上 100ms 后显示的提示框。
+ * 显示提交的完整哈希、是否 HEAD、所有 ref（分支/标签/远程/stash）。
+ * 使用毛玻璃效果和阴影，与整体 UI 风格一致。
+ * ============================================================ */
+
+/* Tooltip 容器 - 默认隐藏，显示时由 JS 设置 display: block 和位置 */
+.commit-graph-tooltip {
+  position: fixed;                             /* 固定定位，相对于视口（由 JS 设置 left/top） */
+  z-index: 10002;                              /* 层级最高，确保在所有元素之上 */
+  display: none;                               /* 默认隐藏 */
+  background: var(--bg-secondary);             /* 次要背景色 */
+  border: 1px solid var(--border);             /* 边框 */
+  border-radius: var(--radius-md);             /* 中等圆角 */
+  box-shadow: var(--shadow-lg);                /* 大阴影，增强立体感 */
+  padding: 8px 12px;                           /* 内边距 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--text-primary);                  /* 主要文字色 */
+  max-width: 400px;                            /* 最大宽度，防止过长 */
+  pointer-events: none;                        /* 不响应鼠标事件，避免干扰悬停检测 */
+  /* 毛玻璃效果 - tooltip 半透明，透出底层内容 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* Tooltip 中的完整哈希 - 使用等宽字体 */
+.commit-graph-tooltip .tooltip-hash {
+  font-family: var(--font-mono);               /* 等宽字体 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  color: var(--accent);                        /* 强调色 */
+  margin-bottom: 4px;                          /* 底部间距 */
+  word-break: break-all;                       /* 长哈希换行 */
+}
+
+/* Tooltip 中的 HEAD 标记 - 红色背景小标签 */
+.commit-graph-tooltip .tooltip-head {
+  display: inline-block;                       /* 行内块，可以设置宽高 */
+  padding: 2px 6px;                            /* 内边距 */
+  background: var(--error);                    /* 错误色背景（红色） */
+  color: #ffffff;                              /* 白色文字 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  font-weight: 600;                            /* 加粗 */
+  margin-bottom: 4px;                          /* 底部间距 */
+}
+
+/* Tooltip 中的 Stash 标记 - 橙色背景小标签 */
+.commit-graph-tooltip .tooltip-stash {
+  display: inline-block;                       /* 行内块 */
+  padding: 2px 6px;                            /* 内边距 */
+  background: rgba(250, 179, 135, 0.2);        /* 半透明橙色背景 */
+  color: #fab387;                              /* 橙色文字 */
+  border: 1px solid rgba(250, 179, 135, 0.5);  /* 橙色边框 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  margin-bottom: 4px;                          /* 底部间距 */
+}
+
+/* Tooltip 中的信息分区 - 分支/标签/远程列表 */
+.commit-graph-tooltip .tooltip-section {
+  padding-top: 4px;                            /* 顶部间距 */
+  border-top: 1px solid var(--border-subtle);  /* 顶部弱化分隔线 */
+  margin-top: 4px;                             /* 与上方内容的间距 */
+  line-height: 1.6;                            /* 行高，方便阅读 */
+  word-break: break-all;                       /* 长文本换行 */
+}
+
+/* Tooltip 中的分区标签（如"分支:"、"标签:"） */
+.commit-graph-tooltip .tooltip-label {
+  color: var(--text-muted);                    /* 弱化文字色 */
+  font-weight: 500;                            /* 中等字重 */
+}
+
+/* ============================================================
+ * Ref 标签样式（Task 2.8）
+ * ============================================================
+ * 提交上的 ref 注解标签，显示在提交消息前面。
+ * 不同类型的 ref 使用不同颜色：
+ *   - .annotation-branch：本地分支（蓝色）
+ *   - .annotation-remote：远程跟踪分支（紫色）
+ *   - .annotation-tag：标签（黄色）
+ *   - .annotation-stash：stash（橙色）
+ * ============================================================ */
+
+/* Ref 标签基础样式 - 所有类型的 ref 标签共用的样式 */
+.ref-label {
+  display: inline-block;                       /* 行内块，可以设置宽高 */
+  padding: 1px 6px;                            /* 内边距 */
+  margin-right: 4px;                           /* 右侧间距，与后面的标签/消息分隔 */
+  font-size: var(--font-size-xs);              /* 超小字号 */
+  font-weight: 500;                            /* 中等字重 */
+  border-radius: var(--radius-sm);             /* 小圆角 */
+  border: 1px solid transparent;               /* 默认透明边框（各变体覆盖颜色） */
+  vertical-align: middle;                      /* 垂直居中对齐 */
+  white-space: nowrap;                         /* 不换行 */
+  cursor: pointer;                             /* 鼠标变为手型，提示可交互 */
+  transition: opacity var(--transition-fast);  /* 透明度过渡动画 */
+  user-select: none;                           /* 禁止选中 */
+}
+
+/* Ref 标签悬停效果 - 轻微变亮 */
+.ref-label:hover {
+  opacity: 0.85;                               /* 轻微透明，提供视觉反馈 */
+}
+
+/* 本地分支标签 - 蓝色背景（使用 --branch-local 变量） */
+.ref-label.annotation-branch {
+  background: rgba(137, 180, 250, 0.2);        /* 半透明蓝色背景 */
+  color: var(--branch-local);                  /* 蓝色文字（本地分支颜色） */
+  border-color: rgba(137, 180, 250, 0.4);      /* 半透明蓝色边框 */
+}
+
+/* 远程跟踪分支标签 - 紫色背景 */
+.ref-label.annotation-remote {
+  background: rgba(203, 166, 247, 0.2);        /* 半透明紫色背景 */
+  color: #cba6f7;                              /* 紫色文字 */
+  border-color: rgba(203, 166, 247, 0.4);      /* 半透明紫色边框 */
+  font-style: italic;                          /* 斜体，区分远程分支 */
+}
+
+/* 标签标签 - 黄色背景（使用 --warning 变量的色调） */
+.ref-label.annotation-tag {
+  background: rgba(249, 226, 175, 0.2);        /* 半透明黄色背景 */
+  color: var(--warning);                       /* 黄色文字（警告色色调） */
+  border-color: rgba(249, 226, 175, 0.4);      /* 半透明黄色边框 */
+}
+
+/* Stash 标签 - 橙色背景 */
+.ref-label.annotation-stash {
+  background: rgba(250, 179, 135, 0.2);        /* 半透明橙色背景 */
+  color: #fab387;                              /* 橙色文字 */
+  border-color: rgba(250, 179, 135, 0.4);      /* 半透明橙色边框 */
+}
+
+/* ============================================================
+ * Muted 提交行样式（Task 2.8）
+ * ============================================================
+ * 被静音的提交行以半透明显示，表示该提交不在当前关注范围内。
+ * 例如：非 HEAD 祖先的提交、合并提交等。
+ * Canvas 层的 muted 由 graph-canvas.ts 处理（用灰色绘制），
+ * 这里处理 HTML 表格行的 muted 样式。
+ * ============================================================ */
+
+/* 静音提交行 - 半透明显示 */
+.commit-row.muted {
+  opacity: 0.5;                                /* 50% 透明度，视觉上弱化 */
+}
+
+/* 静音行悬停时恢复完全不透明，方便查看 */
+.commit-row.muted:hover {
+  opacity: 1;                                  /* 悬停时恢复完全不透明 */
+}
+
+/* ============================================================
+ * 分页加载按钮（Task 2.8）
+ * ============================================================
+ * 滚动到底部时显示的"加载更多提交"按钮。
+ * 也支持滚动到底部自动加载，此按钮作为手动触发方式。
+ * ============================================================ */
+
+/* 加载更多按钮容器 - 居中显示按钮 */
+.commit-graph-load-more {
+  display: flex;                               /* 弹性布局 */
+  justify-content: center;                     /* 水平居中 */
+  padding: 8px;                                /* 内边距 */
+  border-top: 1px solid var(--border-subtle);  /* 顶部弱化边框 */
+  flex-shrink: 0;                              /* 不允许被压缩 */
+  background: var(--bg-tertiary);              /* 背景色 */
+}
+
+/* 加载更多按钮 - 圆角按钮 */
+.load-more-btn {
+  padding: 6px 20px;                           /* 内边距 */
+  background: var(--bg-surface);               /* 表面背景色 */
+  color: var(--text-primary);                  /* 主要文字色 */
+  border: 1px solid var(--border);             /* 边框 */
+  border-radius: var(--radius-md);             /* 中等圆角 */
+  font-size: var(--font-size-sm);              /* 小字号 */
+  font-weight: 500;                            /* 中等字重 */
+  cursor: pointer;                             /* 鼠标变为手型 */
+  transition: all var(--transition-fast);      /* 过渡动画 */
+}
+
+/* 加载更多按钮悬停效果 */
+.load-more-btn:hover {
+  background: var(--bg-hover);                 /* 悬停背景色 */
+  border-color: var(--accent);                 /* 强调色边框 */
+  color: var(--accent);                        /* 强调色文字 */
+}
+
+/* 加载更多按钮禁用状态（加载中） */
+.load-more-btn:disabled {
+  opacity: 0.5;                                /* 半透明 */
+  cursor: not-allowed;                         /* 禁止图标 */
+}
+
+/* 空状态提示 - 没有提交记录时显示 */
+.commit-graph-empty {
+  padding: 40px 20px;                          /* 内边距 */
+  text-align: center;                          /* 文字居中 */
+  color: var(--text-muted);                    /* 弱化文字色 */
+  font-size: var(--font-size-md);              /* 中等字号 */
 }

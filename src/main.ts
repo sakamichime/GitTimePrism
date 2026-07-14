@@ -11,6 +11,10 @@
 import './styles/variables.css';
 import './styles/global.css';
 import './styles/components.css';
+// 导入右键菜单样式（Task 3.5：用于提交节点图、文件列表等右键菜单）
+import './styles/context-menu.css';
+// 导入对话框样式（Task 3.5：用于通用模态对话框、表单输入、下拉选择器）
+import './styles/dialog.css';
 
 // 导入 xterm.js 终端样式
 // xterm.js 需要加载其 CSS 文件才能正确显示终端界面

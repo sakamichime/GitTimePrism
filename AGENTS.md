@@ -26,3 +26,5 @@ Single-context layout (one `CONTEXT.md` + `docs/adr/` at repo root). See `docs/a
 
 - 提交信息使用中文
 - 标题也使用中文
+
+我说的要求一般比较模糊，但是你要尝试理解我的意图，并找到正确的方向，有问题就问我

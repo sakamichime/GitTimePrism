@@ -1,0 +1,472 @@
+/**
+ * ============================================================
+ * 对话框样式文件（Task 3.5）
+ * ============================================================
+ *
+ * 这个文件定义了应用中通用模态对话框的样式。
+ * 对话框用于需要用户输入或确认的操作，例如：
+ *   - 输入提交消息
+ *   - 选择操作模式（如重置类型）
+ *   - 确认危险操作（如删除分支）
+ *   - 从下拉列表中选择选项
+ *
+ * 设计要点：
+ *   1. 全屏遮罩（.dialog-overlay）+ 居中对话框（.dialog）
+ *   2. 毛玻璃效果（backdrop-filter: blur()），与应用整体风格一致
+ *   3. 支持表单输入：文本框、单选、复选、下拉选择
+ *   4. 支持错误状态提示（.dialog-input.error + .dialog-input-error）
+ *   5. 支持加载中状态（.dialog-action-running + .dialog-spinner）
+ *   6. 所有颜色引用 variables.css 中定义的 CSS 变量，支持暗色/亮色主题
+ *
+ * DOM 结构示例：
+ *   <div class="dialog-overlay">
+ *     <div class="dialog">
+ *       <div class="dialog-message">请输入分支名：</div>
+ *       <div class="dialog-input-group">
+ *         <label class="dialog-input-label">名称</label>
+ *         <input class="dialog-input" type="text" />
+ *         <div class="dialog-input-error">名称不能为空</div>
+ *       </div>
+ *       <div class="dialog-radio-group">
+ *         <label><input type="radio" name="mode" /> 软重置</label>
+ *       </div>
+ *       <label class="dialog-checkbox">
+ *         <input type="checkbox" /> 强制删除
+ *       </label>
+ *       <div class="dialog-action-running">
+ *         <div class="dialog-spinner"></div>
+ *         正在执行...
+ *       </div>
+ *       <div class="dialog-buttons">
+ *         <button class="dialog-btn dialog-btn-secondary">取消</button>
+ *         <button class="dialog-btn dialog-btn-primary">确认</button>
+ *       </div>
+ *     </div>
+ *   </div>
+ * ============================================================
+ */
+
+/* ============================================================
+ * 对话框遮罩层 (.dialog-overlay)
+ * ============================================================
+ * 全屏半透明遮罩，覆盖整个视口。
+ * 作用：
+ *   1. 阻止用户点击对话框后面的内容
+ *   2. 视觉上让对话框突出显示
+ *   3. 使用 flex 布局让对话框在遮罩中居中
+ * ============================================================ */
+.dialog-overlay {
+  position: fixed;                              /* 固定定位，覆盖整个视口 */
+  top: 0;                                       /* 距顶部 0 */
+  left: 0;                                      /* 距左侧 0 */
+  width: 100%;                                  /* 宽度占满视口 */
+  height: 100%;                                 /* 高度占满视口 */
+  background: rgba(0, 0, 0, 0.6);              /* 半透明黑色背景（60% 不透明度） */
+  display: flex;                                /* 弹性布局，让对话框居中 */
+  align-items: center;                          /* 垂直居中 */
+  justify-content: center;                      /* 水平居中 */
+  z-index: 10000;                               /* 最高层级，确保在所有元素之上 */
+  animation: dialogOverlayFadeIn 0.2s ease;    /* 遮罩淡入动画 */
+}
+
+/* 遮罩层淡入动画 */
+@keyframes dialogOverlayFadeIn {
+  from { opacity: 0; }                         /* 开始时完全透明 */
+  to { opacity: 1; }                           /* 结束时完全不透明 */
+}
+
+/* ============================================================
+ * 对话框主体 (.dialog)
+ * ============================================================
+ * 对话框的主体容器，居中显示在遮罩层中。
+ * 使用毛玻璃效果，圆角和阴影增强立体感。
+ * ============================================================ */
+.dialog {
+  position: relative;                           /* 相对定位 */
+  background: var(--bg-secondary);              /* 次要背景色（半透明，配合毛玻璃） */
+  border: 1px solid var(--border);              /* 半透明边框 */
+  border-radius: var(--radius-lg);              /* 大圆角 */
+  box-shadow: var(--shadow-lg);                 /* 大阴影，增强浮起立体感 */
+  min-width: 360px;                             /* 最小宽度 */
+  max-width: 90vw;                              /* 最大宽度不超过视口 90% */
+  max-height: 80vh;                             /* 最大高度不超过视口 80% */
+  display: flex;                                /* 弹性布局 */
+  flex-direction: column;                       /* 子元素垂直排列 */
+  overflow: hidden;                             /* 隐藏超出部分（由内部滚动区域处理） */
+  color: var(--text-primary);                   /* 主要文字色 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  /* 对话框出现时的向上滑入动画 */
+  animation: dialogSlideUp 0.2s ease;          /* 向上滑入动画 */
+  /* 毛玻璃效果 - 对话框半透明，透出底层内容 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* 对话框向上滑入动画 - 从下方 20px 处滑入并淡入 */
+@keyframes dialogSlideUp {
+  from {
+    transform: translateY(20px);               /* 开始时向下偏移 20px */
+    opacity: 0;                                /* 完全透明 */
+  }
+  to {
+    transform: translateY(0);                  /* 结束时回到原位 */
+    opacity: 1;                                /* 完全不透明 */
+  }
+}
+
+/* ============================================================
+ * 对话框消息文字 (.dialog-message)
+ * ============================================================
+ * 对话框中显示的提示消息文字，通常在表单上方。
+ * 例如："请输入新的分支名"、"确定要删除此分支吗？"等。
+ * ============================================================ */
+.dialog-message {
+  padding: 20px 24px 12px;                      /* 内边距：上 20px，左右 24px，下 12px */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  color: var(--text-primary);                   /* 主要文字色 */
+  line-height: 1.5;                             /* 行高，方便阅读 */
+  word-break: break-word;                       /* 长文本自动换行 */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+}
+
+/* ============================================================
+ * 表单输入组 (.dialog-input-group)
+ * ============================================================
+ * 一个标签 + 输入框 + 错误提示的组合。
+ * 使用垂直排列，标签在上，输入框在中，错误提示在下。
+ * ============================================================ */
+.dialog-input-group {
+  display: flex;                                /* 弹性布局 */
+  flex-direction: column;                       /* 垂直排列（标签、输入框、错误提示从上到下） */
+  gap: 6px;                                     /* 元素之间的间距 */
+  padding: 0 24px 12px;                         /* 内边距：左右 24px，下 12px */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+}
+
+/* 输入组标签 - 描述输入框的用途 */
+.dialog-input-label {
+  font-size: var(--font-size-sm);               /* 小字号 */
+  font-weight: 500;                             /* 中等字重 */
+  color: var(--text-secondary);                 /* 次要文字色 */
+}
+
+/* 输入框 - 文本输入 */
+.dialog-input {
+  width: 100%;                                  /* 宽度占满 */
+  padding: 8px 10px;                            /* 内边距 */
+  background: var(--bg-primary);                /* 主要背景色 */
+  border: 1px solid var(--border);              /* 半透明边框 */
+  border-radius: var(--radius-sm);              /* 小圆角 */
+  color: var(--text-primary);                   /* 主要文字色 */
+  font-family: var(--font-ui);                  /* UI 字体 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  box-sizing: border-box;                       /* 边框盒模型，padding 包含在宽度内 */
+  transition: border-color var(--transition-fast); /* 边框色过渡动画 */
+}
+
+/* 输入框获得焦点时 - 边框变为强调色 */
+.dialog-input:focus {
+  outline: none;                                /* 去除默认轮廓 */
+  border-color: var(--accent);                  /* 边框变为强调色 */
+}
+
+/* 输入框占位符文字颜色 */
+.dialog-input::placeholder {
+  color: var(--text-muted);                     /* 弱化文字色 */
+  opacity: 0.6;                                 /* 60% 不透明度 */
+}
+
+/* ---- 输入框错误状态 ---- */
+
+/* 错误状态的输入框 - 边框变为错误色（红色） */
+.dialog-input.error {
+  border-color: var(--error);                   /* 错误色边框（红色） */
+}
+
+/* 错误状态的输入框获得焦点时 - 保持错误色边框 */
+.dialog-input.error:focus {
+  border-color: var(--error);                   /* 保持错误色边框 */
+}
+
+/* 输入错误提示文字 - 显示在输入框下方 */
+.dialog-input-error {
+  font-size: var(--font-size-xs);               /* 超小字号 */
+  color: var(--error);                          /* 错误色文字（红色） */
+  font-style: italic;                           /* 斜体，区分错误提示 */
+  line-height: 1.4;                             /* 行高 */
+}
+
+/* ============================================================
+ * 单选按钮组 (.dialog-radio-group)
+ * ============================================================
+ * 一组单选按钮，用于让用户从多个选项中选择一个。
+ * 例如：选择重置模式（软/混合/硬）。
+ * ============================================================ */
+.dialog-radio-group {
+  display: flex;                                /* 弹性布局 */
+  flex-direction: column;                       /* 垂直排列，每个选项一行 */
+  gap: 8px;                                     /* 选项之间的间距 */
+  padding: 0 24px 12px;                         /* 内边距 */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+}
+
+/* 单选项容器 - 包含单选按钮和说明文字 */
+.dialog-radio-group label {
+  display: flex;                                /* 弹性布局 */
+  align-items: flex-start;                      /* 顶部对齐 */
+  gap: 8px;                                     /* 单选按钮和文字之间的间距 */
+  padding: 8px 10px;                            /* 内边距 */
+  border-radius: var(--radius-sm);              /* 小圆角 */
+  cursor: pointer;                              /* 鼠标变为手型 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+  border: 1px solid transparent;                /* 默认透明边框 */
+}
+
+/* 单选项悬停效果 */
+.dialog-radio-group label:hover {
+  background: rgba(255, 255, 255, 0.05);       /* 半透明白色背景 */
+}
+
+/* 单选项选中状态 - 使用 :has() 选择器检测 input:checked */
+.dialog-radio-group label:has(input:checked) {
+  background: var(--accent-muted);              /* 半透明强调色背景 */
+  border-color: var(--accent);                  /* 强调色边框 */
+}
+
+/* 单选按钮本身 */
+.dialog-radio-group input[type="radio"] {
+  margin: 0;                                   /* 去除外边距 */
+  margin-top: 2px;                             /* 顶部微调对齐 */
+  flex-shrink: 0;                              /* 不允许被压缩 */
+  cursor: pointer;                             /* 鼠标变为手型 */
+  accent-color: var(--accent);                 /* 使用强调色渲染单选按钮 */
+}
+
+/* ============================================================
+ * 复选框 (.dialog-checkbox)
+ * ============================================================
+ * 单个复选框，用于让用户进行是/否选择。
+ * 例如："强制删除"、"保留变更"等。
+ * ============================================================ */
+.dialog-checkbox {
+  display: flex;                                /* 弹性布局 */
+  align-items: center;                          /* 垂直居中 */
+  gap: 8px;                                     /* 复选框和文字之间的间距 */
+  padding: 0 24px 12px;                         /* 内边距 */
+  cursor: pointer;                              /* 鼠标变为手型 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  color: var(--text-secondary);                 /* 次要文字色 */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+  user-select: none;                            /* 禁止选中文字 */
+}
+
+/* 复选框本身 */
+.dialog-checkbox input[type="checkbox"] {
+  margin: 0;                                   /* 去除外边距 */
+  flex-shrink: 0;                              /* 不允许被压缩 */
+  cursor: pointer;                             /* 鼠标变为手型 */
+  accent-color: var(--accent);                 /* 使用强调色渲染复选框 */
+}
+
+/* ============================================================
+ * 操作按钮 (.dialog-buttons, .dialog-btn)
+ * ============================================================
+ * 对话框底部的按钮区域，通常包含"确认"和"取消"按钮。
+ * 主按钮（.dialog-btn-primary）使用强调色，次按钮（.dialog-btn-secondary）使用透明背景。
+ * ============================================================ */
+
+/* 按钮容器 - 位于对话框底部，按钮靠右对齐 */
+.dialog-buttons {
+  display: flex;                                /* 弹性布局 */
+  justify-content: flex-end;                    /* 按钮靠右对齐 */
+  gap: 12px;                                    /* 按钮之间的间距 */
+  padding: 16px 24px;                           /* 内边距 */
+  border-top: 1px solid var(--border);          /* 顶部边框，与内容区分隔 */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+}
+
+/* 按钮基础样式 - 所有按钮共用的样式 */
+.dialog-btn {
+  padding: 8px 20px;                            /* 内边距 */
+  border-radius: var(--radius-sm);              /* 小圆角 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  font-weight: 500;                             /* 中等字重 */
+  cursor: pointer;                              /* 鼠标变为手型 */
+  transition: all var(--transition-fast);       /* 过渡动画（背景、边框、颜色） */
+  border: 1px solid transparent;                /* 默认透明边框 */
+  font-family: var(--font-ui);                  /* UI 字体 */
+}
+
+/* 主按钮 - 使用强调色背景，用于"确认"等主要操作 */
+.dialog-btn-primary {
+  background: var(--accent);                    /* 强调色背景（蓝色） */
+  color: var(--text-inverse);                   /* 反色文字（深色文字在亮色背景上） */
+  border-color: var(--accent);                  /* 强调色边框 */
+}
+
+/* 主按钮悬停效果 - 背景变深 */
+.dialog-btn-primary:hover {
+  background: var(--accent-hover);              /* 强调悬停色 */
+  border-color: var(--accent-hover);            /* 强调悬停色边框 */
+}
+
+/* 主按钮禁用状态 */
+.dialog-btn-primary:disabled {
+  opacity: 0.5;                                 /* 半透明 */
+  cursor: not-allowed;                          /* 禁止图标 */
+}
+
+/* 次按钮 - 透明背景，用于"取消"等次要操作 */
+.dialog-btn-secondary {
+  background: transparent;                      /* 透明背景 */
+  color: var(--text-secondary);                 /* 次要文字色 */
+  border-color: var(--border);                  /* 半透明边框 */
+}
+
+/* 次按钮悬停效果 - 背景变亮 */
+.dialog-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.05);       /* 半透明白色背景 */
+  color: var(--text-primary);                   /* 主要文字色 */
+  border-color: var(--text-muted);              /* 边框变亮 */
+}
+
+/* ============================================================
+ * 加载中状态 (.dialog-action-running, .dialog-spinner)
+ * ============================================================
+ * 当对话框中的操作正在执行时（如等待后端响应），
+ * 显示一个旋转的加载动画和提示文字。
+ * ============================================================ */
+
+/* 加载中容器 - 包含旋转图标和提示文字 */
+.dialog-action-running {
+  display: flex;                                /* 弹性布局 */
+  align-items: center;                          /* 垂直居中 */
+  justify-content: center;                      /* 水平居中 */
+  gap: 8px;                                     /* 图标和文字之间的间距 */
+  padding: 12px 24px;                           /* 内边距 */
+  color: var(--text-secondary);                 /* 次要文字色 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+}
+
+/* 旋转加载图标 - 使用 CSS 动画实现旋转效果 */
+.dialog-spinner {
+  width: 16px;                                  /* 图标宽度 */
+  height: 16px;                                 /* 图标高度 */
+  border: 2px solid var(--border);              /* 外圈边框（灰色） */
+  border-top-color: var(--accent);              /* 顶部边框为强调色（蓝色），形成旋转效果 */
+  border-radius: 50%;                           /* 圆形 */
+  animation: dialogSpinner 0.8s linear infinite; /* 无限旋转动画 */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+}
+
+/* 旋转动画 - 360 度无限循环 */
+@keyframes dialogSpinner {
+  to {
+    transform: rotate(360deg);                  /* 旋转 360 度 */
+  }
+}
+
+/* ============================================================
+ * 自定义下拉选择器 (.custom-select)
+ * ============================================================
+ * 带搜索功能的自定义下拉选择器，替代原生 <select>。
+ * 用于选项较多的场景（如选择分支、选择标签等）。
+ *
+ * DOM 结构：
+ *   <div class="custom-select">
+ *     <input class="custom-select-input" placeholder="搜索..." />
+ *     <div class="custom-select-options">
+ *       <div class="custom-select-option selected">选项1</div>
+ *       <div class="custom-select-option highlighted">选项2</div>
+ *       <div class="custom-select-option">选项3</div>
+ *     </div>
+ *   </div>
+ * ============================================================ */
+
+/* 下拉选择器容器 - 相对定位，让选项列表可以绝对定位 */
+.custom-select {
+  position: relative;                           /* 相对定位，作为选项列表的定位上下文 */
+  width: 100%;                                  /* 宽度占满 */
+  box-sizing: border-box;                       /* 边框盒模型 */
+}
+
+/* 搜索输入框 - 用于过滤选项 */
+.custom-select-input {
+  width: 100%;                                  /* 宽度占满 */
+  padding: 8px 10px;                            /* 内边距 */
+  background: var(--bg-primary);                /* 主要背景色 */
+  border: 1px solid var(--border);              /* 半透明边框 */
+  border-radius: var(--radius-sm);              /* 小圆角 */
+  color: var(--text-primary);                   /* 主要文字色 */
+  font-family: var(--font-ui);                  /* UI 字体 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  box-sizing: border-box;                       /* 边框盒模型 */
+  transition: border-color var(--transition-fast); /* 边框色过渡动画 */
+}
+
+/* 搜索输入框获得焦点时 - 边框变为强调色 */
+.custom-select-input:focus {
+  outline: none;                                /* 去除默认轮廓 */
+  border-color: var(--accent);                  /* 边框变为强调色 */
+}
+
+/* 搜索输入框占位符 */
+.custom-select-input::placeholder {
+  color: var(--text-muted);                     /* 弱化文字色 */
+  opacity: 0.6;                                 /* 60% 不透明度 */
+}
+
+/* 选项列表容器 - 绝对定位在输入框下方 */
+.custom-select-options {
+  position: absolute;                           /* 绝对定位，在输入框下方 */
+  top: 100%;                                    /* 顶部紧接输入框底部 */
+  left: 0;                                      /* 左侧对齐 */
+  right: 0;                                     /* 右侧对齐 */
+  background: var(--bg-secondary);              /* 次要背景色 */
+  border: 1px solid var(--border);              /* 半透明边框 */
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm); /* 底部圆角（与输入框衔接） */
+  box-shadow: var(--shadow-md);                 /* 中阴影 */
+  max-height: 240px;                            /* 最大高度，超出后滚动 */
+  overflow-y: auto;                             /* 内容超出时允许纵向滚动 */
+  z-index: 10;                                  /* 层级高于输入框 */
+  /* 毛玻璃效果 - 选项列表半透明 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* 单个选项 */
+.custom-select-option {
+  padding: 8px 10px;                            /* 内边距 */
+  cursor: pointer;                              /* 鼠标变为手型 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  color: var(--text-primary);                   /* 主要文字色 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+  white-space: nowrap;                          /* 不换行 */
+  overflow: hidden;                             /* 超出隐藏 */
+  text-overflow: ellipsis;                      /* 显示省略号 */
+}
+
+/* 选项悬停效果 - 半透明背景 */
+.custom-select-option:hover {
+  background: rgba(255, 255, 255, 0.05);       /* 半透明白色背景 */
+}
+
+/* 选中的选项 - 半透明强调色背景 */
+.custom-select-option.selected {
+  background: var(--accent-muted);              /* 半透明强调色背景 */
+  color: var(--accent);                         /* 强调色文字 */
+  font-weight: 500;                             /* 中等字重 */
+}
+
+/* 高亮的选项 - 键盘导航时当前焦点所在的选项 */
+/* 使用更深的强调色背景，与 .selected 区分 */
+.custom-select-option.highlighted {
+  background: rgba(137, 180, 250, 0.25);       /* 较深的半透明强调色背景 */
+  color: var(--accent);                         /* 强调色文字 */
+}
+
+/* 同时选中且高亮的选项 - 合并两种样式 */
+.custom-select-option.selected.highlighted {
+  background: rgba(137, 180, 250, 0.35);       /* 更深的强调色背景 */
+}

@@ -34,3 +34,15 @@ pub mod tag;
 pub mod remote;
 // 导出文件内容获取命令模块（工作树、暂存区、HEAD 版本文件内容）
 pub mod file_content;
+// 导出引用查询命令模块（与 gitgraph 项目对齐）
+// 提供 get_refs 命令，获取仓库中的所有引用（heads/tags/remotes/HEAD）
+pub mod refs;
+// 导出 Stash 查询命令模块（与 gitgraph 项目对齐）
+// 提供 get_stashes 命令，获取仓库中的所有 stash 记录
+pub mod stash;
+// 导出提交详情查询命令模块（与 gitgraph 项目对齐）
+// 提供 get_commit_details 命令，获取单个提交的完整详情（含 GPG 签名和文件变更）
+pub mod commit_details;
+// 导出提交对比命令模块（与 gitgraph 项目对齐）
+// 提供 get_commit_comparison 命令，比较两个提交之间的文件差异
+pub mod commit_compare;

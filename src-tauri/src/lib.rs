@@ -90,6 +90,31 @@ pub fn run() {
             commands::file_content::get_staged_file_content,
             commands::file_content::get_head_file_content,
             commands::file_content::get_file_content_at_commit,
+            // 引用查询命令（与 gitgraph 项目对齐）
+            // 获取仓库中的所有引用（heads/tags/remotes/HEAD）
+            commands::refs::get_refs,
+            // Stash 查询与操作命令（与 gitgraph 项目对齐）
+            // 获取仓库中的所有 stash 记录
+            commands::stash::get_stashes,
+            // 应用指定 stash（保留 stash 记录，对应 git stash apply）
+            commands::stash::apply_stash,
+            // 弹出指定 stash（应用后删除，对应 git stash pop）
+            commands::stash::pop_stash,
+            // 删除指定 stash（不应用，对应 git stash drop）
+            commands::stash::drop_stash,
+            // 将当前未提交变更保存为 stash（对应 git stash push）
+            commands::stash::push_stash,
+            // 从 stash 创建新分支并切换过去（对应 git stash branch）
+            commands::stash::branch_from_stash,
+            // 提交详情查询命令（与 gitgraph 项目对齐）
+            // 获取单个提交的完整详情（含 GPG 签名和文件变更）
+            commands::commit_details::get_commit_details,
+            // 提交对比命令（与 gitgraph 项目对齐）
+            // 比较两个提交之间的文件差异
+            commands::commit_compare::get_commit_comparison,
+            // 带注解的提交节点图命令（与 gitgraph 项目对齐）
+            // 返回 AnnotatedCommit 列表（含 heads/tags/remotes/stash 注解）
+            commands::graph::get_annotated_commit_graph,
         ])
         
         // 注册终端 PTY 管理器为全局状态（所有命令都可以访问）

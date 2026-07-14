@@ -1,44 +1,47 @@
 /*
  * Git 仓库状态查询模块
- * 
- * 此模块负责解析 `git status --porcelain=v2` 命令的输出，
- * 将 Git 的文件状态信息转换为前端可用的结构化数据。
- * 
- * porcelain v2 格式是 Git 提供的机器可读输出格式，
- * 每行代表一个文件的状态，格式规范且易于解析。
- * 
- * porcelain v2 输出格式说明：
- * - 普通文件行：XY PATH
- *   X = 暂存区状态（索引中的状态）
- *   Y = 工作区状态（工作目录中的状态）
- *   PATH = 文件路径
- * 
- * 状态码含义：
+ *
+ * 此模块负责解析 `git status` 命令的输出，将 Git 的文件状态信息
+ * 转换为前端可用的结构化数据。
+ *
+ * 与 gitgraph 项目对齐：
+ * - 改用 `git status -s --untracked-files=all --porcelain -z` 输出格式
+ * - 使用 -z NUL 分隔符解析（更稳健，能正确处理包含空格、换行的文件名）
+ * - 正确处理 R/C 跳 2 槽逻辑（重命名/复制的文件占用 2 个 NUL 分隔的槽位）
+ * - 区分 deleted/untracked/modified/renamed/copied/unmerged 状态
+ *
+ * porcelain -z 输出格式说明：
+ *   每个条目使用 NUL 字符（\0）分隔，不是换行符。
+ *   条目格式：
+ *   - 普通文件：XY <path>\0
+ *     XY 是 2 字符的状态码，path 是文件路径
+ *   - 重命名/复制：XY <old_path>\0<new_path>\0
+ *     XY 是 R/C 状态码，old_path 是原路径，new_path 是新路径
+ *     注意：重命名/复制占用 2 个 NUL 分隔的槽位
+ *
+ * 状态码含义（XY 两字符）：
+ * - X = 暂存区状态（索引中的状态）
+ * - Y = 工作区状态（工作目录中的状态）
+ * - ' ' (空格) = 该位置无变更
  * - M = Modified（已修改）
  * - A = Added（已添加）
  * - D = Deleted（已删除）
- * - ? = Untracked（未跟踪）
+ * - ? = Untracked（未跟踪，仅作为 Y 出现，整行是 "?? path"）
  * - R = Renamed（已重命名）
  * - C = Copied（已复制）
  * - U = Unmerged（未合并，有冲突）
- * 
- * 示例输出：
- * 1 M. N...  file.txt          (已修改)
- * 1 A. N...  new_file.txt       (已添加到暂存区)
- * 1 .D N...  deleted_file.txt   (在工作区被删除)
- * ? untracked_file.txt          (未跟踪)
+ *
+ * 示例输出（NUL 分隔）：
+ *   "M  file.txt\0?? new_file.txt\0R  old.txt\0new.txt\0"
  */
 
-use super::commands::{run_git, GitError};
+use super::commands::{run_git, run_git_raw, GitError};
 
 /**
  * 文件状态枚举
- * 
+ *
  * 表示一个文件在 Git 仓库中的状态。
  * 对应 git status 输出中的状态码字母（M/A/D/?/R/C/U）。
- * 
- * 通过 serde 序列化，前端可以直接比较字符串值来判断状态。
- * 例如前端可以 `entry.status === "Modified"` 来判断文件是否被修改。
  */
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum FileStatus {
@@ -60,103 +63,90 @@ pub enum FileStatus {
 
 /**
  * 单个文件的状态条目
- * 
+ *
  * 描述仓库中一个文件的详细状态信息。
- * 每个条目对应 `git status --porcelain=v2` 输出中的一行。
- * 
- * 前端使用示例：
- * ```javascript
- * for (const entry of status.entries) {
- *   if (entry.status === 'Modified' && entry.staged) {
- *     console.log(`已暂存的修改: ${entry.path}`);
- *   }
- * }
- * ```
  */
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct StatusEntry {
     /// 文件的路径（相对于仓库根目录）
-    /// 例如 "src/main.rs" 或 "docs/README.md"
     pub path: String,
 
     /// 文件的当前状态（已修改/已添加/已删除/未跟踪等）
-    /// 使用 FileStatus 枚举，前端可序列化为字符串进行比较
     pub status: FileStatus,
 
     /// 文件的原始路径（仅在重命名或复制时有值）
     /// 对于重命名的文件，此字段存储重命名前的路径
-    /// 例如 Some("old_name.txt") 或 None
     pub old_path: Option<String>,
 
     /// 文件是否已暂存（staged）
     /// true = 变更已通过 `git add` 添加到暂存区
     /// false = 变更仅在工作区，尚未暂存
-    /// 对于未跟踪文件，此字段始终为 false
     pub staged: bool,
 }
 
 /**
- * 仓库的完整状态信息
- * 
- * 包含当前分支名和所有文件状态条目。
+ * 仓库的完整状态信息（使用 -s --porcelain -z 格式）
+ *
+ * 包含所有文件状态条目。
  * 此结构体通过 serde 序列化为 JSON 后传递给前端。
- * 
- * 前端使用示例：
- * ```javascript
- * const status = await invoke('get_repo_status', { repoPath: '/path/to/repo' });
- * console.log(`当前分支: ${status.branch}`);
- * console.log(`变更文件数: ${status.entries.length}`);
- * ```
  */
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct RepoStatus {
     /// 当前所在的分支名称
-    /// 例如 "main" 或 "feature/bug-fix"
     pub branch: String,
 
     /// 所有文件状态条目的列表
-    /// 每个条目包含文件路径、状态、是否暂存等信息
     pub entries: Vec<StatusEntry>,
 }
 
 /**
+ * 简化的状态文件分类（用于 commit_details/commit_compare）
+ *
+ * 对应 gitgraph 项目中 `getStatus()` 的返回类型 GitStatusFiles。
+ * 只区分 deleted 和 untracked 两类文件。
+ */
+#[derive(Debug, Clone, Default)]
+pub struct GitStatusFiles {
+    /// 已删除的文件路径列表
+    pub deleted: Vec<String>,
+    /// 未跟踪的文件路径列表
+    pub untracked: Vec<String>,
+}
+
+/**
  * 解析单个状态码字符为 FileStatus 枚举
- * 
- * 将 git status --porcelain=v2 输出中的单个字母（M/A/D/?/R/C/U）
+ *
+ * 将 git status --porcelain 输出中的单个字母（M/A/D/?/R/C/U）
  * 转换为对应的 FileStatus 枚举值。
- * 
+ *
  * 参数：
  * - ch: 状态码字符（单个字母）
- * 
+ *
  * 返回值：
  * - Some(FileStatus) - 成功解析状态码
- * - None - 未识别的状态码（理论上不应出现）
+ * - None - 未识别的状态码
  */
 fn parse_status_char(ch: char) -> Option<FileStatus> {
     match ch {
-        'M' => Some(FileStatus::Modified),   // M = Modified（已修改）
-        'A' => Some(FileStatus::Added),       // A = Added（已添加）
-        'D' => Some(FileStatus::Deleted),     // D = Deleted（已删除）
-        '?' => Some(FileStatus::Untracked),  // ? = Untracked（未跟踪）
-        'R' => Some(FileStatus::Renamed),     // R = Renamed（已重命名）
-        'C' => Some(FileStatus::Copied),      // C = Copied（已复制）
-        'U' => Some(FileStatus::Unmerged),   // U = Unmerged（未合并冲突）
-        _ => None,                            // 未知状态码
+        'M' => Some(FileStatus::Modified),
+        'A' => Some(FileStatus::Added),
+        'D' => Some(FileStatus::Deleted),
+        '?' => Some(FileStatus::Untracked),
+        'R' => Some(FileStatus::Renamed),
+        'C' => Some(FileStatus::Copied),
+        'U' => Some(FileStatus::Unmerged),
+        _ => None,
     }
 }
 
 /**
- * 获取仓库的完整状态信息
- * 
+ * 获取仓库的完整状态信息（旧版，保持向后兼容）
+ *
  * 执行 `git status --porcelain=v2 --branch` 命令，解析其输出，
  * 返回当前分支和所有文件的状态列表。
- * 
- * porcelain v2 完整格式:
- * # branch.oid <commit_hash>
- * # branch.head <branch_name>
- * 1 XY SUB MH MI MW HH HI PATH
- * ? PATH
- * u XY SUB M1 M2 M3 H1 H2 PATH
+ *
+ * 此函数保持向后兼容，使用旧的 --porcelain=v2 格式。
+ * 新代码应使用 get_status_z（基于 -z NUL 分隔的更稳健格式）。
  */
 pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
     // 执行 git status --porcelain=v2 --branch
@@ -197,24 +187,14 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
         }
 
         // 解析已跟踪文件行: 1 XY SUB MH MI MW HH HI PATH
-        // 使用 split_whitespace() 自动处理多个空格
         if line.starts_with("1 ") {
             let tokens: Vec<&str> = line.split_whitespace().collect();
-            
-            // 至少需要 9 个字段: 1 XY SUB MH MI MW HH HI PATH
+
             if tokens.len() < 9 {
                 continue;
             }
 
-            let xy = tokens[1];       // XY 状态码（2字符）
-            // tokens[2] = SUB (子模块信息，跳过)
-            // tokens[3] = MH (HEAD mode，跳过)
-            // tokens[4] = MI (暂存区 mode，跳过)
-            // tokens[5] = MW (工作区 mode，跳过)
-            // tokens[6] = HH (HEAD hash，跳过)
-            // tokens[7] = HI (暂存区 hash，跳过)
-            // tokens[8..] = PATH (可能包含空格)
-
+            let xy = tokens[1];
             let x_char = xy.chars().next().unwrap_or(' ');
             let y_char = xy.chars().nth(1).unwrap_or(' ');
             let staged = x_char != '.' && x_char != ' ';
@@ -227,10 +207,8 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
                 continue;
             };
 
-            // 路径是第 9 个字段开始的所有内容（可能包含空格）
             let path = tokens[8..].join(" ");
 
-            // 检查是否是重命名/复制文件（包含 " -> " 分隔符）
             if path.contains(" -> ") {
                 let parts: Vec<&str> = path.splitn(2, " -> ").collect();
                 let old_path = parts[0].trim().to_string();
@@ -256,14 +234,13 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
         // 解析未合并文件行: u XY SUB M1 M2 M3 H1 H2 PATH
         if line.starts_with("u ") {
             let tokens: Vec<&str> = line.split_whitespace().collect();
-            
+
             if tokens.len() < 9 {
                 continue;
             }
 
             let xy = tokens[1];
             let x_char = xy.chars().next().unwrap_or(' ');
-            let y_char = xy.chars().nth(1).unwrap_or(' ');
             let staged = x_char != '.' && x_char != ' ';
 
             let path = tokens[8..].join(" ");
@@ -289,4 +266,256 @@ pub fn get_status(repo_path: &str) -> Result<RepoStatus, GitError> {
     }
 
     Ok(RepoStatus { branch, entries })
+}
+
+/**
+ * 获取仓库状态（使用 -z NUL 分隔的稳健格式）
+ *
+ * 执行 `git status -s --untracked-files=all --porcelain -z` 命令，
+ * 使用 NUL 分隔符解析输出。
+ *
+ * 与 get_status 的区别：
+ * - 使用 -s --porcelain -z 格式（更简洁，更稳健）
+ * - 正确处理包含空格、特殊字符的文件名
+ * - 正确处理 R/C（重命名/复制）跳 2 槽逻辑
+ * - 不返回 branch 字段（如果需要分支信息，单独调用其他命令）
+ *
+ * 此函数对应 gitgraph 项目中 `DataSource.getStatus()` 的实现。
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ *
+ * 返回值：
+ * - Ok(Vec<StatusEntry>) - 所有文件的状态条目列表
+ * - Err(GitError) - 查询失败
+ */
+pub fn get_status_entries(repo_path: &str) -> Result<Vec<StatusEntry>, GitError> {
+    // 构建命令参数
+    // -s: 短格式输出
+    // --untracked-files=all: 显示所有未跟踪文件（包括目录中的文件）
+    // --porcelain: 机器可读格式
+    // -z: 使用 NUL 字符分隔条目（而不是换行符）
+    let args = &["status", "-s", "--untracked-files=all", "--porcelain", "-z"];
+
+    // 使用 run_git_raw 获取原始字节（因为 -z 输出包含 NUL 字符）
+    let bytes = run_git_raw(repo_path, args)?;
+
+    // 解析 -z 格式的输出
+    Ok(parse_status_z_output(&bytes))
+}
+
+/**
+ * 获取简化的状态文件分类（deleted + untracked）
+ *
+ * 此函数对应 gitgraph 项目中 `DataSource.getStatus()` 的返回类型。
+ * 只返回 deleted 和 untracked 两类文件路径，用于 commit_details 和 commit_compare。
+ *
+ * 参数：
+ * - repo_path: 仓库根目录路径
+ *
+ * 返回值：
+ * - Ok(GitStatusFiles) - 包含 deleted 和 untracked 文件路径列表
+ * - Err(GitError) - 查询失败
+ */
+pub fn get_status_files(repo_path: &str) -> Result<GitStatusFiles, GitError> {
+    let entries = get_status_entries(repo_path)?;
+
+    let mut files = GitStatusFiles::default();
+
+    for entry in entries {
+        match entry.status {
+            FileStatus::Deleted => {
+                files.deleted.push(entry.path);
+            }
+            FileStatus::Untracked => {
+                files.untracked.push(entry.path);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(files)
+}
+
+/**
+ * 解析 `git status -s --porcelain -z` 的输出
+ *
+ * -z 格式说明：
+ * - 条目之间使用 NUL 字符（\0）分隔
+ * - 普通文件条目：XY <path>\0（占用 1 个槽位）
+ * - 重命名/复制条目：XY <old_path>\0<new_path>\0（占用 2 个槽位）
+ * - 最后一个条目后也有一个 NUL 字符
+ *
+ * XY 是 2 字符的状态码：
+ * - X = 暂存区状态
+ * - Y = 工作区状态
+ * - 例如 "M " = 已暂存的修改，" M" = 未暂存的修改
+ *
+ * 解析算法：
+ * 1. 按 NUL 字符分割字节流
+ * 2. 遍历分割后的字段：
+ *    - 如果字段以 XY 状态码开头（长度 >= 3），是普通文件条目
+ *    - 如果上一个条目是 R/C（重命名/复制），当前字段是新路径
+ *    - 否则跳过（空字段或无效字段）
+ *
+ * 参数：
+ * - bytes: git status -z 命令的原始字节输出
+ *
+ * 返回值：
+ * - Vec<StatusEntry>: 解析后的状态条目列表
+ */
+fn parse_status_z_output(bytes: &[u8]) -> Vec<StatusEntry> {
+    let mut entries: Vec<StatusEntry> = Vec::new();
+
+    // 将字节流按 NUL 字符分割为字段列表
+    let mut fields: Vec<&[u8]> = bytes.split(|&b| b == 0).collect();
+
+    // 移除末尾的空字段（-z 格式最后一个 NUL 后是空字符串）
+    if fields.last().map_or(false, |f| f.is_empty()) {
+        fields.pop();
+    }
+
+    let mut i = 0;
+    while i < fields.len() {
+        let field = fields[i];
+
+        // 字段至少要有 3 字节（XY + 空格 + 路径）
+        if field.len() < 3 {
+            i += 1;
+            continue;
+        }
+
+        // 将字节转换为字符串（使用 lossy 转换，避免无效 UTF-8 导致 panic）
+        let field_str = String::from_utf8_lossy(field);
+
+        // 提取 XY 状态码（前 2 字符）
+        let x_char = field_str.chars().next().unwrap_or(' ');
+        let y_char = field_str.chars().nth(1).unwrap_or(' ');
+
+        // 路径部分从第 4 字节开始（XY + 空格 + 路径）
+        // 注意：field_str 的前 3 字符是 "XY "（状态码 + 空格）
+        let path_part = field_str.get(3..).unwrap_or("").to_string();
+
+        // 判断状态码类型
+        let status_opt = if x_char == '?' && y_char == '?' {
+            // 未跟踪文件：?? path
+            Some((FileStatus::Untracked, false))
+        } else if x_char == '!' && y_char == '!' {
+            // 忽略文件：!! path（不显示）
+            None
+        } else if let Some(s) = parse_status_char(x_char) {
+            // X 是有效状态码（暂存区的变更）
+            Some((s, true))
+        } else if let Some(s) = parse_status_char(y_char) {
+            // Y 是有效状态码（工作区的变更）
+            Some((s, false))
+        } else {
+            // 无法识别的状态码，跳过
+            None
+        };
+
+        if let Some((status, staged)) = status_opt {
+            // 检查是否是重命名/复制（R/C 状态码）
+            let is_rename_or_copy = x_char == 'R' || x_char == 'C' || y_char == 'R' || y_char == 'C';
+
+            if is_rename_or_copy {
+                // 重命名/复制：占用 2 个槽位
+                // 当前字段是 old_path，下一个字段是 new_path
+                if i + 1 < fields.len() {
+                    let new_path_field = fields[i + 1];
+                    let new_path = String::from_utf8_lossy(new_path_field).to_string();
+
+                    entries.push(StatusEntry {
+                        path: new_path,
+                        status,
+                        old_path: Some(path_part),
+                        staged,
+                    });
+
+                    // 跳过下一个字段（已作为 new_path 使用）
+                    i += 2;
+                    continue;
+                }
+            } else {
+                // 普通文件：占用 1 个槽位
+                entries.push(StatusEntry {
+                    path: path_part,
+                    status,
+                    old_path: None,
+                    staged,
+                });
+            }
+        }
+
+        i += 1;
+    }
+
+    entries
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_status_z_basic() {
+        // 模拟 git status -s --porcelain -z 的输出
+        // "M  file.txt\0?? new_file.txt\0"
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"M  file.txt");
+        bytes.push(0);
+        bytes.extend_from_slice(b"?? new_file.txt");
+        bytes.push(0);
+
+        let entries = parse_status_z_output(&bytes);
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].path, "file.txt");
+        assert_eq!(entries[0].status, FileStatus::Modified);
+        assert!(entries[0].staged);
+        assert_eq!(entries[1].path, "new_file.txt");
+        assert_eq!(entries[1].status, FileStatus::Untracked);
+        assert!(!entries[1].staged);
+    }
+
+    #[test]
+    fn test_parse_status_z_rename() {
+        // 测试重命名（R 状态码，占用 2 个槽位）
+        // "R  old.txt\0new.txt\0"
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"R  old.txt");
+        bytes.push(0);
+        bytes.extend_from_slice(b"new.txt");
+        bytes.push(0);
+
+        let entries = parse_status_z_output(&bytes);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "new.txt");
+        assert_eq!(entries[0].status, FileStatus::Renamed);
+        assert_eq!(entries[0].old_path, Some("old.txt".to_string()));
+        assert!(entries[0].staged);
+    }
+
+    #[test]
+    fn test_parse_status_z_deleted() {
+        // 测试删除
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b" D deleted.txt");
+        bytes.push(0);
+
+        let entries = parse_status_z_output(&bytes);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "deleted.txt");
+        assert_eq!(entries[0].status, FileStatus::Deleted);
+        assert!(!entries[0].staged); // 工作区删除，未暂存
+    }
+
+    #[test]
+    fn test_parse_status_z_empty() {
+        // 空输出应该返回空列表
+        let entries = parse_status_z_output(&[]);
+        assert!(entries.is_empty());
+    }
 }

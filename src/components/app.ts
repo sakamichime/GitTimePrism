@@ -15,7 +15,10 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { t } from '../services/i18n.js';
 import { GitInstaller } from './git-installer.js';
 import { TerminalPanel } from './terminal.js';
-import { repoService, type RepoInfo, type GraphCommit } from '../services/repo-service.js';
+import { repoService, type RepoInfo } from '../services/repo-service.js';
+// 导入 GitCommit 类型：带 heads/tags/remotes/stash 注解的提交数据
+// （替代旧的 GraphCommit，与 gitgraph 项目对齐的新版节点图数据结构）
+import type { GitCommit } from '../utils/git-types.js';
 import { wallpaperService } from '../services/wallpaper.js';
 import { themeEngine } from '../services/theme-engine.js';
 import { FileList } from './file-list.js';
@@ -27,6 +30,30 @@ import { BranchList } from './branch-list.js';
 import { ResetDialog } from './reset-dialog.js';
 import { TagManager } from './tag-manager.js';
 import { FileHistory } from './file-history.js';
+// 导入右键菜单全局单例（用于显示上下文菜单）
+import { contextMenu } from './context-menu.js';
+// 导入对话框全局单例（用于显示确认对话框、表单、loading、错误等）
+import { dialog as dialogSingleton } from './dialog.js';
+// 导入右键菜单动作生成器和 setter 函数
+// setRefreshCallback/setViewCommitCallback/setRepoPath：由 app.ts 注入回调
+// get*ContextMenuActions：6 类菜单的 actions 生成函数
+import {
+  setRefreshCallback,
+  setViewCommitCallback,
+  setRepoPath,
+  getCommitContextMenuActions,
+  getBranchContextMenuActions,
+  getRemoteBranchContextMenuActions,
+  getTagContextMenuActions,
+  getStashContextMenuActions,
+  getUncommittedChangesContextMenuActions,
+} from './context-menu-actions.js';
+// 导入右键菜单的菜单项类型（用于 handleContextMenu 方法的类型注解）
+import type { ContextMenuActions } from './context-menu.js';
+// 导入 UNCOMMITTED 常量（未提交变更节点的占位哈希 '*'）
+import { UNCOMMITTED } from '../utils/git-utils.js';
+// 导入 Stash 管理组件（提供 stash 操作对话框，作为 commit-graph 的辅助组件）
+import { StashManager } from './stash-manager.js';
 
 export class App {
   /** 左侧面板引用 */
@@ -63,6 +90,8 @@ export class App {
   private branchList: BranchList | null = null;
   /** 文件历史查看组件实例 */
   private fileHistory: FileHistory | null = null;
+  /** Stash 管理组件实例（提供 stash 操作对话框） */
+  private stashManager: StashManager | null = null;
 
   /** 初始化应用 */
   init(): void {
@@ -101,6 +130,7 @@ export class App {
         <div class="toolbar-section" id="toolbar-right">
           <button class="btn" id="btn-tag-manager" title="标签管理">🏷 标签</button>
           <button class="btn" id="btn-reset-commit" title="撤销提交">↩ 撤销</button>
+          <button class="btn" id="btn-stash" title="Stash 未提交的变更">📦 Stash</button>
           <button class="btn" id="btn-pull" title="从远程仓库拉取更新">↓ 拉取</button>
           <button class="btn" id="btn-push" title="推送本地提交到远程仓库">↑ 推送</button>
           <button class="btn" id="btn-wallpaper" title="设置壁纸">🖼</button>
@@ -613,6 +643,26 @@ export class App {
       tagManager.show();
     });
 
+    // Stash 按钮 - 点击后弹出"Stash 未提交的变更"对话框
+    // 只有在已打开仓库的情况下才能 stash，否则提示用户先打开仓库
+    // stashManager 实例在 onRepoOpened 中创建（需要仓库路径）
+    document.getElementById('btn-stash')?.addEventListener('click', () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行 Stash 操作');
+        return;
+      }
+      // 如果 stashManager 实例不存在（理论上不会发生，因为 onRepoOpened 会创建），
+      // 临时创建一个
+      if (!this.stashManager) {
+        this.stashManager = new StashManager(this.currentRepoPath, () => {
+          this.refreshAllComponents();
+        });
+      }
+      // 弹出 push stash 对话框（包含 Include Untracked 复选框 + Message 输入）
+      this.stashManager.showPushStashDialog();
+    });
+
     // 拉取按钮 - 从远程仓库拉取最新提交并合并到当前分支
     // 只有在已打开仓库的情况下才能拉取，否则提示用户先打开仓库
     document.getElementById('btn-pull')?.addEventListener('click', async () => {
@@ -747,6 +797,12 @@ export class App {
     // 保存当前仓库路径
     this.currentRepoPath = info.path;
 
+    // 初始化右键菜单动作系统：注入仓库路径、刷新回调和查看提交详情回调
+    // 这些回调由 context-menu-actions.ts 中的 runAction 和菜单项使用
+    setRepoPath(info.path);
+    setRefreshCallback(() => this.refreshAllComponents());
+    setViewCommitCallback((hash: string) => { this.showCommitDetailByHash(hash); });
+
     // 更新状态栏
     const repoPathEl = document.getElementById('statusbar-repo-path');
     if (repoPathEl) {
@@ -852,10 +908,26 @@ export class App {
         console.log('[App] 节点图节点被点击，hash:', commit.hash);
         this.showCommitDetail(commit);
       });
+
+      // 绑定右键菜单回调：当用户在节点图中右键点击提交节点或 ref 标签时，
+      // 调用 handleContextMenu 方法生成并显示对应的上下文菜单
+      this.commitGraph.setOnContextMenu((target, data, event) => {
+        this.handleContextMenu(target, data, event);
+      });
+
       console.log('[App] CommitGraph 组件初始化完成，开始刷新');
       await this.commitGraph.refresh();
       console.log('[App] CommitGraph 组件刷新完成');
     }
+
+    // 初始化 Stash 管理组件（作为 commit-graph 的辅助组件）
+    // 传入当前仓库路径和成功回调（stash 操作成功后刷新所有组件）
+    // 此组件不创建独立 DOM，仅在用户点击工具栏 Stash 按钮或
+    // 在节点图中操作 stash 节点时弹出对话框
+    this.stashManager = new StashManager(info.path, () => {
+      this.refreshAllComponents();
+    });
+    console.log('[App] StashManager 组件初始化完成');
 
     // 初始化分支列表组件（工具栏）
     const toolbar = document.getElementById('toolbar');
@@ -916,10 +988,10 @@ export class App {
 
   /**
    * 显示提交详情
-   * 
-   * @param commit - 提交节点数据
+   *
+   * @param commit - 提交节点数据（带 heads/tags/remotes/stash 注解）
    */
-  private async showCommitDetail(commit: GraphCommit): Promise<void> {
+  private async showCommitDetail(commit: GitCommit): Promise<void> {
     if (!this.currentRepoPath || !this.commitDetail) return;
 
     // 保存当前提交哈希，用于返回按钮
@@ -930,6 +1002,105 @@ export class App {
     } catch (err) {
       console.error('显示提交详情失败:', err);
     }
+  }
+
+  /**
+   * 通过提交哈希显示提交详情
+   *
+   * 当用户在标签右键菜单中选择"View Details"时调用。
+   * 由于菜单生成时只有标签名，需要通过此方法接收标签指向的提交哈希来显示详情。
+   *
+   * @param hash - 提交的完整哈希值
+   */
+  private async showCommitDetailByHash(hash: string): Promise<void> {
+    if (!this.currentRepoPath || !this.commitDetail) return;
+
+    // 保存当前提交哈希，用于返回按钮
+    this.currentCommitHash = hash;
+
+    try {
+      await this.commitDetail.showCommit(this.currentRepoPath, hash);
+    } catch (err) {
+      console.error('显示提交详情失败:', err);
+    }
+  }
+
+  /**
+   * 处理右键菜单事件
+   *
+   * 当用户在节点图中右键点击提交节点或 ref 标签时，由 commit-graph 的
+   * onContextMenu 回调调用此方法。根据右键目标的类型，生成对应的
+   * 上下文菜单 actions 并通过 contextMenu.show() 显示菜单。
+   *
+   * 支持的 target 类型：
+   *   - 'commit'：右键点击了提交节点（可能是普通提交或 UNCOMMITTED 虚拟节点）
+   *   - 'branch'：右键点击了本地分支标签
+   *   - 'tag'：右键点击了标签
+   *   - 'remote'：右键点击了远程跟踪分支标签
+   *   - 'stash'：右键点击了 stash 标签（运行时值，TypeScript 类型中未声明但实际会出现）
+   *
+   * @param target - 右键目标类型
+   * @param data - 相关数据（GitCommit 对象或 ref 名称字符串）
+   * @param event - 鼠标事件（用于定位菜单）
+   */
+  private handleContextMenu(
+    target: string,
+    data: GitCommit | string,
+    event: MouseEvent
+  ): void {
+    // 获取中间面板作为菜单定位的参照容器
+    const frameElem: HTMLElement = document.getElementById('center-body') || document.body;
+
+    // 根据目标类型生成对应的菜单 actions
+    let actions: ContextMenuActions;
+
+    if (target === 'commit') {
+      // 右键点击了提交节点
+      const commit = data as GitCommit;
+
+      // 检查是否是 UNCOMMITTED 虚拟节点（hash 为 '*'）
+      if (commit.hash === UNCOMMITTED) {
+        // 未提交变更节点：显示未提交变更菜单
+        actions = getUncommittedChangesContextMenuActions(null);
+      } else {
+        // 普通提交节点：显示提交菜单
+        actions = getCommitContextMenuActions(commit, null);
+      }
+    } else if (target === 'branch') {
+      // 右键点击了本地分支标签：data 是分支名
+      const branchName = data as string;
+      actions = getBranchContextMenuActions(branchName, null);
+    } else if (target === 'tag') {
+      // 右键点击了标签：data 是标签名
+      const tagName = data as string;
+      actions = getTagContextMenuActions(tagName, null);
+    } else if (target === 'remote') {
+      // 右键点击了远程跟踪分支标签：data 是远程分支全名（如 "origin/main"）
+      const remoteBranchName = data as string;
+      actions = getRemoteBranchContextMenuActions(remoteBranchName, null);
+    } else if (target === 'stash') {
+      // 右键点击了 stash 标签：data 是 stash 选择器（如 "stash@{0}"）
+      // 需要从提交列表中查找 stash 的完整哈希值（用于"复制哈希"功能）
+      const stashSelector = data as string;
+      const commits = this.commitGraph?.getCommits() ?? [];
+      // 查找包含该 stash 选择器的提交
+      const stashCommit = commits.find(c => c.stash?.selector === stashSelector);
+      const stashHash = stashCommit?.hash ?? '';
+      actions = getStashContextMenuActions(stashSelector, stashHash, null);
+    } else {
+      // 未知目标类型：不显示菜单
+      console.warn('[App] 未知的右键菜单目标类型:', target);
+      return;
+    }
+
+    // 显示右键菜单
+    // 参数说明：
+    //   actions：菜单项的二维数组
+    //   false：不显示勾选标记（此项目前不需要勾选类菜单）
+    //   null：不绑定特定目标元素（菜单不需要高亮目标）
+    //   event：鼠标事件（用于定位菜单位置）
+    //   frameElem：菜单定位的参照容器
+    contextMenu.show(actions, false, null, event, frameElem);
   }
 
   /**
@@ -1019,6 +1190,13 @@ export class App {
       // 刷新节点图
       if (this.commitGraph) {
         await this.commitGraph.refresh();
+
+        // 节点图刷新后，刷新右键菜单和对话框的目标元素绑定
+        // 因为节点图重新渲染后，之前的 DOM 元素引用已失效，
+        // 需要通过 commits 数组重新查找对应的 DOM 元素
+        const commits = this.commitGraph.getCommits();
+        contextMenu.refresh(commits);
+        dialogSingleton.refresh(commits);
       }
 
       // 刷新分支列表

@@ -79,3 +79,19 @@ pub mod push;
 // 文件内容获取模块
 // 提供获取工作树、暂存区、HEAD 版本文件内容的功能
 pub mod file_content;
+
+// 引用查询模块（与 gitgraph 项目对齐）
+// 获取仓库中的所有引用（heads/tags/remotes/HEAD）
+pub mod refs;
+
+// Stash 查询模块（与 gitgraph 项目对齐）
+// 获取仓库中的所有 stash 记录
+pub mod stash;
+
+// 提交详情查询模块（与 gitgraph 项目对齐）
+// 获取单个提交的完整详情（含 GPG 签名和文件变更）
+pub mod commit_details;
+
+// 提交对比模块（与 gitgraph 项目对齐）
+// 比较两个提交之间的文件差异
+pub mod commit_compare;

@@ -1,0 +1,198 @@
+/**
+ * ============================================================
+ * 右键菜单样式文件（Task 3.5）
+ * ============================================================
+ *
+ * 这个文件定义了应用中所有右键菜单（上下文菜单）的样式。
+ * 右键菜单在以下场景中使用：
+ *   - 提交节点图：右键点击提交行或 ref 标签
+ *   - 文件列表：右键点击文件项
+ *   - 列头：右键点击表头切换列可见性
+ *
+ * 设计要点：
+ *   1. 使用 position: fixed 定位，由 JS 设置 left/top 坐标
+ *   2. 使用毛玻璃效果（backdrop-filter: blur()），与应用整体风格一致
+ *   3. 菜单项支持：禁用状态（.disabled）、勾选状态（.checked）、隐藏（.visible-false）
+ *   4. 支持组分隔线（.context-menu-separator）和菜单标题（.context-menu-title）
+ *   5. 所有颜色引用 variables.css 中定义的 CSS 变量，支持暗色/亮色主题
+ *
+ * DOM 结构示例：
+ *   <ul class="context-menu" style="left: 100px; top: 200px;">
+ *     <li class="context-menu-title">操作</li>
+ *     <li class="context-menu-item">查看详情</li>
+ *     <li class="context-menu-item disabled">删除（禁用）</li>
+ *     <li class="context-menu-separator"></li>
+ *     <li class="context-menu-item checked">显示日期列</li>
+ *     <li class="context-menu-item visible-false">隐藏的项</li>
+ *   </ul>
+ * ============================================================
+ */
+
+/* ============================================================
+ * 菜单容器 (.context-menu)
+ * ============================================================
+ * 右键菜单的最外层容器。
+ * 使用 position: fixed 定位，由 JS 根据鼠标位置设置 left/top。
+ * z-index: 10000 确保菜单在所有元素之上。
+ * 毛玻璃效果让菜单半透明，透出底层内容。
+ * ============================================================ */
+.context-menu {
+  position: fixed;                              /* 固定定位，相对于视口（由 JS 设置坐标） */
+  z-index: 10000;                               /* 最高层级，确保在所有元素之上 */
+  display: block;                               /* 块级显示 */
+  min-width: 180px;                             /* 最小宽度，确保菜单项文字完整显示 */
+  max-width: 320px;                             /* 最大宽度，防止菜单过宽 */
+  margin: 0;                                    /* 去除外边距 */
+  padding: 4px 0;                               /* 上下内边距 4px，左右无内边距 */
+  list-style: none;                             /* 去除列表默认样式（圆点等） */
+  background: var(--bg-secondary);              /* 次要背景色（半透明，配合毛玻璃效果） */
+  border: 1px solid var(--border);              /* 半透明边框 */
+  border-radius: var(--radius-md);              /* 中等圆角 */
+  box-shadow: var(--shadow-lg);                 /* 大阴影，增强浮起立体感 */
+  color: var(--text-primary);                   /* 主要文字色 */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  /* 毛玻璃效果 - 菜单半透明，透出底层内容 */
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  /* 菜单出现时的淡入+缩放动画 */
+  animation: contextMenuAppear 0.15s ease;      /* 淡入动画，0.15 秒 */
+  /* 禁止用户选中菜单文字 */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 菜单淡入动画 - 从透明+略微缩小到完全不透明+正常大小 */
+@keyframes contextMenuAppear {
+  from {
+    opacity: 0;                                 /* 开始时完全透明 */
+    transform: scale(0.95);                     /* 开始时缩小到 95% */
+  }
+  to {
+    opacity: 1;                                 /* 结束时完全不透明 */
+    transform: scale(1);                        /* 结束时恢复正常大小 */
+  }
+}
+
+/* ============================================================
+ * 菜单标题 (.context-menu-title)
+ * ============================================================
+ * 菜单的可选标题，显示在菜单顶部，用于说明菜单的用途。
+ * 例如："提交操作"、"文件操作"等。
+ * 标题不可点击，仅作标识。
+ * ============================================================ */
+.context-menu-title {
+  padding: 6px 16px;                            /* 内边距 */
+  font-size: var(--font-size-xs);               /* 超小字号 */
+  font-weight: 600;                             /* 加粗 */
+  color: var(--text-muted);                     /* 弱化文字色（不抢眼） */
+  text-transform: uppercase;                    /* 大写字母 */
+  letter-spacing: 0.5px;                        /* 字间距，让大写字母更清晰 */
+  cursor: default;                              /* 默认鼠标样式（不可点击） */
+  border-bottom: 1px solid var(--border-subtle); /* 底部弱化分隔线 */
+  margin-bottom: 4px;                           /* 与下方菜单项的间距 */
+}
+
+/* ============================================================
+ * 菜单项 (.context-menu-item)
+ * ============================================================
+ * 菜单中的单个可点击选项。
+ * 支持 hover 高亮、禁用状态（.disabled）、勾选状态（.checked）。
+ * 勾选状态在左侧显示 ✓ 符号。
+ * ============================================================ */
+
+/* 菜单项基础样式 */
+.context-menu-item {
+  display: flex;                                /* 弹性布局，让图标、文字、快捷键水平排列 */
+  align-items: center;                          /* 垂直居中 */
+  gap: 8px;                                     /* 图标、文字、快捷键之间的间距 */
+  padding: 6px 16px;                            /* 内边距：上下 6px，左右 16px */
+  cursor: pointer;                              /* 鼠标变为手型，提示可点击 */
+  color: var(--text-primary);                   /* 主要文字色 */
+  transition: background var(--transition-fast); /* 背景色过渡动画 */
+  white-space: nowrap;                          /* 不换行，保持单行显示 */
+  position: relative;                           /* 相对定位，用于勾选符号的绝对定位 */
+}
+
+/* 菜单项悬停效果 - 使用强调色高亮 */
+.context-menu-item:hover {
+  background: var(--accent-muted);              /* 半透明强调色背景 */
+  color: var(--accent);                         /* 强调色文字 */
+}
+
+/* ---- 菜单项图标 ---- */
+
+/* 菜单项中的图标（可选） */
+.context-menu-item .context-menu-icon {
+  font-size: 14px;                              /* 图标大小 */
+  flex-shrink: 0;                               /* 不允许被压缩 */
+  width: 16px;                                  /* 固定宽度，让所有图标对齐 */
+  text-align: center;                           /* 图标居中 */
+}
+
+/* 菜单项中的文字 */
+.context-menu-item .context-menu-text {
+  flex: 1;                                      /* 占据剩余空间 */
+}
+
+/* 菜单项中的快捷键提示（可选，如 "Ctrl+C"） */
+.context-menu-item .context-menu-shortcut {
+  font-size: var(--font-size-xs);               /* 超小字号 */
+  color: var(--text-muted);                     /* 弱化文字色 */
+  font-family: var(--font-mono);                /* 等宽字体 */
+  margin-left: 12px;                            /* 与菜单项文字的间距 */
+}
+
+/* ---- 菜单项禁用状态 ---- */
+
+/* 禁用的菜单项 - 半透明且不可点击 */
+.context-menu-item.disabled {
+  opacity: 0.4;                                 /* 40% 透明度，视觉上弱化 */
+  cursor: not-allowed;                          /* 禁止图标 */
+  pointer-events: none;                         /* 不响应鼠标事件 */
+}
+
+/* 禁用项不响应 hover 效果 */
+.context-menu-item.disabled:hover {
+  background: transparent;                      /* 透明背景 */
+  color: var(--text-primary);                   /* 保持原色 */
+}
+
+/* ---- 菜单项勾选状态 ---- */
+
+/* 勾选状态 - 在左侧显示 ✓ 符号，表示当前选项已启用 */
+/* 常用于切换列可见性等场景 */
+.context-menu-item.checked {
+  padding-left: 28px;                           /* 左侧增加内边距，为 ✓ 符号留空间 */
+}
+
+/* 勾选符号 - 使用 ::before 伪元素绘制 ✓ */
+.context-menu-item.checked::before {
+  content: "✓";                                 /* 勾选符号 */
+  position: absolute;                           /* 绝对定位在左侧 */
+  left: 10px;                                   /* 距左侧 10px */
+  color: var(--accent);                         /* 强调色（蓝色） */
+  font-size: var(--font-size-sm);               /* 小字号 */
+  font-weight: 600;                             /* 加粗，让符号更清晰 */
+}
+
+/* ---- 菜单项隐藏状态 ---- */
+
+/* 隐藏的菜单项 - 完全不显示（display: none） */
+/* 用于动态控制菜单项的可见性 */
+.context-menu-item.visible-false {
+  display: none;                                /* 完全移出布局，不占据空间 */
+}
+
+/* ============================================================
+ * 分隔线 (.context-menu-separator)
+ * ============================================================
+ * 菜单中的水平分隔线，用于将相关的菜单项分组。
+ * 例如：将"查看详情"与"删除"用分隔线分开。
+ * ============================================================ */
+.context-menu-separator {
+  height: 1px;                                  /* 分隔线高度 1px */
+  margin: 4px 8px;                              /* 上下 4px 间距，左右 8px 缩进 */
+  background: var(--border-subtle);             /* 弱化边框色（半透明） */
+  /* 分隔线不可点击 */
+  pointer-events: none;                         /* 不响应鼠标事件 */
+}
