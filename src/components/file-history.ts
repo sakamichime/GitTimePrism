@@ -19,6 +19,8 @@
 
 import { repoService, type CommitInfo } from '../services/repo-service.js';
 import { DiffViewer } from './diff-viewer.js';
+// 引入文件图标服务，用于根据文件路径获取对应的 vscode-icons 文件类型 SVG 图标 URL
+import { fileIconService } from '../services/file-icon-service.js';
 
 /**
  * 文件历史查看组件类
@@ -76,7 +78,7 @@ export class FileHistory {
     this.container.innerHTML = `
       <div class="file-history-container">
         <div class="file-history-header">
-          <span class="file-history-icon">📜</span>
+          <img class="file-history-icon" src="${fileIconService.getFileIconUrl(filePath)}" alt="">
           <span class="file-history-title">文件历史</span>
           <span class="file-history-path" title="${this.escapeHtml(filePath)}">${this.escapeHtml(filePath)}</span>
         </div>
@@ -92,7 +94,7 @@ export class FileHistory {
         this.container.innerHTML = `
           <div class="file-history-container">
             <div class="file-history-header">
-              <span class="file-history-icon">📜</span>
+              <img class="file-history-icon" src="${fileIconService.getFileIconUrl(filePath)}" alt="">
               <span class="file-history-title">文件历史</span>
               <span class="file-history-path" title="${this.escapeHtml(filePath)}">${this.escapeHtml(filePath)}</span>
             </div>
@@ -109,7 +111,7 @@ export class FileHistory {
       this.container.innerHTML = `
         <div class="file-history-container">
           <div class="file-history-header">
-            <span class="file-history-icon">📜</span>
+            <img class="file-history-icon" src="${fileIconService.getFileIconUrl(filePath)}" alt="">
             <span class="file-history-title">文件历史</span>
             <span class="file-history-path" title="${this.escapeHtml(filePath)}">${this.escapeHtml(filePath)}</span>
           </div>
@@ -135,7 +137,7 @@ export class FileHistory {
       <div class="file-history-container">
         <!-- 头部区域：显示文件路径和提交数量 -->
         <div class="file-history-header">
-          <span class="file-history-icon">📜</span>
+          <img class="file-history-icon" src="${fileIconService.getFileIconUrl(filePath)}" alt="">
           <span class="file-history-title">文件历史</span>
           <span class="file-history-path" title="${this.escapeHtml(filePath)}">${this.escapeHtml(filePath)}</span>
           <span class="file-history-count">${commits.length} 个提交</span>

@@ -23,11 +23,11 @@
  *   - 动态目标重绑定：commits 列表重渲染后通过 refresh() 重新定位元素
  *
  * DOM 结构：
- *   <ul class="contextMenu">
- *     <li class="contextMenuItem" data-index="0">菜单项 1</li>
- *     <li class="contextMenuItem" data-index="1">菜单项 2</li>
- *     <li class="contextMenuDivider"></li>
- *     <li class="contextMenuItem" data-index="2">菜单项 3</li>
+ *   <ul class="context-menu">
+ *     <li class="context-menu-item" data-index="0">菜单项 1</li>
+ *     <li class="context-menu-item" data-index="1">菜单项 2</li>
+ *     <li class="context-menu-separator"></li>
+ *     <li class="context-menu-item" data-index="2">菜单项 3</li>
  *   </ul>
  *
  * 使用示例：
@@ -78,7 +78,7 @@ export interface ContextMenuAction {
  * 右键菜单项的二维数组
  *
  * 外层数组代表"组"，内层数组代表组内的"项"。
- * 不同组之间会渲染一条分隔线（contextMenuDivider）。
+ * 不同组之间会渲染一条分隔线（context-menu-separator）。
  * 例如：[[项1, 项2], [项3]] 会渲染为"项1 项2 | 分隔线 | 项3"
  */
 export type ContextMenuActions = ReadonlyArray<ReadonlyArray<ContextMenuAction>>;
@@ -183,7 +183,7 @@ export type ContextMenuTarget = RepoTarget | CommitTarget | RefTarget | CommitDe
  * 当右键菜单打开时，被右键的目标元素会添加这个类名，
  * 用于在 CSS 中实现高亮效果（如背景色变化）。
  */
-const CLASS_CONTEXT_MENU_ACTIVE: string = 'contextMenuActive';
+const CLASS_CONTEXT_MENU_ACTIVE: string = 'context-menu-active';
 
 
 /**
@@ -282,13 +282,13 @@ export class ContextMenu {
 				/* 只渲染 visible 为 true 的菜单项 */
 				if (actions[i][j].visible) {
 					/* 构建菜单项 HTML：
-					 *   - contextMenuItem 类用于 CSS 样式
+					 *   - context-menu-item 类用于 CSS 样式
 					 *   - data-index 用于点击时查找对应回调
-					 *   - 如果 checked 为 true，显示勾选标记（contextMenuItemCheck 容器）
+					 *   - 如果 checked 为 true，显示勾选标记（context-menu-item-check 容器）
 					 *     如果该项的 checked 也为 true，显示对勾图标；否则为空
 					 */
-					groupHtml += '<li class="contextMenuItem" data-index="' + handlerId + '">'
-						+ (checked ? '<span class="contextMenuItemCheck">' + (actions[i][j].checked ? SVG_ICONS.check : '') + '</span>' : '')
+					groupHtml += '<li class="context-menu-item" data-index="' + handlerId + '">'
+						+ (checked ? '<span class="context-menu-item-check">' + (actions[i][j].checked ? SVG_ICONS.check : '') + '</span>' : '')
 						+ actions[i][j].title
 						+ '</li>';
 					/* 如果有 onClick 回调，添加到 handlers 数组 */
@@ -303,7 +303,7 @@ export class ContextMenu {
 			if (groupHtml !== '') {
 				if (html !== '') {
 					/* 不是第一组，先添加分隔线 */
-					html += '<li class="contextMenuDivider"></li>';
+					html += '<li class="context-menu-separator"></li>';
 				}
 				html += groupHtml;
 			}
@@ -315,11 +315,11 @@ export class ContextMenu {
 		/* 创建菜单容器 <ul> 元素 */
 		const menu = document.createElement('ul');
 		/* 设置类名：
-		 *   - contextMenu：基础样式
+		 *   - context-menu：基础样式
 		 *   - checked：显示勾选标记的菜单（CSS 中可调整 padding）
 		 *   - 如果传入了额外的 className，追加到末尾
 		 */
-		menu.className = 'contextMenu'
+		menu.className = 'context-menu'
 			+ (checked ? ' checked' : '')
 			+ (className !== null ? ' ' + className : '');
 		/* 初始透明度为 0，定位计算完成后再设为 1，避免闪烁 */
@@ -374,7 +374,7 @@ export class ContextMenu {
 		menu.addEventListener('click', (e: MouseEvent) => {
 			/* 找到被点击的菜单项（可能点击到子元素，需要 closest 向上查找） */
 			const target = e.target as HTMLElement;
-			const itemElem = target.closest('.contextMenuItem') as HTMLElement | null;
+			const itemElem = target.closest('.context-menu-item') as HTMLElement | null;
 			if (itemElem !== null && itemElem.dataset.index !== undefined) {
 				/* 阻止事件冒泡，避免触发 document 上的 close 监听器 */
 				e.stopPropagation();
@@ -398,7 +398,7 @@ export class ContextMenu {
 		};
 		document.addEventListener('keydown', this.escListener, true);
 
-		/* 高亮被右键的目标元素（添加 contextMenuActive 类） */
+		/* 高亮被右键的目标元素（添加 context-menu-active 类） */
 		this.target = target;
 		if (this.target !== null && this.target.type !== 'Repo') {
 			/* 只对非 Repo 类型的目标添加高亮（Repo 是背景，无需高亮） */
@@ -411,7 +411,7 @@ export class ContextMenu {
 	 *
 	 * 如果当前有菜单打开：
 	 *   1. 移除菜单 DOM 元素
-	 *   2. 移除所有元素的高亮类（contextMenuActive）
+	 *   2. 移除所有元素的高亮类（context-menu-active）
 	 *   3. 触发 onClose 回调（如果有）
 	 *   4. 移除 ESC 监听器
 	 *   5. 清空 target 引用
@@ -423,7 +423,7 @@ export class ContextMenu {
 			this.elem = null;
 		}
 
-		/* 移除所有元素的高亮类（查找所有带 contextMenuActive 类的元素） */
+		/* 移除所有元素的高亮类（查找所有带 context-menu-active 类的元素） */
 		const activeElems = document.getElementsByClassName(CLASS_CONTEXT_MENU_ACTIVE) as HTMLCollectionOf<HTMLElement>;
 		for (let i = 0; i < activeElems.length; i++) {
 			alterClass(activeElems[i], CLASS_CONTEXT_MENU_ACTIVE, false);

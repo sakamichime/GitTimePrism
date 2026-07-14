@@ -27,20 +27,8 @@ import { join } from '@tauri-apps/api/path';
 import { repoService, type StatusEntry, type FileStatus } from '../services/repo-service.js';
 /* 导入全局右键菜单组件（Task 13.5：复用 contextMenu.show() 方法显示文件右键菜单） */
 import { contextMenu, type ContextMenuAction, type ContextMenuTarget } from './context-menu.js';
-
-/**
- * 文件状态图标映射
- * 根据文件状态返回对应的 Unicode 图标
- */
-const STATUS_ICONS: Record<FileStatus, string> = {
-  Modified: '✏️',   // 修改
-  Added: '➕',      // 新增
-  Deleted: '🗑️',    // 删除
-  Untracked: '❓',  // 未跟踪
-  Renamed: '️',    // 重命名
-  Copied: '📋',     // 复制
-  Unmerged: '⚠️',   // 冲突
-};
+/* 导入文件图标服务，用于根据文件路径获取对应的 vscode-icons 风格 SVG 图标 URL */
+import { fileIconService } from '../services/file-icon-service.js';
 
 /**
  * 文件状态中文名称映射
@@ -195,7 +183,6 @@ export class FileList {
 
     // 渲染每个文件
     for (const file of files) {
-      const icon = STATUS_ICONS[file.status] || '📄';
       const statusName = STATUS_NAMES[file.status] || file.status;
       const actionText = isStaged ? '取消暂存' : '暂存';
       const actionIcon = isStaged ? '↩' : '➕';
@@ -203,7 +190,7 @@ export class FileList {
       html += `
         <div class="file-item" data-path="${file.path}" data-staged="${isStaged}">
           <div class="file-info" data-action="view-diff">
-            <span class="file-icon">${icon}</span>
+            <img class="file-type-icon" src="${fileIconService.getFileIconUrl(file.path)}" alt="">
             <span class="file-path" title="${file.path}">${file.path}</span>
             <span class="file-status">${statusName}</span>
           </div>

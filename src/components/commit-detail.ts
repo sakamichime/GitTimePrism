@@ -45,6 +45,9 @@ import { codeReviewService } from '../services/code-review-service.js';
 import { formatLine } from '../utils/text-formatter.js';
 // 导入配置服务（Task 11.2：读取 markdown/emoji/issueLinking 等配置）
 import { configService } from '../services/config-service.js';
+// 导入文件图标服务（用于在文件树节点前显示 vscode-icons 风格的 SVG 文件类型图标）
+// 注意：项目使用 ESM 模块解析，即使源文件是 .ts，import 路径也要写 .js 扩展名
+import { fileIconService } from '../services/file-icon-service.js';
 
 /**
  * 文件树节点接口
@@ -1010,8 +1013,6 @@ export class CommitDetail {
     if (!node.fileChange) return '';
 
     const file: NormalizedFileChange = node.fileChange;
-    // 根据变更类型选择图标
-    const icon: string = this.getFileStatusIcon(file.status);
     // 根据变更类型选择状态文字
     const statusText: string = this.getFileStatusText(file.status);
     // 未审文件（Code Review 期间）添加 unreviewed 类
@@ -1023,7 +1024,7 @@ export class CommitDetail {
           data-old-path="${file.oldPath ? this.escapeHtml(file.oldPath) : ''}"
           data-status="${file.status}"
           title="${this.escapeHtml(node.path)} • ${statusText}">
-        <span class="file-tree-file-icon">${icon}</span>
+        <img class="file-type-icon" src="${fileIconService.getFileIconUrl(node.path)}" alt="">
         <span class="file-tree-name">${this.escapeHtml(node.name)}</span>
         <span class="file-tree-file-status">${statusText}</span>
         ${this.renderFileStatsHtml(file)}
@@ -1086,7 +1087,6 @@ export class CommitDetail {
         reviewed: this.isFileReviewed(file.path),
       };
       // 列表视图直接显示完整路径，不显示状态文字（更紧凑）
-      const icon: string = this.getFileStatusIcon(file.status);
       const statusText: string = this.getFileStatusText(file.status);
       const fileClass: string = `file-tree-file file-list-item${tempNode.reviewed === false ? ' unreviewed' : ''}`;
 
@@ -1096,7 +1096,7 @@ export class CommitDetail {
             data-old-path="${file.oldPath ? this.escapeHtml(file.oldPath) : ''}"
             data-status="${file.status}"
             title="${this.escapeHtml(file.path)} • ${statusText}">
-          <span class="file-tree-file-icon">${icon}</span>
+          <img class="file-type-icon" src="${fileIconService.getFileIconUrl(file.path)}" alt="">
           <span class="file-tree-name">${this.escapeHtml(file.path)}</span>
           <span class="file-tree-file-status">${statusText}</span>
           ${this.renderFileStatsHtml(file)}
@@ -1105,28 +1105,6 @@ export class CommitDetail {
     }
     html += '</ul>';
     return html;
-  }
-
-  /**
-   * 获取文件变更类型的图标
-   *
-   * @param status - 文件变更类型
-   * @returns 对应的 emoji 图标
-   */
-  private getFileStatusIcon(status: GitFileStatus): string {
-    switch (status) {
-      case GitFileStatus.Added:
-        return '➕';
-      case GitFileStatus.Deleted:
-        return '🗑️';
-      case GitFileStatus.Renamed:
-        return '✂️';
-      case GitFileStatus.Untracked:
-        return '❓';
-      case GitFileStatus.Modified:
-      default:
-        return '📄';
-    }
   }
 
   /**

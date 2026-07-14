@@ -1210,6 +1210,10 @@ export class CommitGraph {
         const mouseEvent = event as MouseEvent;
         /* 阻止默认右键菜单（无论是否找到提交都先阻止浏览器默认菜单） */
         mouseEvent.preventDefault();
+        /* 阻止事件冒泡到 document：
+         * context-menu.ts 构造函数在 document 上注册了 contextmenu 监听器（closeHandler），
+         * 如果不阻止冒泡，show() 刚打开菜单后 closeHandler 会立即触发 close() 关闭菜单 */
+        mouseEvent.stopPropagation();
 
         const hash = row.getAttribute('data-hash') || '';
         const commit = this.graphData?.commits.find(c => c.hash === hash);

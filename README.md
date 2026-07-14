@@ -132,6 +132,12 @@ npm run tauri build
 
 本项目使用 Rust 后端命令 `read_image_as_data_url` 将图片转为 base64 data URL 后加载，比直接使用 asset URL 更可靠。
 
+## 致谢
+
+本项目使用了以下开源项目，在此表示感谢：
+
+- [vscode-icons](https://github.com/vscode-icons/vscode-icons)：为 Visual Studio Code 提供丰富的文件图标集，本项目借用其图标资源来美化文件类型展示，让工作区中的文件变更一目了然。
+
 ## 许可证
 
 本项目采用 [MIT](LICENSE) 许可证。

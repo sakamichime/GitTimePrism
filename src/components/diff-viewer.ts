@@ -14,6 +14,7 @@
  */
 
 import { repoService, type DiffResult, type FileDiff, type DiffHunk } from '../services/repo-service.js';
+import { fileIconService } from '../services/file-icon-service.js';
 
 /**
  * 对比行类型
@@ -254,7 +255,7 @@ export class DiffViewer {
     html += `
       <div class="diff-header">
         <div class="diff-file-path">
-          <span class="diff-file-icon">📄</span>
+          <img class="diff-file-icon" src="${fileIconService.getFileIconUrl(fileDiff.path)}" alt="">
           <span class="diff-file-name">${this.escapeHtml(fileDiff.path)}</span>
         </div>
         <div class="diff-stats">
@@ -422,7 +423,7 @@ export class DiffViewer {
           <div class="diff-header-left">
             ${this.onBack ? `<button class="diff-back-btn" id="diff-back-btn" title="返回详情">← 返回</button>` : ''}
             <div class="diff-file-path">
-              <span class="diff-file-icon"></span>
+              <img class="diff-file-icon" src="${fileIconService.getFileIconUrl(filePath)}" alt="">
               <span class="diff-file-name">${this.escapeHtml(filePath)}</span>
             </div>
           </div>
@@ -474,7 +475,7 @@ export class DiffViewer {
         <div class="diff-header-left">
           ${this.onBack ? `<button class="diff-back-btn" id="diff-back-btn" title="返回详情">← 返回</button>` : ''}
           <div class="diff-file-path">
-            <span class="diff-file-icon">📄</span>
+            <img class="diff-file-icon" src="${fileIconService.getFileIconUrl(filePath)}" alt="">
             <span class="diff-file-name">${this.escapeHtml(filePath)}</span>
           </div>
         </div>
@@ -942,7 +943,7 @@ export class DiffViewer {
     html += `
       <div class="diff-header">
         <div class="diff-file-path">
-          <span class="diff-file-icon">📄</span>
+          <img class="diff-file-icon" src="${fileIconService.getFileIconUrl(fileDiff.path)}" alt="">
           <span class="diff-file-name">${fileDiff.path}</span>
         </div>
         <div class="diff-stats">
@@ -1082,7 +1083,7 @@ export class DiffViewer {
     let html = `
       <div class="diff-header">
         <div class="diff-file-path">
-          <span class="diff-file-icon">📄</span>
+          <img class="diff-file-icon" src="${fileIconService.getFileIconUrl(fileDiff.path)}" alt="">
           <span class="diff-file-name">${fileDiff.path}</span>
         </div>
         <div class="diff-stats">

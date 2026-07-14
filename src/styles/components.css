@@ -587,9 +587,13 @@
   font-weight: 500;                           /* 中等字重 */
 }
 
-/* diff 文件图标 */
+/* diff 文件图标（同时支持 emoji span 与 <img> 标签） */
 .diff-file-icon {
-  font-size: 14px;                            /* 图标大小 */
+  font-size: 14px;                            /* emoji 字号 */
+  width: 16px;                                /* <img> 固定宽度 */
+  height: 16px;                               /* <img> 固定高度 */
+  vertical-align: middle;                      /* 与文字基线对齐 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
 }
 
 /* diff 文件名 */
@@ -1935,9 +1939,12 @@
   background: var(--bg-tertiary);             /* 背景色 */
 }
 
-/* 文件历史图标 */
+/* 文件历史图标（同时支持 emoji span 与 <img> 标签） */
 .file-history-icon {
-  font-size: 16px;                            /* 图标大小 */
+  font-size: 16px;                            /* emoji 字号 */
+  width: 16px;                                /* <img> 固定宽度 */
+  height: 16px;                               /* <img> 固定高度 */
+  vertical-align: middle;                      /* 与文字基线对齐 */
   flex-shrink: 0;                             /* 不允许被压缩 */
 }
 
@@ -2171,6 +2178,10 @@
 
 .diff-file-icon {
   font-size: 16px;
+  width: 16px;                                /* <img> 固定宽度 */
+  height: 16px;                               /* <img> 固定高度 */
+  vertical-align: middle;                      /* 与文字基线对齐 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
 }
 
 .diff-file-name {
@@ -2992,12 +3003,24 @@ body.column-resizing * {
   background: rgba(255, 255, 255, 0.06);       /* 半透明白色背景 */
 }
 
-/* 文件图标 */
+/* 文件图标（emoji 状态图标，与新增的 <img> 文件类型图标并列显示） */
 .file-tree-file-icon {
-  font-size: 14px;                             /* 图标大小 */
+  font-size: 14px;                             /* emoji 字号 */
   flex-shrink: 0;                              /* 不允许被压缩 */
   width: 16px;                                 /* 固定宽度（与文件夹图标对齐） */
+  height: 16px;                                /* 固定高度 */
   text-align: center;                          /* 文字居中 */
+  vertical-align: middle;                      /* 与文字基线对齐 */
+}
+
+/* 文件类型图标（用于 <img> 标签，显示 vscode-icons SVG 图标） */
+.file-type-icon {
+  width: 16px;                                /* 图标固定宽度 */
+  height: 16px;                               /* 图标固定高度 */
+  vertical-align: middle;                      /* 与文字基线对齐 */
+  flex-shrink: 0;                             /* 不允许被压缩 */
+  margin-right: 4px;                          /* 与后续元素的间距 */
+  display: inline-block;                       /* 行内块元素，便于设置尺寸 */
 }
 
 /* 文件状态文字（新增/修改/删除/重命名） */
@@ -3089,10 +3112,10 @@ body.column-resizing * {
  * 右键菜单激活状态（文件被右键时高亮）
  * ============================================================ */
 
-/* 被右键的文件/文件夹添加 contextMenuActive 类时高亮 */
-.file-tree-file.contextMenuActive,
-.file-list-item.contextMenuActive,
-.file-tree-folder-label.contextMenuActive {
+/* 被右键的文件/文件夹添加 context-menu-active 类时高亮 */
+.file-tree-file.context-menu-active,
+.file-list-item.context-menu-active,
+.file-tree-folder-label.context-menu-active {
   background: var(--accent);                   /* 强调色背景 */
   color: var(--bg-primary);                    /* 反色文字 */
 }

@@ -496,7 +496,7 @@ export function getCommitContextMenuActions(
 		[
 			{
 				/* 添加标签：让用户输入标签名和选择类型，然后在当前提交上创建标签 */
-				title: 'Add Tag...',
+				title: '添加标签...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.addTag,
 				onClick: () => {
@@ -562,7 +562,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 创建分支：让用户输入分支名，从当前提交创建新分支并切换过去 */
-				title: 'Create Branch...',
+				title: '创建分支...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.createBranch,
 				onClick: () => {
@@ -597,7 +597,7 @@ export function getCommitContextMenuActions(
 		[
 			{
 				/* 检出：将 HEAD 切换到该提交（进入 detached HEAD 状态） */
-				title: 'Checkout',
+				title: '检出',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.checkout,
 				onClick: () => {
@@ -610,7 +610,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 拣选：将该提交的变更应用到当前分支 */
-				title: 'Cherry Pick',
+				title: '拣选',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.cherryPick,
 				onClick: () => {
@@ -639,7 +639,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 还原：创建一个反向提交，撤销该提交的变更 */
-				title: 'Revert',
+				title: '还原',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.revert,
 				onClick: () => {
@@ -656,7 +656,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 丢弃：从历史中移除该提交（改写历史，危险操作） */
-				title: 'Drop',
+				title: '丢弃',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.drop,
 				onClick: () => {
@@ -680,7 +680,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 合并：将该提交所在分支合并到当前分支 */
-				title: 'Merge...',
+				title: '合并...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.merge,
 				onClick: () => {
@@ -729,7 +729,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 变基：将当前分支的提交变基到该提交之上 */
-				title: 'Rebase...',
+				title: '变基...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.rebase,
 				onClick: () => {
@@ -771,7 +771,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 重置：将当前分支重置到该提交（支持 Soft/Mixed/Hard 三种模式） */
-				title: 'Reset...',
+				title: '重置...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.reset,
 				onClick: () => {
@@ -805,7 +805,7 @@ export function getCommitContextMenuActions(
 		[
 			{
 				/* 复制提交哈希到剪贴板 */
-				title: 'Copy Hash',
+				title: '复制哈希',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.copyHash,
 				onClick: () => {
@@ -814,7 +814,7 @@ export function getCommitContextMenuActions(
 			},
 			{
 				/* 复制提交标题（消息第一行）到剪贴板 */
-				title: 'Copy Subject',
+				title: '复制提交信息',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.copySubject,
 				onClick: () => {
@@ -864,7 +864,7 @@ export function getBranchContextMenuActions(
 		[
 			{
 				/* 切换到该分支：执行 git checkout <branch> */
-				title: 'Checkout',
+				title: '检出',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.checkout,
 				onClick: () => {
@@ -880,7 +880,7 @@ export function getBranchContextMenuActions(
 		[
 			{
 				/* 重命名分支：让用户输入新分支名 */
-				title: 'Rename...',
+				title: '重命名...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.rename,
 				onClick: () => {
@@ -901,7 +901,7 @@ export function getBranchContextMenuActions(
 			},
 			{
 				/* 删除分支：显示确认对话框 */
-				title: 'Delete...',
+				title: '删除...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.delete,
 				onClick: () => {
@@ -926,7 +926,7 @@ export function getBranchContextMenuActions(
 		[
 			{
 				/* 合并该分支到当前分支 */
-				title: 'Merge...',
+				title: '合并...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.merge,
 				onClick: () => {
@@ -975,7 +975,7 @@ export function getBranchContextMenuActions(
 			},
 			{
 				/* 将当前分支变基到该分支 */
-				title: 'Rebase...',
+				title: '变基...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.rebase,
 				onClick: () => {
@@ -1016,7 +1016,7 @@ export function getBranchContextMenuActions(
 			},
 			{
 				/* 推送该分支到远程仓库 */
-				title: 'Push...',
+				title: '推送...',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.push,
 				onClick: () => {
@@ -1059,7 +1059,7 @@ export function getBranchContextMenuActions(
 		[
 			{
 				/* 创建 Pull Request：根据远程仓库 URL 自动检测 Provider 并打开 PR 创建页面 */
-				title: 'Create Pull Request',
+				title: '创建 Pull Request',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.createPullRequest,
 				onClick: () => {
@@ -1096,7 +1096,7 @@ export function getBranchContextMenuActions(
 		[
 			{
 				/* 复制分支名到剪贴板 */
-				title: 'Copy Name',
+				title: '复制名称',
 				/* Task 13.2：从配置读取可见性 */
 				visible: vis.copyName,
 				onClick: () => {
@@ -1172,7 +1172,7 @@ export function getRemoteBranchContextMenuActions(
 		[
 			{
 				/* 检出远程分支：创建本地分支跟踪该远程分支 */
-				title: 'Checkout',
+				title: '检出',
 				visible: vis.checkout,
 				onClick: () => {
 					runAction('检出远程分支', `checkout ${remoteBranch}`, async () => {
@@ -1188,7 +1188,7 @@ export function getRemoteBranchContextMenuActions(
 		[
 			{
 				/* 删除远程分支：执行 git push <remote> --delete <branch> */
-				title: 'Delete',
+				title: '删除',
 				visible: vis.delete,
 				onClick: () => {
 					dialog.showConfirmation(
@@ -1211,7 +1211,7 @@ export function getRemoteBranchContextMenuActions(
 		[
 			{
 				/* 拉取到本地分支：从远程获取并创建/更新本地分支 */
-				title: 'Fetch into local',
+				title: '拉取到本地',
 				visible: vis.fetchIntoLocal,
 				onClick: () => {
 					runAction('拉取到本地分支', `fetchIntoLocal ${remoteBranch}`, async () => {
@@ -1223,7 +1223,7 @@ export function getRemoteBranchContextMenuActions(
 			},
 			{
 				/* 合并该远程分支到当前分支 */
-				title: 'Merge...',
+				title: '合并...',
 				visible: vis.merge,
 				onClick: () => {
 					dialog.showForm(
@@ -1270,7 +1270,7 @@ export function getRemoteBranchContextMenuActions(
 			},
 			{
 				/* 拉取：从远程获取最新提交并合并到当前分支 */
-				title: 'Pull',
+				title: '拉取',
 				visible: vis.pull,
 				onClick: () => {
 					runAction('拉取', `pull ${remoteBranch}`, async () => {
@@ -1285,7 +1285,7 @@ export function getRemoteBranchContextMenuActions(
 		[
 			{
 				/* 创建 Pull Request：根据远程仓库 URL 自动检测 Provider 并打开 PR 创建页面 */
-				title: 'Create Pull Request',
+				title: '创建 Pull Request',
 				visible: vis.createPullRequest,
 				onClick: () => {
 					runAction('创建 Pull Request', `createPR ${remoteBranch}`, async () => {
@@ -1322,7 +1322,7 @@ export function getRemoteBranchContextMenuActions(
 		[
 			{
 				/* 复制远程分支名到剪贴板 */
-				title: 'Copy Name',
+				title: '复制名称',
 				visible: vis.copyName,
 				onClick: () => {
 					copyToClipboard(remoteBranch);
@@ -1364,7 +1364,7 @@ export function getTagContextMenuActions(
 		[
 			{
 				/* 查看详情：显示该标签指向的提交的详情 */
-				title: 'View Details',
+				title: '查看详情',
 				visible: vis.viewDetails,
 				onClick: () => {
 					/* 由于菜单生成时只有标签名，需要异步查找标签指向的提交哈希 */
@@ -1391,7 +1391,7 @@ export function getTagContextMenuActions(
 			},
 			{
 				/* 删除标签：显示确认对话框 */
-				title: 'Delete',
+				title: '删除',
 				visible: true,
 				onClick: () => {
 					dialog.showConfirmation(
@@ -1413,7 +1413,7 @@ export function getTagContextMenuActions(
 		[
 			{
 				/* 推送标签到远程仓库 */
-				title: 'Push',
+				title: '推送',
 				visible: vis.push,
 				onClick: () => {
 					runAction('推送标签', `pushTag ${tag}`, async () => {
@@ -1429,7 +1429,7 @@ export function getTagContextMenuActions(
 		[
 			{
 				/* 复制标签名到剪贴板 */
-				title: 'Copy Name',
+				title: '复制名称',
 				visible: vis.copyName,
 				onClick: () => {
 					copyToClipboard(tag);
@@ -1477,7 +1477,7 @@ export function getStashContextMenuActions(
 		[
 			{
 				/* 应用 stash：将 stash 的变更应用到工作区，但不删除 stash */
-				title: 'Apply...',
+				title: '应用...',
 				visible: vis.apply,
 				onClick: () => {
 					/* 显示复选框对话框，让用户选择是否恢复暂存区 */
@@ -1500,7 +1500,7 @@ export function getStashContextMenuActions(
 			},
 			{
 				/* 弹出 stash：应用 stash 并删除它 */
-				title: 'Pop...',
+				title: '弹出...',
 				visible: vis.pop,
 				onClick: () => {
 					dialog.showCheckbox(
@@ -1521,7 +1521,7 @@ export function getStashContextMenuActions(
 			},
 			{
 				/* 丢弃 stash：直接删除 stash，不应用变更 */
-				title: 'Drop...',
+				title: '丢弃...',
 				visible: vis.drop,
 				onClick: () => {
 					dialog.showConfirmation(
@@ -1544,7 +1544,7 @@ export function getStashContextMenuActions(
 		[
 			{
 				/* 从 stash 创建分支：在 stash 基于的提交上创建新分支并应用 stash 变更 */
-				title: 'Create Branch...',
+				title: '创建分支...',
 				visible: vis.createBranch,
 				onClick: () => {
 					dialog.showRefInput(
@@ -1568,7 +1568,7 @@ export function getStashContextMenuActions(
 		[
 			{
 				/* 复制 stash 选择器（如 "stash@{0}"）到剪贴板 */
-				title: 'Copy Name',
+				title: '复制名称',
 				visible: vis.copyName,
 				onClick: () => {
 					copyToClipboard(stashSelector);
@@ -1576,7 +1576,7 @@ export function getStashContextMenuActions(
 			},
 			{
 				/* 复制 stash 哈希到剪贴板 */
-				title: 'Copy Hash',
+				title: '复制哈希',
 				visible: vis.copyHash,
 				onClick: () => {
 					copyToClipboard(stashHash);
@@ -1621,7 +1621,7 @@ export function getUncommittedChangesContextMenuActions(
 		[
 			{
 				/* 暂存变更：执行 git stash push，将工作区变更保存到 stash */
-				title: 'Stash...',
+				title: '暂存...',
 				visible: vis.stash,
 				onClick: () => {
 					/* 显示表单对话框，让用户选择选项和输入消息 */
@@ -1663,7 +1663,7 @@ export function getUncommittedChangesContextMenuActions(
 			},
 			{
 				/* 重置：将当前分支重置到 HEAD（撤销未提交的变更） */
-				title: 'Reset...',
+				title: '重置...',
 				visible: vis.reset,
 				onClick: () => {
 					/* 显示下拉选择对话框，让用户选择重置模式 */
@@ -1693,7 +1693,7 @@ export function getUncommittedChangesContextMenuActions(
 			},
 			{
 				/* 清理：删除未跟踪的文件和目录 */
-				title: 'Clean...',
+				title: '清理...',
 				visible: vis.clean,
 				onClick: () => {
 					/* 显示确认对话框，因为清理是危险操作 */
@@ -1719,7 +1719,7 @@ export function getUncommittedChangesContextMenuActions(
 		[
 			{
 				/* 打开 SCM：在外部工具中打开仓库（如 VS Code 的 SCM 视图） */
-				title: 'Open SCM',
+				title: '打开 SCM',
 				visible: vis.openScm,
 				onClick: () => {
 					runAction('打开 SCM', `openSCM`, async () => {
