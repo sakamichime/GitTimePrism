@@ -446,8 +446,8 @@ export class Branch {
 		/* 遍历合并提交，在对应位置渲染标签 */
 		for (const vertex of mergeCommits) {
 			/* 计算标签位置（节点右侧） */
-			const x = vertex.col * config.grid.x + config.grid.offsetX + offset.x + 10;
-			const y = vertex.row * config.grid.y + config.grid.offsetY + offset.y;
+			const x = vertex.getCol() * config.grid.x + config.grid.offsetX + offset.x + 10;
+			const y = vertex.getRow() * config.grid.y + config.grid.offsetY + offset.y;
 
 			/* 设置字体和颜色 */
 			ctx.font = '11px sans-serif';

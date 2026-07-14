@@ -639,13 +639,13 @@ export class MergeEditor {
     }
 
     // 设置 Ours 栏内容
-    const oursCode: HTMLElement | null = this.overlay?.querySelector('#merge-editor-ours-code');
+    const oursCode: HTMLElement | null = this.overlay?.querySelector('#merge-editor-ours-code') ?? null;
     if (oursCode) {
       oursCode.textContent = oursContent;
     }
 
     // 设置 Theirs 栏内容
-    const theirsCode: HTMLElement | null = this.overlay?.querySelector('#merge-editor-theirs-code');
+    const theirsCode: HTMLElement | null = this.overlay?.querySelector('#merge-editor-theirs-code') ?? null;
     if (theirsCode) {
       theirsCode.textContent = theirsContent;
     }
@@ -867,7 +867,7 @@ export class MergeEditor {
       `<span class="progress-resolved">${resolved}</span> / <span class="progress-total">${total}</span> 冲突已解决`;
 
     // 同时更新标题栏的冲突数标签
-    const conflictCount: HTMLElement | null = this.overlay?.querySelector('.merge-editor-conflict-count');
+    const conflictCount: HTMLElement | null = this.overlay?.querySelector('.merge-editor-conflict-count') ?? null;
     if (conflictCount) {
       conflictCount.textContent = `${resolved} / ${total} 已解决`;
     }

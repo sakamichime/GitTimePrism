@@ -973,8 +973,10 @@ export class Dialog {
 			 */
 			const commitElem = document.querySelector('.commit-row[data-row="' + commitIndex + '"]') as HTMLElement | null;
 			if (commitElem !== null) {
-				if (typedTarget.ref === undefined) {
-					/* target 没有 ref */
+				/* 用 'ref' in 收窄类型，避免访问 CommitTarget 上不存在的 ref 属性 */
+			const refValue = 'ref' in typedTarget ? typedTarget.ref : undefined;
+			if (refValue === undefined) {
+				/* target 没有 ref */
 					if (typedTarget.type !== 'CommitDetailsView') {
 						(this.target as CommitTarget).elem = commitElem;
 						alterClass((this.target as CommitTarget).elem, CLASS_DIALOG_ACTIVE, true);
@@ -984,7 +986,7 @@ export class Dialog {
 					/* target 有 ref，查找对应的 ref-label 元素 */
 					const refElems = commitElem.querySelectorAll('[data-ref-name]') as NodeListOf<HTMLElement>;
 					for (let i = 0; i < refElems.length; i++) {
-						if (refElems[i].dataset.refName === typedTarget.ref) {
+						if (refElems[i].dataset.refName === refValue) {
 							if (typedTarget.type === 'Ref') {
 								(this.target as RefTarget).elem = refElems[i];
 							} else {
@@ -1352,7 +1354,7 @@ class CustomSelect {
 				/* 鼠标移动时更新焦点（hover 效果） */
 				const optionElems = this.optionsElem.children;
 				for (let i = 0; i < optionElems.length; i++) {
-					optionElems[i].addEventListener('mousemove', (e: MouseEvent) => {
+					(optionElems[i] as HTMLElement).addEventListener('mousemove', (e: MouseEvent) => {
 						if (!e.target) return;
 						const elem = (e.target as HTMLElement).closest('.customSelectOption') as HTMLElement | null;
 						if (elem === null || elem.dataset.index === undefined) return;

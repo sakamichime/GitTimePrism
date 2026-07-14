@@ -882,7 +882,7 @@ class ConfigService {
    * @param source - 源对象（提供新值）
    * @returns 合并后的对象（即 target）
    */
-  private deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T> | null | undefined): T {
+  private deepMerge<T extends object>(target: T, source: Partial<T> | null | undefined): T {
     // 如果 source 为 null 或 undefined，直接返回 target
     if (!source) return target;
 
@@ -902,9 +902,9 @@ class ConfigService {
       ) {
         // 递归合并子对象
         target[key] = this.deepMerge(
-          targetVal as Record<string, unknown>,
-          sourceVal as Record<string, unknown>,
-        ) as T[keyof T];
+          targetVal as unknown as Record<string, unknown>,
+          sourceVal as unknown as Record<string, unknown>,
+        ) as unknown as T[keyof T];
       } else if (sourceVal !== undefined) {
         // 否则直接用 source 的值覆盖（数组、原始类型等）
         target[key] = sourceVal as T[keyof T];
@@ -923,7 +923,7 @@ class ConfigService {
    * @param path - 点分路径（如 'a.b.c'）
    * @returns 路径对应的值，如果路径不存在返回 undefined
    */
-  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  private getNestedValue(obj: object, path: string): unknown {
     // 按点分割路径
     const keys = path.split('.');
     // 从根对象开始逐层访问
@@ -948,11 +948,11 @@ class ConfigService {
    * @param path - 点分路径（如 'a.b.c'）
    * @param value - 要设置的值
    */
-  private setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
+  private setNestedValue(obj: object, path: string, value: unknown): void {
     // 按点分割路径
     const keys = path.split('.');
     // 逐层访问，直到倒数第二层
-    let current: Record<string, unknown> = obj;
+    let current: Record<string, unknown> = obj as unknown as Record<string, unknown>;
     for (let i = 0; i < keys.length - 1; i++) {
       const key = keys[i];
       // 如果中间层不存在或不是对象，创建一个空对象

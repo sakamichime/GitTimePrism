@@ -392,8 +392,7 @@ async function loadTauriStore(): Promise<{ set: (key: string, value: unknown) =>
   }
 
   try {
-    // 动态 import Tauri Store 插件（如果未安装会抛错）
-    // @ts-ignore - 此模块可能未安装（降级方案），忽略类型检查避免编译失败
+    // 动态 import Tauri Store 插件（如果后端未注册会抛错，自动降级为 localStorage）
     const storeModule = await import('@tauri-apps/plugin-store');
     // 创建 Store 实例，指定文件名为 state.json
     const store = await storeModule.Store.load(TAURI_STORE_FILE);
@@ -441,7 +440,7 @@ async function loadFromDisk<T>(key: string): Promise<T | null> {
     const store = await loadTauriStore();
     if (store === null) return null; // Tauri Store 不可用，返回 null
     // 读取键值对
-    const value = await store.get<T>(key);
+    const value = await store.get(key) as T | null;
     return value ?? null;
   } catch (err) {
     console.warn('[state-service] 从磁盘加载失败:', err);

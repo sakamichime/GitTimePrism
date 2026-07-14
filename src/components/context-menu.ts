@@ -152,8 +152,8 @@ export interface RefTarget {
 export interface CommitDetailsViewTarget {
 	/** 目标类型：提交详情视图 */
 	readonly type: 'CommitDetailsView';
-	/** 触发右键的详情视图元素（不参与 refresh 重绑定） */
-	readonly elem: HTMLElement;
+	/** 触发右键的详情视图元素（refresh 时会重新绑定到对应的提交行或 ref 标签） */
+	elem: HTMLElement;
 	/** 关联提交的完整哈希值 */
 	readonly hash: string;
 	/** 提交在 commits 数组中的索引 */
@@ -485,8 +485,10 @@ export class ContextMenu {
 			if (commitElem !== null) {
 				/* 提交行元素找到 */
 
-				if (typedTarget.ref === undefined) {
-					/* target 没有 ref，说明是针对提交本身的菜单
+				/* 用 'ref' in 收窄类型，避免访问 CommitTarget 上不存在的 ref 属性 */
+			const refValue = 'ref' in typedTarget ? typedTarget.ref : undefined;
+			if (refValue === undefined) {
+				/* target 没有 ref，说明是针对提交本身的菜单
 					 * （Commit 类型，或 CommitDetailsView 类型但无 ref 关联）
 					 * 对于 CommitDetailsView 类型，elem 是详情视图内的元素，不重新绑定
 					 */
@@ -502,7 +504,7 @@ export class ContextMenu {
 					 */
 					const refElems = commitElem.querySelectorAll('[data-ref-name]') as NodeListOf<HTMLElement>;
 					for (let i = 0; i < refElems.length; i++) {
-						if (refElems[i].dataset.refName === typedTarget.ref) {
+						if (refElems[i].dataset.refName === refValue) {
 							/* 找到匹配的 ref 标签元素 */
 							if (typedTarget.type === 'Ref') {
 								/* Ref 类型：elem 更新为 ref 标签元素 */

@@ -1688,7 +1688,7 @@ export class CommitGraph {
    * @param callback - Ctrl+点击回调函数
    */
   public setOnCommitCtrlClick(callback: (commit: GitCommit) => void): void {
-    (this as { onCommitCtrlClick: (commit: GitCommit) => void }).onCommitCtrlClick = callback;
+    (this as unknown as { onCommitCtrlClick: (commit: GitCommit) => void }).onCommitCtrlClick = callback;
   }
 
   /**
@@ -1699,7 +1699,7 @@ export class CommitGraph {
    * @param callback - 双击 ref 回调函数
    */
   public setOnRefDoubleClick(callback: (refType: 'branch' | 'tag' | 'remote', refName: string, commit: GitCommit) => void): void {
-    (this as { onRefDoubleClick: (refType: 'branch' | 'tag' | 'remote', refName: string, commit: GitCommit) => void }).onRefDoubleClick = callback;
+    (this as unknown as { onRefDoubleClick: (refType: 'branch' | 'tag' | 'remote', refName: string, commit: GitCommit) => void }).onRefDoubleClick = callback;
   }
 
   /**
@@ -1710,7 +1710,7 @@ export class CommitGraph {
    * @param callback - 右键菜单回调函数
    */
   public setOnContextMenu(callback: (target: 'commit' | 'branch' | 'tag' | 'remote', data: GitCommit | string, event: MouseEvent) => void): void {
-    (this as { onContextMenu: (target: 'commit' | 'branch' | 'tag' | 'remote', data: GitCommit | string, event: MouseEvent) => void }).onContextMenu = callback;
+    (this as unknown as { onContextMenu: (target: 'commit' | 'branch' | 'tag' | 'remote', data: GitCommit | string, event: MouseEvent) => void }).onContextMenu = callback;
   }
 
   /**

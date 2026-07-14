@@ -54,6 +54,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // 注册 Store 插件，提供磁盘持久化键值存储（应用状态保存到 ~/.gittimeprism/state.json）
+        .plugin(tauri_plugin_store::Builder::default().build())
         // 暂时不注册日志插件，避免沙箱环境下的文件写入权限问题
         // .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
         
