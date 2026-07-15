@@ -66,7 +66,8 @@ export class SubmoduleManager {
         <!-- 对话框头部：标题和关闭按钮 -->
         <div class="submodule-manager-header">
           <h2 class="submodule-manager-title">子模块管理</h2>
-          <button class="submodule-manager-close-btn" id="submodule-manager-close">&times;</button>
+          <!-- Task 8.2：右上角 X 关闭按钮，添加 close-icon-btn 类统一样式 -->
+          <button class="submodule-manager-close-btn close-icon-btn" id="submodule-manager-close" title="关闭">✕</button>
         </div>
 
         <!-- 对话框主体：子模块列表和操作按钮 -->

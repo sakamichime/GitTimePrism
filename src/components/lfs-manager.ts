@@ -68,7 +68,8 @@ export class LfsManager {
         <!-- 对话框头部：标题和关闭按钮 -->
         <div class="lfs-manager-header">
           <h2 class="lfs-manager-title">LFS 管理</h2>
-          <button class="lfs-manager-close-btn" id="lfs-manager-close">&times;</button>
+          <!-- Task 8.3：右上角 X 关闭按钮，添加 close-icon-btn 类统一样式 -->
+          <button class="lfs-manager-close-btn close-icon-btn" id="lfs-manager-close" title="关闭">✕</button>
         </div>
 
         <!-- 对话框主体 -->

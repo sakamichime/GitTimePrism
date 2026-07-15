@@ -200,12 +200,6 @@ pub fn clone_repo(url: &str, path: &str) -> Result<String, GitError> {
         }
     }
 
-    // 构建克隆命令的参数列表
-    // git clone <url> <path>
-    // url: 远程仓库地址
-    // path: 本地存储路径
-    let clone_args: Vec<&str> = vec![url, path];
-
     // 获取父目录作为工作目录（如果存在）
     // 因为目标目录可能还不存在，所以需要在父目录下执行 clone 命令
     let work_dir = parent_dir.unwrap_or_else(|| ".".to_string());

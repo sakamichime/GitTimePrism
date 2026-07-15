@@ -240,7 +240,8 @@ export class PurgeHistoryDialog {
         <!-- 顶部标题栏 -->
         <div class="purge-history-header">
           <h2>${t('purge.title')}</h2>
-          <button class="purge-close-btn" id="purge-close-btn">&times;</button>
+          <!-- Task 8.4：右上角 X 关闭按钮，添加 close-icon-btn 类统一样式 -->
+          <button class="purge-close-btn close-icon-btn" id="purge-close-btn" title="关闭">✕</button>
         </div>
 
         <!-- filter-repo 不可用提示条（默认隐藏，检测后动态显示） -->

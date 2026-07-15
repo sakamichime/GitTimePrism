@@ -92,7 +92,8 @@ pub fn commit_changes(repo_path: &str, message: &str) -> Result<String, GitError
 
     // 执行 git commit -m "message"
     // -m 参数指定提交消息
-    let output = run_git(repo_path, &["commit", "-m", message])?;
+    // run_git 的返回值此处不需要使用（仅确认命令成功即可），用 _ 丢弃
+    let _ = run_git(repo_path, &["commit", "-m", message])?;
 
     // 获取新提交的哈希值
     // git commit 成功后，HEAD 指向新提交

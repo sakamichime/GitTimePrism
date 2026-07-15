@@ -30,8 +30,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # Tauri 核心框架，提供窗口管理、IPC 通信等功能
 tauri = { version = "2", features = ["macos-private-api"] }
-# Tauri Shell 插件，用于打开外部链接和执行系统命令
+# Tauri Shell 插件，用于执行系统命令（打开外部链接已迁移到 tauri-plugin-opener）
 tauri-plugin-shell = "2"
+# Tauri Opener 插件，用于在系统默认浏览器中打开 URL（替代 shell.open 的 deprecated 方法）
+tauri-plugin-opener = "2"
 # Tauri 对话框插件，提供原生对话框（消息框、文件选择等）
 tauri-plugin-dialog = "2"
 # Tauri 文件系统插件，提供文件读写操作

@@ -678,3 +678,227 @@ a.externalUrl:hover {
   /* 列表项标记 */
   list-style-type: disc;
 }
+
+/* ============================================================
+ * Task 3.2：环境检测分组样式
+ * ============================================================
+ * 用于 settings-panel.ts 中的 renderEnvironmentSection() 方法。
+ * 显示 Git / Python / Git Filter Repo 三项工具的检测结果。
+ * ============================================================ */
+
+/* 检测项行容器 - 包含工具名、状态、版本号和操作按钮 */
+.env-check-row {
+  /* 边框分隔每个检测项 */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  /* 内边距 */
+  padding: 12px;
+  /* 上下间距 */
+  margin-bottom: 8px;
+  /* 背景色 */
+  background: var(--bg-secondary);
+}
+
+/* 检测项信息区 - 工具名、状态、版本号水平排列 */
+.env-check-info {
+  /* 弹性布局 */
+  display: flex;
+  /* 垂直居中 */
+  align-items: center;
+  /* 间距 */
+  gap: 12px;
+  /* 自动换行（窄屏幕时） */
+  flex-wrap: wrap;
+  /* 下方间距 */
+  margin-bottom: 8px;
+}
+
+/* 工具名称 */
+.env-check-name {
+  /* 加粗显示 */
+  font-weight: 600;
+  /* 主要文字色 */
+  color: var(--text-primary);
+  /* 最小宽度，让状态标记对齐 */
+  min-width: 120px;
+}
+
+/* 状态标记基础样式 */
+.env-status {
+  /* 内边距 */
+  padding: 2px 8px;
+  /* 圆角 */
+  border-radius: var(--radius-sm);
+  /* 小字号 */
+  font-size: var(--font-size-xs);
+  /* 加粗 */
+  font-weight: 500;
+  /* 不缩小 */
+  flex-shrink: 0;
+}
+
+/* 已安装状态（绿色） */
+.env-status-installed {
+  /* 绿色背景 */
+  background: rgba(78, 201, 176, 0.15);
+  /* 绿色文字 */
+  color: #4ec9b0;
+}
+
+/* 未安装状态（红色） */
+.env-status-not-installed {
+  /* 红色背景 */
+  background: rgba(244, 135, 113, 0.15);
+  /* 红色文字 */
+  color: #f48771;
+}
+
+/* 未检测状态（灰色） */
+.env-status-unknown {
+  /* 灰色背景 */
+  background: var(--bg-hover);
+  /* 弱化文字色 */
+  color: var(--text-muted);
+}
+
+/* 安装中状态（黄色） */
+.env-status-installing {
+  /* 黄色背景 */
+  background: rgba(230, 195, 80, 0.15);
+  /* 黄色文字 */
+  color: #e6c350;
+}
+
+/* 版本号显示 */
+.env-check-version {
+  /* 弱化文字色 */
+  color: var(--text-muted);
+  /* 小字号 */
+  font-size: var(--font-size-sm);
+  /* 等宽字体显示版本号 */
+  font-family: var(--font-mono);
+}
+
+/* 操作按钮区 */
+.env-check-actions {
+  /* 弹性布局 */
+  display: flex;
+  /* 间距 */
+  gap: 8px;
+}
+
+/* 安装命令文本容器 */
+.env-install-command {
+  /* 上方间距 */
+  margin-top: 8px;
+  /* 内边距 */
+  padding: 8px;
+  /* 背景色（代码块样式） */
+  background: var(--bg-tertiary);
+  /* 圆角 */
+  border-radius: var(--radius-sm);
+  /* 左侧边框强调 */
+  border-left: 3px solid var(--accent);
+}
+
+/* 安装命令文本（code 元素） */
+.env-install-command code {
+  /* 等宽字体 */
+  font-family: var(--font-mono);
+  /* 小字号 */
+  font-size: var(--font-size-xs);
+  /* 主要文字色 */
+  color: var(--text-primary);
+  /* 允许换行（长命令不溢出） */
+  word-break: break-all;
+}
+
+/* ============================================================
+ * Task 4.3：壁纸分组样式
+ * ============================================================
+ * 用于 settings-panel.ts 中的 renderWallpaperSection() 方法。
+ * 显示壁纸预览、主色调色块等。
+ * ============================================================ */
+
+/* 壁纸预览容器 */
+.wallpaper-preview {
+  /* 边框 */
+  border: 1px solid var(--border);
+  /* 圆角 */
+  border-radius: var(--radius-md);
+  /* 内边距 */
+  padding: 12px;
+  /* 背景色 */
+  background: var(--bg-tertiary);
+}
+
+/* 壁纸预览图片 */
+.wallpaper-preview-img {
+  /* 最大宽度 */
+  max-width: 100%;
+  /* 最大高度（限制预览图大小） */
+  max-height: 300px;
+  /* 圆角 */
+  border-radius: var(--radius-sm);
+  /* 居中显示 */
+  display: block;
+  margin: 0 auto;
+  /* 阴影 */
+  box-shadow: var(--shadow-md);
+}
+
+/* 空壁纸预览 */
+.wallpaper-preview-empty {
+  /* 文字居中 */
+  text-align: center;
+  /* 较小的高度 */
+  min-height: 80px;
+  /* 弹性布局，居中内容 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 主色调容器 */
+.wallpaper-colors {
+  /* 上方间距 */
+  margin-top: 12px;
+  /* 弹性布局 */
+  display: flex;
+  /* 垂直居中 */
+  align-items: center;
+  /* 间距 */
+  gap: 8px;
+  /* 自动换行 */
+  flex-wrap: wrap;
+}
+
+/* 主色调标签 */
+.wallpaper-colors-label {
+  /* 弱化文字色 */
+  color: var(--text-muted);
+  /* 小字号 */
+  font-size: var(--font-size-sm);
+  /* 不缩小 */
+  flex-shrink: 0;
+}
+
+/* 主色调色块 */
+.wallpaper-color-swatch {
+  /* 尺寸 */
+  width: 24px;
+  height: 24px;
+  /* 圆角 */
+  border-radius: var(--radius-sm);
+  /* 边框 */
+  border: 1px solid var(--border);
+  /* 鼠标变为手型 */
+  cursor: pointer;
+  /* 过渡动画 */
+  transition: transform var(--transition-fast);
+}
+
+/* 主色调色块悬停状态 - 放大显示 */
+.wallpaper-color-swatch:hover {
+  transform: scale(1.2);
+}

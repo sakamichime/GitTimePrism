@@ -163,6 +163,10 @@ export class App {
     // 阶段 10：注册 repo_changed 事件监听器
     // 当后端文件监听器检测到 .git 目录变化时，触发节点图刷新
     void this.setupRepoChangedListener();
+    // Task 2：首次启动环境检测向导
+    // 检测 Git、Python、git-filter-repo 是否已安装，缺失则自动通过终端安装
+    // 只在首次启动时运行一次，完成后在 localStorage 标记，后续启动不再执行
+    void this.runFirstLaunchCheck();
   }
 
   /**
@@ -242,15 +246,12 @@ export class App {
         <div class="titlebar-controls">
           <button class="titlebar-btn titlebar-btn-minimize" id="btn-minimize" title="最小化">─</button>
           <button class="titlebar-btn titlebar-btn-maximize" id="btn-maximize" title="最大化">□</button>
-          <button class="titlebar-btn titlebar-btn-close" id="btn-close" title="关闭"></button>
+          <button class="titlebar-btn titlebar-btn-close" id="btn-close" title="关闭">✕</button>
         </div>
       </div>
       <header class="toolbar" id="toolbar">
-        <div class="toolbar-section" id="toolbar-left">
-          <button class="btn" id="btn-open-repo">${t('toolbar.openRepo')}</button>
-          <button class="btn" id="btn-clone-repo">${t('toolbar.cloneRepo')}</button>
-          <button class="btn" id="btn-init-repo">${t('toolbar.initRepo')}</button>
-        </div>
+        <!-- Task 6：移除了 toolbar-left 中的"打开仓库""克隆仓库""初始化仓库"按钮 -->
+        <!-- 这些按钮已移至中央面板欢迎页，减少工具栏拥挤 -->
         <div class="toolbar-spacer"></div>
         <div class="toolbar-section" id="toolbar-right">
           <button class="btn" id="btn-tag-manager" title="标签管理">🏷 标签</button>
@@ -264,7 +265,6 @@ export class App {
           <button class="btn" id="btn-find" title="搜索提交 (Ctrl+F)">🔍 查找</button>
           <button class="btn" id="btn-purge-history" title="清理历史文件">🧹 清理历史</button>
           <button class="btn" id="btn-settings" title="设置">⚙ 设置</button>
-          <button class="btn" id="btn-wallpaper" title="设置壁纸">🖼</button>
           <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`">${t('toolbar.toggleTerminal')}</button>
         </div>
       </header>
@@ -293,6 +293,11 @@ export class App {
             <div style="text-align: center; color: var(--text-primary);">
               <p style="font-size: var(--font-size-2xl); margin-bottom: 8px; font-weight: 600;">GitTimePrism</p>
               <p>${t('center.welcome')}</p>
+              <!-- Task 6.2：欢迎页按钮区 - 提供快捷的"打开仓库"和"克隆仓库"入口 -->
+              <div style="margin-top: 24px; display: flex; gap: 12px; justify-content: center;">
+                <button class="btn btn-primary" id="btn-welcome-open">${t('welcome.openRepo')}</button>
+                <button class="btn" id="btn-welcome-clone">${t('welcome.cloneRepo')}</button>
+              </div>
             </div>
           </div>
         </main>
@@ -395,34 +400,10 @@ export class App {
    *
    * 1. 尝试从 localStorage 加载之前保存的壁纸
    * 2. 如果有壁纸，应用到壁纸层并启动动态变色
-   * 3. 绑定壁纸选择按钮
+   * 注意：壁纸选择/清除按钮已迁移至设置面板（settings-panel.ts 的壁纸分组）
    */
   private initWallpaper(): void {
     this.loadSavedWallpaper();
-
-    document.getElementById('btn-wallpaper')?.addEventListener('click', async () => {
-      try {
-        const result = await wallpaperService.selectWallpaper();
-        if (result && result.dataUrl) {
-          this.applyWallpaper(result.dataUrl, result.dominantColors);
-          console.log('[壁纸] 壁纸已成功应用');
-        }
-      } catch (err) {
-        console.error('设置壁纸失败:', err);
-        alert('设置壁纸失败：' + String(err));
-      }
-    });
-
-    const btnWallpaper = document.getElementById('btn-wallpaper');
-    if (btnWallpaper) {
-      btnWallpaper.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        if (this.hasWallpaper) {
-          wallpaperService.clearWallpaper();
-          this.removeWallpaper();
-        }
-      });
-    }
   }
 
   /**
@@ -859,19 +840,29 @@ export class App {
     document.getElementById('btn-toggle-terminal-status')?.addEventListener('click', () => this.toggleTerminal());
     document.getElementById('btn-close-terminal')?.addEventListener('click', () => this.toggleTerminal());
 
-    // ---- 绑定仓库操作按钮 ----
-    document.getElementById('btn-open-repo')?.addEventListener('click', async () => {
+    // ---- 绑定仓库操作按钮（Task 6.3：按钮已从工具栏移至欢迎页）----
+    // "打开仓库"按钮 - 点击后弹出目录选择对话框，打开选定的 Git 仓库
+    // 如果选择的目录不是 Git 仓库，显示"非 Git 仓库"提示 + 初始化按钮（Task 6.4 + Task 9）
+    document.getElementById('btn-welcome-open')?.addEventListener('click', async () => {
       try {
         const dir = await repoService.selectDirectory();
         if (!dir) return;
-        const info = await repoService.openRepo(dir);
-        this.onRepoOpened(info);
+        try {
+          // 尝试打开仓库：如果目录不是 Git 仓库，后端会抛出错误
+          const info = await repoService.openRepo(dir);
+          this.onRepoOpened(info);
+        } catch (openErr) {
+          // Task 6.4 + Task 9：打开的目录不是 Git 仓库时，清空旧数据并显示提示 + 初始化按钮
+          console.error('打开仓库失败（该目录可能不是 Git 仓库）:', openErr);
+          this.showNotGitRepoPrompt(dir);
+        }
       } catch (err) {
-        console.error('打开仓库失败:', err);
+        console.error('选择目录失败:', err);
       }
     });
 
-    document.getElementById('btn-clone-repo')?.addEventListener('click', async () => {
+    // "克隆仓库"按钮 - 点击后弹出 URL 输入框和目录选择对话框，克隆远程仓库到本地
+    document.getElementById('btn-welcome-clone')?.addEventListener('click', async () => {
       try {
         const url = prompt(t('repo.cloneUrlPrompt'));
         if (!url) return;
@@ -882,17 +873,7 @@ export class App {
         this.onRepoOpened(info);
       } catch (err) {
         console.error('克隆仓库失败:', err);
-      }
-    });
-
-    document.getElementById('btn-init-repo')?.addEventListener('click', async () => {
-      try {
-        const dir = await repoService.selectDirectory();
-        if (!dir) return;
-        const info = await repoService.initRepo(dir);
-        this.onRepoOpened(info);
-      } catch (err) {
-        console.error('初始化仓库失败:', err);
+        alert('克隆仓库失败：' + String(err));
       }
     });
 
@@ -1021,9 +1002,11 @@ export class App {
         return;
       }
       // 创建设置面板并显示
-      // 传入当前仓库路径和成功回调（配置保存后刷新所有组件）
+      // 传入当前仓库路径和成功回调（配置保存后刷新所有组件 + 重新加载壁纸）
       const settingsPanel = new SettingsPanel(this.currentRepoPath, () => {
         this.refreshAllComponents();
+        // 壁纸选择/清除已迁移至设置面板，需重新加载以应用视觉变更
+        this.loadSavedWallpaper();
       });
       settingsPanel.show();
     });
@@ -1976,13 +1959,140 @@ export class App {
   }
 
   /**
+   * 清空所有组件数据（Task 9：切换仓库时清空旧数据）
+   *
+   * 当切换到非 Git 仓库或关闭仓库时，清空节点图、分支列表、文件列表等组件，
+   * 避免显示上一个仓库的过期数据。
+   *
+   * 此方法会：
+   *   1. 清空中央面板（节点图）的 DOM 内容
+   *   2. 清空左侧面板（文件变更列表）的 DOM 内容
+   *   3. 清空右侧面板（提交详情）的 DOM 内容
+   *   4. 隐藏提交输入区域
+   *   5. 重置所有组件实例引用为 null（下次打开仓库时会重新创建）
+   *   6. 清空当前仓库路径
+   *   7. 重置状态栏显示
+   */
+  private clearAllComponents(): void {
+    /* 清空中央面板（节点图区域）的 DOM 内容 */
+    const centerBody = document.getElementById('center-body');
+    if (centerBody) {
+      centerBody.innerHTML = '';
+    }
+
+    /* 重置所有组件实例引用为 null，避免旧实例持有过期数据和事件监听器 */
+    this.commitGraph = null;
+    this.branchList = null;
+    this.fileList = null;
+    this.commitInput = null;
+    this.diffViewer = null;
+    this.commitDetail = null;
+    this.fileHistory = null;
+    this.stashManager = null;
+    this.findWidget = null;
+
+    /* 清空左侧面板（文件变更列表）- 显示"没有打开的仓库"提示 */
+    const sidebarBody = document.getElementById('sidebar-body');
+    if (sidebarBody) {
+      sidebarBody.innerHTML = `<p style="color: var(--text-muted); padding: 16px; text-align: center;">${t('sidebar.noRepoOpen')}</p>`;
+    }
+
+    /* 清空右侧面板（提交详情）- 显示"请选择一个提交"提示 */
+    const detailBody = document.getElementById('detail-body');
+    if (detailBody) {
+      detailBody.innerHTML = `<p style="color: var(--text-muted); padding: 16px; text-align: center;">${t('detail.selectCommit')}</p>`;
+    }
+
+    /* 隐藏提交输入区域（没有仓库时不需要提交功能） */
+    const commitInputArea = document.getElementById('commit-input-area');
+    if (commitInputArea) {
+      commitInputArea.style.display = 'none';
+    }
+
+    /* 清空当前仓库路径（防止后续操作使用过期路径） */
+    this.currentRepoPath = null;
+
+    /* 重置状态栏显示 */
+    const repoPathEl = document.getElementById('statusbar-repo-path');
+    if (repoPathEl) {
+      repoPathEl.textContent = '';
+    }
+    const branchEl = document.getElementById('statusbar-branch');
+    if (branchEl) {
+      branchEl.style.display = 'none';
+    }
+    const aheadBehindEl = document.getElementById('statusbar-ahead-behind');
+    if (aheadBehindEl) {
+      aheadBehindEl.style.display = 'none';
+    }
+    const commitCountEl = document.getElementById('statusbar-commit-count');
+    if (commitCountEl) {
+      commitCountEl.style.display = 'none';
+    }
+
+    /* 隐藏对比面板（如果之前打开了） */
+    this.hideDiffPanel();
+  }
+
+  /**
+   * 显示"非 Git 仓库"提示页面（Task 6.4 + Task 6.5 + Task 9）
+   *
+   * 当用户打开的目录不是 Git 仓库时，在中央面板显示提示信息和"初始化仓库"按钮。
+   * 同时清空旧的节点图、分支列表、文件列表等数据，避免显示过期内容。
+   *
+   * 点击"初始化仓库"按钮会调用 repoService.initRepo(dir) 在该目录执行 git init，
+   * 初始化成功后自动打开仓库。
+   *
+   * @param dir - 用户选择的目录路径（该目录不是 Git 仓库）
+   */
+  private showNotGitRepoPrompt(dir: string): void {
+    /* Task 9：先清空所有组件数据，避免显示上一个仓库的过期内容 */
+    this.clearAllComponents();
+
+    /* 在中央面板显示"非 Git 仓库"提示 + 初始化按钮 */
+    const centerBody = document.getElementById('center-body');
+    if (centerBody) {
+      centerBody.innerHTML = `
+        <div style="text-align: center;">
+          <p style="color: var(--text-muted); margin-bottom: 16px;">${t('welcome.notGitRepo')}</p>
+          <button class="btn btn-primary" id="btn-welcome-init">${t('welcome.initRepoBtn')}</button>
+        </div>
+      `;
+
+      /* Task 6.5：绑定"初始化仓库"按钮事件 */
+      /* 点击后调用 repoService.initRepo(dir) 在该目录执行 git init */
+      document.getElementById('btn-welcome-init')?.addEventListener('click', async () => {
+        try {
+          /* 调用后端执行 git init，返回新仓库信息 */
+          const info = await repoService.initRepo(dir);
+          /* 初始化成功后，自动打开仓库（加载节点图、分支列表等） */
+          this.onRepoOpened(info);
+        } catch (err) {
+          console.error('初始化仓库失败:', err);
+          alert('初始化仓库失败：' + String(err));
+        }
+      });
+    }
+  }
+
+  /**
    * 刷新所有组件
    *
    * 在提交、切换分支等操作后调用，重新加载所有数据。
    * 同时检查暂存文件状态并更新提交按钮。
+   *
+   * Task 9：如果当前仓库路径无效（如切换到非 Git 仓库后），且组件实例仍存在，
+   * 会先清空所有组件数据，避免显示过期内容。
    */
   private async refreshAllComponents(): Promise<void> {
-    if (!this.currentRepoPath) return;
+    /* Task 9：如果当前没有有效的仓库路径，清空所有组件数据并返回 */
+    if (!this.currentRepoPath) {
+      /* 如果组件实例存在，说明是从有效仓库切换到无效状态，需要清空 */
+      if (this.commitGraph || this.fileList || this.branchList) {
+        this.clearAllComponents();
+      }
+      return;
+    }
 
     try {
       // 刷新文件列表
@@ -2035,5 +2145,115 @@ export class App {
     } catch (err) {
       console.error('刷新组件失败:', err);
     }
+  }
+
+  /**
+   * 首次启动环境检测向导（Task 2）
+   *
+   * 在应用首次启动时检测 Git、Python、git-filter-repo 三项依赖是否已安装。
+   * 如果有缺失项，自动打开终端面板并通过 PTY 发送安装命令。
+   * 安装命令发送完毕后提示用户重启应用。
+   *
+   * 此方法只在首次启动时运行一次，完成后在 localStorage 设置
+   * `firstLaunchCheckCompleted = 'true'`，后续启动不再执行。
+   *
+   * 检测项与安装命令：
+   *   1. Git - 通过 invoke('check_git_installed') 检测
+   *      缺失时安装命令：winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements
+   *   2. Python - 通过 invoke('check_python_installed') 检测
+   *      缺失时安装命令：winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements
+   *   3. git-filter-repo - 通过 invoke('check_filter_repo_available') 检测
+   *      缺失时安装命令：pip install git-filter-repo
+   *
+   * 安装命令通过终端 PTY 发送（复用 TerminalPanel 的 writeToPty 机制），
+   * 用户可以在终端中实时查看安装进度。
+   */
+  private async runFirstLaunchCheck(): Promise<void> {
+    /* 读取 localStorage，如果之前已完成过检测则直接返回，不重复执行 */
+    if (localStorage.getItem('firstLaunchCheckCompleted') === 'true') {
+      return;
+    }
+
+    /* 动态导入 Tauri 的 invoke 函数（用于调用后端命令） */
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    /* 收集缺失的依赖项及其安装命令 */
+    const missingItems: { name: string; installCommand: string }[] = [];
+
+    /* 1. 检测 Git 是否已安装 */
+    /* 后端返回 GitCheckResult: { installed: bool, version: String, path: String } */
+    try {
+      const gitResult = await invoke<{ installed: boolean; version: string; path: string }>('check_git_installed');
+      if (!gitResult.installed) {
+        missingItems.push({
+          name: 'Git',
+          installCommand: 'winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements',
+        });
+      }
+    } catch (err) {
+      /* 检测失败时记录警告，不中断流程（可能后端命令暂未实现） */
+      console.warn('[首次启动检测] 检测 Git 失败:', err);
+    }
+
+    /* 2. 检测 Python 是否已安装 */
+    /* 后端返回 PythonCheckResult: { installed: bool, version: Option<String> } */
+    try {
+      const pythonResult = await invoke<{ installed: boolean; version: string | null }>('check_python_installed');
+      if (!pythonResult.installed) {
+        missingItems.push({
+          name: 'Python',
+          installCommand: 'winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements',
+        });
+      }
+    } catch (err) {
+      console.warn('[首次启动检测] 检测 Python 失败:', err);
+    }
+
+    /* 3. 检测 git-filter-repo 是否可用 */
+    /* 后端返回 FilterRepoStatus: { available: bool, version: string | null } */
+    try {
+      const filterRepoResult = await invoke<{ available: boolean; version: string | null }>('check_filter_repo_available');
+      if (!filterRepoResult.available) {
+        missingItems.push({
+          name: 'git-filter-repo',
+          installCommand: 'pip install git-filter-repo',
+        });
+      }
+    } catch (err) {
+      console.warn('[首次启动检测] 检测 git-filter-repo 失败:', err);
+    }
+
+    /* 如果有缺失项，自动打开终端面板并通过 PTY 发送安装命令 */
+    if (missingItems.length > 0) {
+      console.log('[首次启动检测] 检测到缺失依赖:', missingItems.map(item => item.name).join(', '));
+
+      /* 打开终端面板（复用现有的 toggleTerminal 机制） */
+      /* toggleTerminal 内部会创建 TerminalPanel 实例并异步初始化 PTY */
+      this.toggleTerminal();
+
+      /* 等待终端 PTY 初始化完成 */
+      /* toggleTerminal 是同步方法，但内部 init() 是异步的，需要等待一段时间让 PTY 启动 */
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      /* 通过终端 PTY 依次发送安装命令 */
+      if (this.terminalInstance) {
+        for (const item of missingItems) {
+          /* 发送安装命令并按回车执行（\n 表示回车键） */
+          /* shell 会排队执行命令：前一条执行完后才会执行下一条 */
+          await this.terminalInstance.writeToPty(item.installCommand + '\n');
+          /* 命令之间等待 500ms，避免命令输入过快导致 shell 处理混乱 */
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      /* 提示用户安装完成后重启应用 */
+      /* 使用 alert 同步提示，确保用户看到消息 */
+      alert('检测到缺失依赖（' + missingItems.map(item => item.name).join('、') + '），\n已自动在终端中发送安装命令。\n\n请在终端中等待安装完成后，重启 GitTimePrism 使环境生效。');
+    } else {
+      console.log('[首次启动检测] 所有依赖已安装，无需安装');
+    }
+
+    /* 标记首次启动检测已完成，后续启动不再执行 */
+    localStorage.setItem('firstLaunchCheckCompleted', 'true');
   }
 }

@@ -52,6 +52,8 @@ pub fn run() {
     tauri::Builder::default()
         // 注册 Tauri 插件（插件提供额外的系统功能）
         .plugin(tauri_plugin_shell::init())
+        // 注册 Opener 插件，用于在默认浏览器中打开 URL（替代已废弃的 shell.open）
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         // 注册 Store 插件，提供磁盘持久化键值存储（应用状态保存到 ~/.gittimeprism/state.json）
@@ -66,6 +68,9 @@ pub fn run() {
             commands::system::open_external_url,
             // 获取 Git 版本号（Task 11.4：状态栏增强）
             commands::system::get_git_version,
+            // 检测 Python 是否已安装（Task 1：后端新增 python 检测命令）
+            // 返回 { installed: bool, version: Option<String> }
+            commands::system::check_python_installed,
             // 终端命令
             commands::terminal::start_pty,
             commands::terminal::write_to_pty,

@@ -288,7 +288,21 @@
               background var(--transition-fast);    /* 宽度和背景色的过渡动画 */
   flex-shrink: 0;                                  /* 不允许被压缩 */
   position: relative;                             /* 相对定位 */
-  z-index: 10;                                     /* 层级稍高，确保可点击 */
+  z-index: 100;                                    /* 层级提高，确保可点击且不被面板遮挡（Task 5 修复：原 z-index:10 过低） */
+  pointer-events: auto;                            /* 显式启用鼠标事件，防止父级元素 pointer-events 影响（Task 5 修复） */
+  touch-action: none;                              /* 禁止触摸默认行为，防止拖拽时触发滚动（Task 5 修复） */
+}
+
+/* 垂直拖拽手柄的伪元素 - 扩大可点击区域（Task 5 修复） */
+/* 视觉宽度只有 4px，通过伪元素将实际可点击区域向左右各扩展 4px（共 12px），方便用户精确点击 */
+.resize-handle-vertical::before {
+  content: '';                                     /* 空内容，仅用于扩大点击区域 */
+  position: absolute;                              /* 绝对定位，相对于手柄 */
+  top: 0;                                          /* 顶部对齐 */
+  bottom: 0;                                       /* 底部对齐 */
+  left: -4px;                                      /* 向左扩展 4px 点击区域 */
+  right: -4px;                                     /* 向右扩展 4px 点击区域 */
+  z-index: 100;                                    /* 与手柄同层 */
 }
 
 /* 垂直拖拽手柄悬停效果 */
@@ -310,7 +324,21 @@
               background var(--transition-fast);    /* 高度和背景色的过渡动画 */
   flex-shrink: 0;                                  /* 不允许被压缩 */
   position: relative;                               /* 相对定位 */
-  z-index: 10;                                     /* 层级稍高 */
+  z-index: 100;                                     /* 层级提高，确保可点击且不被面板遮挡（Task 5 修复：原 z-index:10 过低） */
+  pointer-events: auto;                             /* 显式启用鼠标事件，防止父级元素 pointer-events 影响（Task 5 修复） */
+  touch-action: none;                               /* 禁止触摸默认行为，防止拖拽时触发滚动（Task 5 修复） */
+}
+
+/* 水平拖拽手柄的伪元素 - 扩大可点击区域（Task 5 修复） */
+/* 视觉高度只有 4px，通过伪元素将实际可点击区域向上下各扩展 4px（共 12px），方便用户精确点击 */
+.resize-handle-horizontal::before {
+  content: '';                                      /* 空内容，仅用于扩大点击区域 */
+  position: absolute;                               /* 绝对定位，相对于手柄 */
+  left: 0;                                          /* 左侧对齐 */
+  right: 0;                                         /* 右侧对齐 */
+  top: -4px;                                        /* 向上扩展 4px 点击区域 */
+  bottom: -4px;                                     /* 向下扩展 4px 点击区域 */
+  z-index: 100;                                     /* 与手柄同层 */
 }
 
 /* 水平拖拽手柄悬停效果 */
@@ -3134,4 +3162,102 @@ body.column-resizing * {
 .diff-deletions {
   color: #f48771;                              /* 红色（参考 VS Code 配色） */
   font-weight: 500;                            /* 中等字重 */
+}
+
+/* ============================================================
+ * 统一的 X 关闭按钮样式（Task 8.7）
+ * ============================================================
+ * 用于所有内部窗口/面板/对话框的右上角关闭按钮。
+ * 提供一致的视觉样式：无边框、X 图标、悬停高亮。
+ * 各组件通过添加 .close-icon-btn 类来复用此样式。
+ * ============================================================ */
+
+/* 关闭按钮基础样式 */
+.close-icon-btn {
+  background: none;                            /* 无背景 */
+  border: none;                                /* 无边框 */
+  color: var(--text-muted);                    /* 弱化文字色 */
+  font-size: 18px;                             /* 字号 18px，让 ✕ 图标清晰可见 */
+  cursor: pointer;                             /* 鼠标变为手型 */
+  padding: 4px 8px;                            /* 内边距，扩大点击区域 */
+  border-radius: 4px;                          /* 圆角 */
+  display: flex;                               /* 弹性布局 */
+  align-items: center;                         /* 垂直居中 */
+  justify-content: center;                     /* 水平居中 */
+  transition: background var(--transition-fast), color var(--transition-fast); /* 过渡动画 */
+  line-height: 1;                              /* 紧凑行高，避免 ✕ 上下留白过多 */
+}
+
+/* 关闭按钮悬停状态 - 背景变亮、文字变亮 */
+.close-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);        /* 半透明白色背景 */
+  color: var(--text-primary);                  /* 主要文字色 */
+}
+
+/* 关闭按钮按下状态 - 背景更深 */
+.close-icon-btn:active {
+  background: rgba(255, 255, 255, 0.2);        /* 更深的半透明背景 */
+}
+
+/* ============================================================
+ * Task 8.5：终端面板关闭按钮（#btn-close-terminal）样式
+ * ============================================================
+ * 由于终端面板的 HTML 由 app.ts 渲染，而 app.ts 由另一个 agent 修改，
+ * 此处仅通过 CSS 将 #btn-close-terminal 显示为 X 图标风格。
+ * 通过 ::before 伪元素注入 ✕ 字符，避免修改 app.ts 中的按钮文字。
+ * ============================================================ */
+
+/* 终端关闭按钮基础样式 - 与 .close-icon-btn 保持一致 */
+#btn-close-terminal {
+  background: none;                            /* 无背景 */
+  border: none;                                /* 无边框 */
+  color: var(--text-muted);                    /* 弱化文字色 */
+  font-size: 18px;                             /* 字号 18px */
+  cursor: pointer;                             /* 手型 */
+  padding: 4px 8px;                            /* 内边距 */
+  border-radius: 4px;                          /* 圆角 */
+  transition: background var(--transition-fast), color var(--transition-fast); /* 过渡 */
+  line-height: 1;                              /* 紧凑行高 */
+}
+
+/* 终端关闭按钮悬停状态 */
+#btn-close-terminal:hover {
+  background: rgba(255, 255, 255, 0.1);        /* 半透明白色背景 */
+  color: var(--text-primary);                  /* 主要文字色 */
+}
+
+/* 终端关闭按钮按下状态 */
+#btn-close-terminal:active {
+  background: rgba(255, 255, 255, 0.2);        /* 更深的半透明背景 */
+}
+
+/* ============================================================
+ * Task 8.6：对比面板关闭按钮（#btn-close-diff-panel）样式
+ * ============================================================
+ * 对比面板的关闭按钮在 app.ts 中已经是 ✕ 字符（btn-icon 类），
+ * 此处通过 CSS 统一其样式，与 .close-icon-btn 保持一致的视觉效果。
+ * ============================================================ */
+
+/* 对比面板关闭按钮基础样式 */
+#btn-close-diff-panel {
+  background: none;                            /* 无背景 */
+  border: none;                                /* 无边框 */
+  color: var(--text-muted);                    /* 弱化文字色 */
+  font-size: 18px;                             /* 字号 18px */
+  cursor: pointer;                             /* 手型 */
+  padding: 4px 8px;                            /* 内边距 */
+  border-radius: 4px;                          /* 圆角 */
+  transition: background var(--transition-fast), color var(--transition-fast); /* 过渡 */
+  line-height: 1;                              /* 紧凑行高 */
+}
+
+/* 对比面板关闭按钮悬停状态 */
+#btn-close-diff-panel:hover {
+  background: rgba(255, 255, 255, 0.1);        /* 半透明白色背景 */
+  color: var(--text-primary);                  /* 主要文字色 */
+}
+
+/* 对比面板关闭按钮按下状态 */
+#btn-close-diff-panel:active {
+  background: rgba(255, 255, 255, 0.2);        /* 更深的半透明背景 */
 }

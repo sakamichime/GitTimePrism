@@ -481,7 +481,7 @@ async fn download_image(url: &str) -> Result<Option<(Vec<u8>, String, bool)>, St
  * - Ok(None) - 头像不存在或获取失败
  * - Err(String) - 错误
  */
-pub async fn get_avatar(repo_path: &str, email: &str, author: &str) -> Result<Option<String>, String> {
+pub async fn get_avatar(repo_path: &str, email: &str, _author: &str) -> Result<Option<String>, String> {
     // 加载缓存索引
     let mut cache = load_cache_index();
 

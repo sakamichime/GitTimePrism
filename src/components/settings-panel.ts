@@ -27,6 +27,10 @@ import { configService, type RepoConfig } from '../services/config-service.js';
 import { invoke } from '@tauri-apps/api/core';
 /* Task 13.7：导入 PR 工具，用于自动检测 Provider 和解析远程 URL */
 import { detectPullRequestProvider, parseRemoteUrl } from '../utils/pr-utils.js';
+/* Task 3.2：导入国际化服务 t 函数，用于环境检测分组的文本翻译（当前以中文为主） */
+import { t } from '../services/i18n.js';
+/* Task 4.3：导入壁纸服务，用于在设置面板中选择/清除壁纸 */
+import { wallpaperService } from '../services/wallpaper.js';
 
 /**
  * 设置面板组件类
@@ -43,6 +47,23 @@ export class SettingsPanel {
   private overlay: HTMLElement | null = null;
   /** 从后端加载的 Git 仓库配置（含 user.name/email、remotes 等） */
   private repoConfig: RepoConfig | null = null;
+
+  /* Task 3.2：环境检测状态缓存
+   * 存储三项工具（Git / Python / Git Filter Repo）的检测结果。
+   * 在 renderEnvironmentSection() 渲染时使用，点击"重新检测"按钮后更新。
+   * 初始值为 null，表示尚未检测；首次切换到环境检测分组时会自动触发检测。 */
+  private envCheckStatus: {
+    git: { installed: boolean; version: string } | null;
+    python: { installed: boolean; version: string | null } | null;
+    filterRepo: { available: boolean; version: string | null } | null;
+  } = { git: null, python: null, filterRepo: null };
+
+  /* Task 3.2：环境检测是否正在执行中（用于显示 loading 状态，防止重复触发） */
+  private envChecking: boolean = false;
+
+  /* Task 3.2：正在安装的工具名（用于显示 loading 状态）
+   * 取值：'git' / 'python' / 'filter-repo' / null */
+  private envInstalling: string | null = null;
 
   /**
    * 构造函数
@@ -88,7 +109,8 @@ export class SettingsPanel {
         <!-- 对话框头部：标题和关闭按钮 -->
         <div class="settings-panel-header">
           <h2 class="settings-panel-title">⚙ 设置</h2>
-          <button class="settings-panel-close-btn" id="settings-close">&times;</button>
+          <!-- Task 8.1：右上角 X 关闭按钮，添加 close-icon-btn 类统一样式 -->
+          <button class="settings-panel-close-btn close-icon-btn" id="settings-close" title="关闭">✕</button>
         </div>
 
         <!-- 对话框主体：左侧导航 + 右侧表单 -->
@@ -112,6 +134,10 @@ export class SettingsPanel {
               <li class="settings-nav-item" data-section="remote-management">远程仓库管理</li>
               <li class="settings-nav-item" data-section="pr-creation">PR 创建</li>
               <li class="settings-nav-item" data-section="config-export">配置导出</li>
+              <!-- Task 3.1：环境检测分组项 - 显示 Git/Python/git-filter-repo 的安装状态 -->
+              <li class="settings-nav-item" data-section="environment">环境检测</li>
+              <!-- Task 4.2：壁纸分组项 - 提供壁纸选择/清除功能 -->
+              <li class="settings-nav-item" data-section="wallpaper">壁纸</li>
             </ul>
           </nav>
 
@@ -267,6 +293,30 @@ export class SettingsPanel {
         e.preventDefault();
         await this.handleRemoteAdd();
         break;
+      /* Task 3.2：环境检测"重新检测"按钮 */
+      case 'env-recheck-btn':
+        e.preventDefault();
+        await this.handleEnvironmentRecheck();
+        break;
+      /* Task 4.3：壁纸"选择壁纸"按钮 */
+      case 'wallpaper-select-btn':
+        e.preventDefault();
+        await this.handleWallpaperSelect();
+        break;
+      /* Task 4.3：壁纸"清除壁纸"按钮 */
+      case 'wallpaper-clear-btn':
+        e.preventDefault();
+        this.handleWallpaperClear();
+        break;
+    }
+
+    /* Task 3.2：处理环境检测"安装"按钮（通过 data-tool 属性标识工具类型） */
+    const installTool = btn.dataset.tool;
+    if (installTool && btn.classList.contains('env-install-btn')) {
+      e.preventDefault();
+      e.stopPropagation();
+      await this.handleInstallTool(installTool);
+      return;
     }
   }
 
@@ -588,6 +638,18 @@ export class SettingsPanel {
         break;
       case 'config-export':
         content.innerHTML = this.renderConfigExportSection();
+        break;
+      case 'environment':
+        /* Task 3.2：渲染环境检测分组 */
+        content.innerHTML = this.renderEnvironmentSection();
+        /* 首次进入环境检测分组时自动触发检测（如果尚未检测过） */
+        if (this.envCheckStatus.git === null && !this.envChecking) {
+          void this.handleEnvironmentRecheck();
+        }
+        break;
+      case 'wallpaper':
+        /* Task 4.3：渲染壁纸分组 */
+        content.innerHTML = this.renderWallpaperSection();
         break;
       default:
         content.innerHTML = '<p class="settings-error">未知分组</p>';
@@ -1837,6 +1899,416 @@ export class SettingsPanel {
         </ul>
       </div>
     `;
+  }
+
+  /* ====================================================================== *
+   * Task 3.2 / Task 4.3：环境检测分组与壁纸分组的渲染方法
+   * ====================================================================== */
+
+  /**
+   * Task 3.2：渲染"环境检测"分组
+   *
+   * 显示三项工具的检测结果：
+   *   1. Git（版本控制工具，应用核心依赖）
+   *   2. Python（用于 git-filter-repo 的运行环境）
+   *   3. Git Filter Repo（历史清理工具，可选但推荐）
+   *
+   * 每项显示：
+   *   - 工具名称
+   *   - 安装状态（✓ 已安装 / ✗ 未安装）
+   *   - 版本号（已安装时显示，未安装时显示"-"）
+   *   - 操作按钮（未安装时显示"安装"按钮，已安装时不显示）
+   *
+   * 顶部提供"重新检测"按钮，点击后重新执行三项检测。
+   * 检测过程中显示 loading 状态，安装过程中对应项显示"安装中..."。
+   *
+   * 后端命令：
+   *   - invoke('check_git_installed') → { installed: boolean, version: string, path: string }
+   *   - invoke('check_python_installed') → { installed: boolean, version: string | null }
+   *   - invoke('check_filter_repo_available') → { available: boolean, version: string | null }
+   */
+  private renderEnvironmentSection(): string {
+    /* 如果正在检测中（首次进入或点击重新检测），显示 loading 状态 */
+    if (this.envChecking) {
+      return `
+        <h3 class="settings-section-title">环境检测</h3>
+        <p class="settings-section-desc">检测应用运行所需的工具是否已安装。</p>
+        <div class="settings-loading">正在检测环境，请稍候...</div>
+      `;
+    }
+
+    /* 渲染三项工具的检测结果行 */
+    const gitRow = this.renderEnvCheckRow(
+      'Git',
+      'git',
+      this.envCheckStatus.git?.installed ?? null,
+      this.envCheckStatus.git?.version ?? null,
+      'winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements'
+    );
+
+    const pythonRow = this.renderEnvCheckRow(
+      'Python',
+      'python',
+      this.envCheckStatus.python?.installed ?? null,
+      this.envCheckStatus.python?.version ?? null,
+      'winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements'
+    );
+
+    const filterRepoRow = this.renderEnvCheckRow(
+      'Git Filter Repo',
+      'filter-repo',
+      this.envCheckStatus.filterRepo?.available ?? null,
+      this.envCheckStatus.filterRepo?.version ?? null,
+      'pip install git-filter-repo'
+    );
+
+    return `
+      <h3 class="settings-section-title">环境检测</h3>
+      <p class="settings-section-desc">检测应用运行所需的工具是否已安装。未安装项可点击"安装"按钮进行安装。</p>
+
+      <!-- 重新检测按钮 - 点击后重新执行三项检测 -->
+      <div class="form-group">
+        <button class="btn btn-secondary" id="env-recheck-btn" type="button">🔄 重新检测</button>
+        <p class="form-hint">点击按钮重新检测 Git、Python、Git Filter Repo 的安装状态。</p>
+      </div>
+
+      <!-- 检测结果列表 -->
+      <div class="settings-subsection">
+        <h4 class="settings-subsection-title">检测结果</h4>
+        ${gitRow}
+        ${pythonRow}
+        ${filterRepoRow}
+      </div>
+
+      <!-- 安装说明 -->
+      <div class="form-group">
+        <h4 class="settings-subsection-title">安装说明</h4>
+        <ul class="settings-list">
+          <li><strong>Git</strong>：版本控制工具，应用核心依赖。通过 winget 安装 Git for Windows。</li>
+          <li><strong>Python</strong>：用于运行 git-filter-repo。通过 winget 安装 Python 3.12。</li>
+          <li><strong>Git Filter Repo</strong>：用于清理历史中的大文件。通过 pip 安装（需要先安装 Python）。</li>
+        </ul>
+        <p class="form-hint">安装完成后，请点击"重新检测"按钮验证安装结果。部分安装可能需要重启应用才能生效。</p>
+      </div>
+    `;
+  }
+
+  /**
+   * Task 3.2：渲染单个环境检测项的行 HTML
+   *
+   * @param displayName - 工具的显示名称（如 "Git"）
+   * @param toolKey - 工具标识符（'git' / 'python' / 'filter-repo'），用于安装按钮的 data-tool 属性
+   * @param installed - 是否已安装（true/false/null，null 表示尚未检测）
+   * @param version - 版本号字符串（已安装时显示）
+   * @param installCommand - 安装命令文本（显示给用户参考）
+   * @returns 该工具的检测行 HTML
+   */
+  private renderEnvCheckRow(
+    displayName: string,
+    toolKey: string,
+    installed: boolean | null,
+    version: string | null,
+    installCommand: string
+  ): string {
+    /* 根据安装状态确定状态标记和颜色 */
+    let statusBadge: string;
+    let versionDisplay: string;
+
+    if (installed === null) {
+      /* 尚未检测 */
+      statusBadge = '<span class="env-status env-status-unknown">未检测</span>';
+      versionDisplay = '-';
+    } else if (installed) {
+      /* 已安装：显示绿色 ✓ 标记和版本号 */
+      statusBadge = '<span class="env-status env-status-installed">✓ 已安装</span>';
+      versionDisplay = version ? this.escapeAttr(version) : '-';
+    } else {
+      /* 未安装：显示红色 ✗ 标记 */
+      statusBadge = '<span class="env-status env-status-not-installed">✗ 未安装</span>';
+      versionDisplay = '-';
+    }
+
+    /* 如果该工具正在安装中，显示 loading 状态 */
+    const isInstalling = this.envInstalling === toolKey;
+    if (isInstalling) {
+      statusBadge = '<span class="env-status env-status-installing">⏳ 安装中...</span>';
+    }
+
+    /* 未安装且不在安装中时，显示"安装"按钮 */
+    const showInstallBtn = installed === false && !isInstalling;
+    const installBtnHtml = showInstallBtn
+      ? `<button class="btn btn-small btn-primary env-install-btn" data-tool="${toolKey}" type="button">📥 安装</button>`
+      : '';
+
+    /* 显示安装命令文本（让用户可以复制手动执行） */
+    const commandHtml = (installed === false)
+      ? `<div class="env-install-command"><code>${this.escapeAttr(installCommand)}</code></div>`
+      : '';
+
+    return `
+      <div class="env-check-row" data-tool="${toolKey}">
+        <div class="env-check-info">
+          <span class="env-check-name">${this.escapeAttr(displayName)}</span>
+          ${statusBadge}
+          <span class="env-check-version">版本: ${versionDisplay}</span>
+        </div>
+        <div class="env-check-actions">
+          ${installBtnHtml}
+        </div>
+        ${commandHtml}
+      </div>
+    `;
+  }
+
+  /**
+   * Task 3.2：处理"重新检测"按钮点击
+   *
+   * 并行调用三个后端检测命令，更新 envCheckStatus 缓存，然后重新渲染分组。
+   * 检测过程中设置 envChecking = true，UI 显示 loading 状态。
+   */
+  private async handleEnvironmentRecheck(): Promise<void> {
+    /* 如果正在检测中，忽略重复触发 */
+    if (this.envChecking) return;
+
+    /* 设置检测中状态 */
+    this.envChecking = true;
+
+    /* 重新渲染分组（显示 loading） */
+    this.renderSection('environment');
+
+    try {
+      /* 并行执行三项检测，提高速度 */
+      const [gitResult, pythonResult, filterRepoResult] = await Promise.all([
+        invoke<{ installed: boolean; version: string; path: string }>('check_git_installed'),
+        invoke<{ installed: boolean; version: string | null }>('check_python_installed'),
+        invoke<{ available: boolean; version: string | null }>('check_filter_repo_available'),
+      ]);
+
+      /* 更新检测结果缓存 */
+      this.envCheckStatus.git = {
+        installed: gitResult.installed,
+        version: gitResult.version,
+      };
+      this.envCheckStatus.python = {
+        installed: pythonResult.installed,
+        version: pythonResult.version,
+      };
+      this.envCheckStatus.filterRepo = {
+        available: filterRepoResult.available,
+        version: filterRepoResult.version,
+      };
+
+      console.log('[SettingsPanel] 环境检测完成:', this.envCheckStatus);
+    } catch (err) {
+      console.error('[SettingsPanel] 环境检测失败:', err);
+      /* 检测失败时，将所有状态设为未安装（保守处理） */
+      this.envCheckStatus.git = { installed: false, version: '' };
+      this.envCheckStatus.python = { installed: false, version: null };
+      this.envCheckStatus.filterRepo = { available: false, version: null };
+      alert(`环境检测失败: ${String(err)}`);
+    } finally {
+      /* 取消检测中状态 */
+      this.envChecking = false;
+      /* 重新渲染分组（显示检测结果） */
+      this.renderSection('environment');
+    }
+  }
+
+  /**
+   * Task 3.2：处理"安装"按钮点击
+   *
+   * 由于前端未安装 @tauri-apps/plugin-shell 插件包，无法直接在终端中执行安装命令。
+   * 采用替代方案：
+   *   1. 显示安装命令文本（用户可复制到终端手动执行）
+   *   2. 调用 open_external_url 打开工具的官方下载页面
+   *
+   * 安装命令文本已在 renderEnvCheckRow 中显示，此处主要处理打开下载页面。
+   *
+   * @param tool - 要安装的工具标识符：'git' / 'python' / 'filter-repo'
+   */
+  private async handleInstallTool(tool: string): Promise<void> {
+    /* 设置安装中状态（用于 UI 反馈） */
+    this.envInstalling = tool;
+    this.renderSection('environment');
+
+    try {
+      /* 根据工具类型确定下载页面 URL */
+      let downloadUrl: string;
+      let toolName: string;
+      let installCommand: string;
+
+      switch (tool) {
+        case 'git':
+          downloadUrl = 'https://git-scm.com/download/win';
+          toolName = 'Git';
+          installCommand = 'winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements';
+          break;
+        case 'python':
+          downloadUrl = 'https://www.python.org/downloads/';
+          toolName = 'Python';
+          installCommand = 'winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements';
+          break;
+        case 'filter-repo':
+          downloadUrl = 'https://pypi.org/project/git-filter-repo/';
+          toolName = 'Git Filter Repo';
+          installCommand = 'pip install git-filter-repo';
+          break;
+        default:
+          console.warn('[SettingsPanel] 未知工具:', tool);
+          return;
+      }
+
+      /* 提示用户安装方式（显示安装命令和下载页面链接） */
+      const confirmed = confirm(
+        `${toolName} 安装说明\n\n` +
+        `方法一（推荐）：在终端中执行以下命令\n` +
+        `${installCommand}\n\n` +
+        `方法二：点击"确定"打开官方下载页面\n${downloadUrl}\n\n` +
+        `安装完成后，请返回设置面板点击"重新检测"验证安装结果。`
+      );
+
+      /* 如果用户确认，打开下载页面 */
+      if (confirmed) {
+        try {
+          await invoke('open_external_url', { url: downloadUrl });
+        } catch (err) {
+          console.error('[SettingsPanel] 打开下载页面失败:', err);
+          alert(`打开下载页面失败: ${String(err)}\n\n请手动访问: ${downloadUrl}`);
+        }
+      }
+    } finally {
+      /* 取消安装中状态 */
+      this.envInstalling = null;
+      this.renderSection('environment');
+    }
+  }
+
+  /**
+   * Task 4.3：渲染"壁纸"分组
+   *
+   * 提供壁纸管理功能：
+   *   - "选择壁纸"按钮：调用 wallpaperService.selectWallpaper() 打开文件选择对话框
+   *   - "清除壁纸"按钮：调用 wallpaperService.clearWallpaper() 清除当前壁纸
+   *   - 当前壁纸预览：显示壁纸缩略图（如有）
+   *
+   * 壁纸数据存储在 localStorage 中（base64 data URL），
+   * 由 wallpaperService 统一管理。
+   */
+  private renderWallpaperSection(): string {
+    /* 从 wallpaperService 加载已保存的壁纸状态 */
+    const wallpaperState = wallpaperService.loadWallpaper();
+    const hasWallpaper = wallpaperState !== null && wallpaperState.dataUrl !== null;
+
+    /* 构建壁纸预览 HTML（如有壁纸则显示缩略图） */
+    let previewHtml: string;
+    if (hasWallpaper && wallpaperState!.dataUrl) {
+      /* 有壁纸：显示缩略图和主色调信息 */
+      const colorsHtml = wallpaperState!.dominantColors.length > 0
+        ? `<div class="wallpaper-colors">
+             <span class="wallpaper-colors-label">提取的主色调：</span>
+             ${wallpaperState!.dominantColors.map(color =>
+               `<span class="wallpaper-color-swatch"
+                      style="background: rgb(${color.r}, ${color.g}, ${color.b})"
+                      title="rgb(${color.r}, ${color.g}, ${color.b}) - 权重 ${(color.weight * 100).toFixed(1)}%">
+                </span>`
+             ).join('')}
+           </div>`
+        : '';
+
+      previewHtml = `
+        <div class="wallpaper-preview">
+          <img src="${wallpaperState!.dataUrl}" alt="当前壁纸预览" class="wallpaper-preview-img" />
+          <p class="form-hint">当前壁纸预览（如未显示，可能是图片数据损坏）</p>
+          ${colorsHtml}
+        </div>
+      `;
+    } else {
+      /* 无壁纸：显示提示信息 */
+      previewHtml = `
+        <div class="wallpaper-preview wallpaper-preview-empty">
+          <p class="settings-hint">当前未设置壁纸</p>
+        </div>
+      `;
+    }
+
+    return `
+      <h3 class="settings-section-title">壁纸</h3>
+      <p class="settings-section-desc">自定义应用背景壁纸。选择图片后，应用会自动提取主色调并应用到界面。</p>
+
+      <!-- 壁纸操作按钮 -->
+      <div class="form-group">
+        <button class="btn btn-primary" id="wallpaper-select-btn" type="button">🖼 选择壁纸</button>
+        <button class="btn btn-secondary" id="wallpaper-clear-btn" type="button" ${hasWallpaper ? '' : 'disabled'}>🗑 清除壁纸</button>
+        <p class="form-hint">"选择壁纸"按钮打开文件选择对话框，支持 JPG/PNG/WebP/BMP/GIF 格式。</p>
+      </div>
+
+      <!-- 当前壁纸预览 -->
+      <div class="form-group">
+        <h4 class="settings-subsection-title">当前壁纸预览</h4>
+        ${previewHtml}
+      </div>
+
+      <!-- 壁纸功能说明 -->
+      <div class="form-group">
+        <h4 class="settings-subsection-title">功能说明</h4>
+        <ul class="settings-list">
+          <li>选择壁纸后，图片会以 base64 格式存储在浏览器本地（localStorage）</li>
+          <li>应用会自动提取壁纸的主色调，并应用到界面的强调色</li>
+          <li>清除壁纸后，应用恢复默认的渐变背景</li>
+          <li>大图片可能超出 localStorage 存储限制（约 5-10MB），建议使用压缩后的图片</li>
+        </ul>
+      </div>
+    `;
+  }
+
+  /**
+   * Task 4.3：处理"选择壁纸"按钮点击
+   *
+   * 调用 wallpaperService.selectWallpaper() 打开文件选择对话框。
+   * 选择成功后，重新渲染壁纸分组以更新预览。
+   * 选择失败或取消时，不执行任何操作。
+   */
+  private async handleWallpaperSelect(): Promise<void> {
+    try {
+      /* 调用壁纸服务选择壁纸 */
+      const result = await wallpaperService.selectWallpaper();
+
+      if (result && result.dataUrl) {
+        /* 选择成功：重新渲染壁纸分组以更新预览 */
+        console.log('[SettingsPanel] 壁纸已选择，重新渲染预览');
+        this.renderSection('wallpaper');
+
+        /* 通知主应用应用壁纸（通过 onSuccess 回调） */
+        /* onSuccess 通常会调用 refreshAllComponents，其中包含 applyWallpaper 逻辑 */
+        this.onSuccess();
+      }
+    } catch (err) {
+      console.error('[SettingsPanel] 选择壁纸失败:', err);
+      alert(`选择壁纸失败: ${String(err)}`);
+    }
+  }
+
+  /**
+   * Task 4.3：处理"清除壁纸"按钮点击
+   *
+   * 调用 wallpaperService.clearWallpaper() 清除壁纸。
+   * 清除后重新渲染壁纸分组以更新预览。
+   */
+  private handleWallpaperClear(): void {
+    try {
+      /* 调用壁纸服务清除壁纸 */
+      wallpaperService.clearWallpaper();
+      console.log('[SettingsPanel] 壁纸已清除');
+
+      /* 重新渲染壁纸分组以更新预览 */
+      this.renderSection('wallpaper');
+
+      /* 通知主应用移除壁纸（通过 onSuccess 回调） */
+      this.onSuccess();
+    } catch (err) {
+      console.error('[SettingsPanel] 清除壁纸失败:', err);
+      alert(`清除壁纸失败: ${String(err)}`);
+    }
   }
 
   /* ====================================================================== *

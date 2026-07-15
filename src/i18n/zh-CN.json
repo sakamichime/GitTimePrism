@@ -36,6 +36,12 @@
     "commitHistory": "提交历史",
     "noCommits": "暂无提交记录"
   },
+  "welcome": {
+    "openRepo": "打开仓库",
+    "cloneRepo": "克隆仓库",
+    "notGitRepo": "该目录不是 Git 仓库",
+    "initRepoBtn": "初始化仓库"
+  },
   "detail": {
     "title": "详情",
     "selectCommit": "请选择一个提交查看详情",
@@ -150,6 +156,26 @@
     "notImplemented": "此功能正在开发中",
     "notImplementedDetail": "\"{name}\" 功能的后端命令尚未实现，敬请期待。"
   },
+  "welcome": {
+    "openRepo": "打开仓库",
+    "cloneRepo": "克隆仓库",
+    "initRepo": "初始化仓库",
+    "notGitRepo": "该目录不是 Git 仓库",
+    "initRepoBtn": "初始化仓库"
+  },
+  "envCheck": {
+    "title": "环境检测",
+    "git": "Git",
+    "python": "Python",
+    "gitFilterRepo": "Git Filter Repo",
+    "installed": "已安装",
+    "notInstalled": "未安装",
+    "recheck": "重新检测",
+    "install": "安装",
+    "installing": "正在安装...",
+    "installComplete": "安装完成，请重启应用",
+    "restartRequired": "安装完成后需要重启应用生效"
+  },
   "settings": {
     "title": "设置",
     "commitDetails": "提交详情视图",
@@ -163,7 +189,12 @@
     "markdown": "Markdown",
     "accessibility": "无障碍",
     "issueLinking": "Issue Linking",
-    "gitUser": "Git 用户身份"
+    "gitUser": "Git 用户身份",
+    "wallpaper": "壁纸",
+    "wallpaperSelect": "选择壁纸",
+    "wallpaperClear": "清除壁纸",
+    "wallpaperPreview": "当前壁纸预览",
+    "environment": "环境检测"
   },
   "find": {
     "search": "搜索",
