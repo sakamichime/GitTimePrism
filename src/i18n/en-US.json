@@ -261,5 +261,45 @@
     "stashComplete": "Stash operation successful",
     "mergeComplete": "Merge successful",
     "rebaseComplete": "Rebase successful"
+  },
+  "purge": {
+    "title": "Purge History Files",
+    "scan": "Scan",
+    "scanResult": "Scan complete, found {count} files",
+    "filterMode": "Filter",
+    "largeFilesOnly": "Large Files Only",
+    "allFiles": "All Files",
+    "threshold": "Threshold (bytes)",
+    "search": "Search files...",
+    "delete": "Purge Selected",
+    "cancel": "Close",
+    "selected": "{count} files selected",
+    "noFiles": "Click \"Scan\" to start scanning history files",
+    "scanning": "Scanning history files...",
+    "purging": "Purging files from history...",
+    "colPath": "Path",
+    "colSize": "Size",
+    "colCommitCount": "Commits",
+    "backup": {
+      "title": "Create a backup branch before purging?",
+      "create": "Create Backup",
+      "skip": "Skip"
+    },
+    "confirm": {
+      "title": "Confirm Purge",
+      "warning": "This will rewrite Git history and cannot be undone!",
+      "remoteWarning": "Remote detected. You will need git push --force after this operation",
+      "delete": "Confirm Purge",
+      "cancel": "Cancel"
+    },
+    "success": "Purge successful!",
+    "failed": "Purge failed",
+    "sizeBefore": "Before",
+    "sizeAfter": "After",
+    "method": "Method",
+    "backupBranch": "Backup Branch",
+    "restoreHint": "To restore: git reset --hard {branch}",
+    "filterRepoUnavailable": "git-filter-repo not found, will use filter-branch (slower)",
+    "filterRepoTip": "Recommended: pip install git-filter-repo"
   }
 }

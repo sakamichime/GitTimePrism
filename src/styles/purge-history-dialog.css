@@ -1,0 +1,427 @@
+/**
+ * 历史文件清理对话框样式（Task 6.1）
+ *
+ * 定义"清理历史文件"对话框的视觉样式，包括：
+ * - 全屏遮罩层（半透明背景 + 毛玻璃模糊效果）
+ * - 居中面板容器（圆角、阴影、最大宽度 800px、最大高度 80vh）
+ * - 顶部标题栏（标题 + 关闭按钮）
+ * - filter-repo 不可用提示条（橙色背景警告）
+ * - 工具行（扫描按钮 + 筛选模式 + 阈值输入框 + 搜索框）
+ * - 文件列表表格（表头可排序、行悬停高亮、选中行高亮、表头 sticky）
+ * - 加载动画（旋转 spinner）
+ * - 空状态提示
+ * - 底部按钮栏（选中计数 + 删除按钮 + 关闭按钮）
+ * - 结果展示区（成功/失败样式、远程警告样式）
+ *
+ * 复用项目 CSS 变量（var(--bg-primary) 等）实现暗色/亮色主题自动适配。
+ */
+
+/* ============================================================
+ * 遮罩层与面板容器
+ * ============================================================ */
+
+/* 全屏遮罩层：覆盖整个窗口的半透明背景，使用 flex 布局居中面板 */
+.purge-history-overlay {
+  position: fixed;
+  inset: 0;                              /* 等价于 top/right/bottom/left:0 */
+  background: rgba(0, 0, 0, 0.5);        /* 半透明黑色背景 */
+  backdrop-filter: blur(4px);            /* 毛玻璃模糊效果 */
+  -webkit-backdrop-filter: blur(4px);     /* Safari 兼容 */
+  z-index: 10000;                        /* 高于普通对话框，确保覆盖所有内容 */
+  display: flex;                         /* 使用 flex 居中面板 */
+  align-items: center;
+  justify-content: center;
+}
+
+/* 面板容器：居中显示的模态窗口 */
+.purge-history-panel {
+  background: var(--bg-primary);         /* 主背景色（暗色/亮色主题自动适配） */
+  border: 1px solid var(--border);       /* 半透明边框 */
+  border-radius: 12px;                   /* 大圆角 */
+  max-width: 800px;                      /* 最大宽度 800px */
+  width: 90%;                            /* 宽度为视口的 90% */
+  max-height: 80vh;                      /* 最大高度为视口的 80% */
+  overflow: hidden;                      /* 圆角裁剪，让内部滚动区域不超出 */
+  display: flex;                         /* 使用 flex 布局，垂直排列各区块 */
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);          /* 大阴影，强调浮层效果 */
+}
+
+/* ============================================================
+ * 顶部标题栏
+ * ============================================================ */
+
+/* 标题栏：包含标题文字和关闭按钮 */
+.purge-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 标题栏中的标题文字 */
+.purge-history-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 关闭按钮：无背景、大字号、鼠标悬停变色 */
+.purge-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+/* 关闭按钮悬停状态：颜色变为主文字色 */
+.purge-close-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ============================================================
+ * filter-repo 不可用警告提示条
+ * ============================================================ */
+
+/* 警告提示条：橙色半透明背景，提示用户安装 git-filter-repo */
+.purge-warning-bar {
+  background: var(--warning-bg);
+  color: var(--warning);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* ============================================================
+ * 工具行
+ * ============================================================ */
+
+/* 工具行：包含扫描按钮、筛选模式下拉、阈值输入、搜索框 */
+.purge-toolbar {
+  display: flex;
+  gap: 8px;                              /* 子元素间距 8px */
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;                  /* 垂直居中对齐 */
+  flex-wrap: wrap;                      /* 空间不足时换行 */
+}
+
+/* 工具行中的输入框和下拉框统一样式 */
+.purge-toolbar select,
+.purge-toolbar input[type="number"],
+.purge-toolbar input[type="text"] {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+/* 工具行中的输入框/下拉框聚焦状态：边框变蓝 */
+.purge-toolbar select:focus,
+.purge-toolbar input[type="number"]:focus,
+.purge-toolbar input[type="text"]:focus {
+  border-color: var(--accent);
+}
+
+/* 阈值输入框宽度固定，避免过长 */
+.purge-toolbar input[type="number"] {
+  width: 100px;
+}
+
+/* 搜索框：占据剩余空间 */
+.purge-toolbar input[type="text"] {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* ============================================================
+ * 文件列表表格
+ * ============================================================ */
+
+/* 文件列表容器：可滚动区域，flex 占满剩余空间 */
+.purge-file-list-container {
+  flex: 1;
+  overflow-y: auto;                     /* 内容超出时垂直滚动 */
+  position: relative;                   /* 为内部 loading 遮罩提供定位上下文 */
+}
+
+/* 文件列表表格：占满容器宽度，边框合并 */
+.purge-file-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* 表头单元格：sticky 固定在顶部，可点击排序 */
+.purge-file-table thead th {
+  position: sticky;
+  top: 0;                               /* 滚动时固定在顶部 */
+  background: var(--bg-secondary);      /* 表头背景色 */
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  cursor: pointer;                      /* 可点击排序，鼠标显示为手型 */
+  user-select: none;                    /* 禁止选中表头文字 */
+  font-size: 0.85rem;
+  z-index: 1;                          /* 确保表头在行之上 */
+}
+
+/* 表头第一列（复选框列）：宽度固定，居中对齐 */
+.purge-file-table thead th:first-child {
+  width: 36px;
+  text-align: center;
+  cursor: default;                     /* 复选框列表头不响应排序 */
+}
+
+/* 表头排序指示器：通过 data-sort 属性标识可排序列 */
+.purge-file-table thead th[data-sort]::after {
+  content: ' ⇅';                        /* 默认显示双向箭头 */
+  opacity: 0.5;
+}
+
+/* 表体单元格：内边距、底部边框 */
+.purge-file-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+/* 表体行：悬停时高亮背景 */
+.purge-file-table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+/* 表体行悬停状态：背景变为悬停色 */
+.purge-file-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* 表体行选中状态：背景变为强调色弱化背景 */
+.purge-file-table tbody tr.selected {
+  background: var(--accent-muted);
+}
+
+/* 表体第一列（复选框列）：居中对齐 */
+.purge-file-table tbody td:first-child {
+  text-align: center;
+}
+
+/* 文件路径列：使用等宽字体，便于辨识 */
+.purge-file-table td.purge-col-path {
+  font-family: var(--font-mono);
+  word-break: break-all;                /* 路径过长时换行显示 */
+}
+
+/* 大小列和提交数列：右对齐数字 */
+.purge-file-table td.purge-col-size,
+.purge-file-table td.purge-col-commits {
+  text-align: right;
+  font-variant-numeric: tabular-nums;   /* 等宽数字，便于对齐 */
+}
+
+/* ============================================================
+ * 加载动画与空状态
+ * ============================================================ */
+
+/* 加载中遮罩：覆盖文件列表容器，居中显示 spinner */
+.purge-loading {
+  position: absolute;
+  inset: 0;                             /* 覆盖整个文件列表容器 */
+  background: var(--bg-primary);        /* 不透明背景，遮挡表格内容 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* 操作中 loading 遮罩：覆盖整个面板，阻止用户操作 */
+.purge-action-loading {
+  position: absolute;
+  inset: 0;                             /* 覆盖整个面板 */
+  background: rgba(0, 0, 0, 0.5);       /* 半透明黑色背景 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  z-index: 10;                         /* 确保在面板内容之上 */
+}
+
+/* 旋转 spinner：使用 border 实现的圆形旋转动画 */
+.purge-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);      /* 顶部边框为强调色，形成旋转视觉 */
+  border-radius: 50%;                   /* 圆形 */
+  animation: spin 1s linear infinite;  /* 1 秒一圈无限旋转 */
+}
+
+/* 旋转动画关键帧 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 空状态提示：居中显示灰色文字 */
+.purge-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* ============================================================
+ * 底部按钮栏
+ * ============================================================ */
+
+/* 底部栏：左侧显示选中计数，右侧显示删除和关闭按钮 */
+.purge-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
+}
+
+/* 选中文件计数：小字号灰色文字 */
+.purge-selected-count {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* 底部按钮组：右侧按钮容器 */
+.purge-footer > div:last-child,
+.purge-footer > .btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+/* ============================================================
+ * 按钮样式
+ * ============================================================ */
+
+/* 危险按钮（删除选中文件）：红色背景、白色文字 */
+.btn-danger {
+  background: var(--error);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: opacity var(--transition-fast);
+}
+
+/* 危险按钮悬停状态：略微变暗 */
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+/* 危险按钮禁用状态：半透明且不可点击 */
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+ * 结果展示区
+ * ============================================================ */
+
+/* 结果展示区：底部边框分隔，内边距 */
+.purge-result {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+/* 结果成功状态：绿色文字 */
+.purge-result.purge-result-success {
+  color: var(--success);
+}
+
+/* 结果失败状态：红色文字 */
+.purge-result.purge-result-failed {
+  color: var(--error);
+}
+
+/* 结果中的标题（如"清理成功！"） */
+.purge-result-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* 结果中的信息行（如"操作前：12.5 MB"） */
+.purge-result-row {
+  margin: 4px 0;
+  color: var(--text-secondary);
+}
+
+/* 结果中的信息标签（如"操作前"、"使用方法"） */
+.purge-result-label {
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+
+/* 结果中的信息值（如"12.5 MB"、"filter-repo"） */
+.purge-result-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+/* 远程仓库警告：红色加粗，强调危险性 */
+.purge-remote-warning {
+  color: #ff6b6b;
+  font-weight: 500;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--error-bg);
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+/* 恢复提示：等宽字体，便于复制命令 */
+.purge-restore-hint {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+/* ============================================================
+ * 暗色主题适配
+ * ============================================================
+ * 项目通过 CSS 变量（var(--bg-primary) 等）自动适配暗色/亮色主题，
+ * 无需额外的 @media (prefers-color-scheme) 规则。
+ * 当 HTML 根元素设置 data-theme="light" 时，
+ * variables.css 中的变量值会自动覆盖。
+ */

@@ -25,6 +25,10 @@ import type {
   CommitComparison,
   GraphQueryParams,
   AnnotatedCommitGraph,
+  // 历史文件清理相关类型（Task 4.2：用于扫描、检测、删除 Git 历史中的大文件）
+  HistoryFileInfo,
+  FilterRepoStatus,
+  PurgeResult,
 } from '../utils/git-types';
 
 /**
@@ -1744,6 +1748,93 @@ export const repoService = {
    */
   async listCredentialHosts(): Promise<string[]> {
     return await invoke<string[]>('list_credential_hosts');
+  },
+
+  // ==================== 历史文件清理（Task 4.1：扫描 / 检测 / 删除 / 仓库大小） ====================
+
+  /**
+   * 扫描仓库历史中所有文件的信息（Task 4.1）
+   *
+   * 调用后端 scan_history_files 命令，
+   * 执行 git rev-list --objects --all + git cat-file --batch-check，
+   * 解析所有历史 blob 对象，按路径去重，计算 maxSize / totalSize / commitCount，
+   * 返回按 maxSize 降序排列的文件列表。
+   *
+   * 前端 PurgeHistoryDialog 组件在用户点击"扫描"按钮时调用此方法，
+   * 获取文件列表后渲染到表格中供用户选择要清理的文件。
+   *
+   * @param repoPath - 仓库路径
+   * @returns 历史文件信息列表（按 maxSize 降序排列）
+   */
+  async scanHistoryFiles(repoPath: string): Promise<HistoryFileInfo[]> {
+    return await invoke<HistoryFileInfo[]>('scan_history_files', { repoPath });
+  },
+
+  /**
+   * 检测 git-filter-repo 工具是否可用（Task 4.1）
+   *
+   * 调用后端 check_filter_repo_available 命令，
+   * 执行 git filter-repo --version 检测是否安装了 git-filter-repo 工具。
+   * 如果可用，清理历史时将使用 filter-repo（更快、更安全）；
+   * 如果不可用，将回退到 filter-branch（较慢，Git 原生但已弃用）。
+   *
+   * 前端 PurgeHistoryDialog 组件在 show() 方法中调用此方法，
+   * 不可用时在 UI 顶部显示警告提示条。
+   *
+   * @returns filter-repo 可用性状态（包含 available 和 version 字段）
+   */
+  async checkFilterRepoAvailable(): Promise<FilterRepoStatus> {
+    return await invoke<FilterRepoStatus>('check_filter_repo_available');
+  },
+
+  /**
+   * 从 Git 历史中删除指定文件（Task 4.1）
+   *
+   * ⚠️ 危险操作：此方法会重写 Git 历史，不可撤销！
+   *
+   * 调用后端 purge_files_from_history 命令，
+   * 根据是否安装 git-filter-repo 自动选择清理方法：
+   *   - filter-repo 可用：执行 git filter-repo --path <path> --invert-paths（推荐）
+   *   - filter-repo 不可用：执行 git filter-branch --index-filter 'git rm --cached --ignore-unmatch <paths>' --prune-empty --tag-name-filter cat -- --all（兼容）
+   *
+   * 如果 createBackup 为 true，会先执行 git branch <backup_branch_name> 创建备份分支，
+   * 用户可通过 git reset --hard <backup_branch_name> 恢复到操作前的状态。
+   *
+   * 操作前后会调用 git count-objects -vH 获取仓库大小，
+   * 用于在结果中对比清理效果。
+   *
+   * @param repoPath - 仓库路径
+   * @param filePaths - 要从历史中删除的文件路径列表（相对于仓库根目录）
+   * @param createBackup - 是否在删除前创建备份分支（true = 创建，false = 不创建）
+   * @param backupBranchName - 备份分支名（如 "backup/pre-purge-1700000000"）；createBackup 为 false 时传 null
+   * @returns 清理结果（包含 success、beforeSize、afterSize、backupBranch、method、error 字段）
+   */
+  async purgeFilesFromHistory(
+    repoPath: string,
+    filePaths: string[],
+    createBackup: boolean,
+    backupBranchName: string | null
+  ): Promise<PurgeResult> {
+    return await invoke<PurgeResult>('purge_files_from_history', {
+      repoPath,
+      filePaths,
+      createBackup,
+      backupBranchName,
+    });
+  },
+
+  /**
+   * 获取仓库大小（Task 4.1）
+   *
+   * 调用后端 get_repo_size 命令，
+   * 执行 git count-objects -vH，解析 size-pack 行返回人类可读的大小字符串。
+   * 用于在清理前后对比仓库大小。
+   *
+   * @param repoPath - 仓库路径
+   * @returns 仓库大小（人类可读字符串，如 "12.5 MB"）
+   */
+  async getRepoSize(repoPath: string): Promise<string> {
+    return await invoke<string>('get_repo_size', { repoPath });
   },
 };
 

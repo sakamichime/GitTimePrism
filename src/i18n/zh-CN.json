@@ -261,5 +261,45 @@
     "stashComplete": "Stash 操作成功",
     "mergeComplete": "合并成功",
     "rebaseComplete": "变基成功"
+  },
+  "purge": {
+    "title": "清理历史文件",
+    "scan": "扫描",
+    "scanResult": "扫描完成，共找到 {count} 个文件",
+    "filterMode": "筛选模式",
+    "largeFilesOnly": "仅大文件",
+    "allFiles": "全部文件",
+    "threshold": "阈值(字节)",
+    "search": "搜索文件...",
+    "delete": "删除选中文件",
+    "cancel": "关闭",
+    "selected": "已选 {count} 个文件",
+    "noFiles": "点击\"扫描\"按钮开始扫描历史文件",
+    "scanning": "正在扫描历史文件...",
+    "purging": "正在清理历史文件...",
+    "colPath": "路径",
+    "colSize": "大小",
+    "colCommitCount": "提交数",
+    "backup": {
+      "title": "是否在删除前创建备份分支？",
+      "create": "创建备份分支",
+      "skip": "跳过"
+    },
+    "confirm": {
+      "title": "确认删除",
+      "warning": "此操作将重写 Git 历史，不可撤销！",
+      "remoteWarning": "检测到远程仓库已配置，操作后需要 git push --force 同步远程",
+      "delete": "确认删除",
+      "cancel": "取消"
+    },
+    "success": "清理成功！",
+    "failed": "清理失败",
+    "sizeBefore": "操作前",
+    "sizeAfter": "操作后",
+    "method": "使用方法",
+    "backupBranch": "备份分支",
+    "restoreHint": "如需恢复，可执行：git reset --hard {branch}",
+    "filterRepoUnavailable": "未检测到 git-filter-repo，将使用 filter-branch（较慢）",
+    "filterRepoTip": "建议安装：pip install git-filter-repo"
   }
 }

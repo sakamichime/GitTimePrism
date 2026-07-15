@@ -139,3 +139,9 @@ pub mod state;
 // 用于前端在节点图中显示作者头像（GitHub/GitLab/Gravatar 三源获取，14 天缓存刷新）
 pub mod avatar;
 
+// 导出历史文件清理命令模块（Task 2：历史文件清理功能后端命令）
+// 提供 scan_history_files / check_filter_repo_available /
+// purge_files_from_history / get_repo_size 四个命令
+// 用于前端清理历史对话框：扫描大文件、检测 filter-repo、清除历史文件、查询仓库大小
+pub mod purge;
+

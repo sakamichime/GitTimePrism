@@ -27,6 +27,8 @@ import './styles/blame-viewer.css';
 import './styles/submodule-manager.css';
 // 导入 LFS 管理器样式（阶段 9：Task 9.9：用于 LFS 管理对话框）
 import './styles/lfs-manager.css';
+// 导入历史文件清理对话框样式（Task 6.2：用于清理历史文件的模态对话框）
+import './styles/purge-history-dialog.css';
 
 // 导入 xterm.js 终端样式
 // xterm.js 需要加载其 CSS 文件才能正确显示终端界面

@@ -1225,3 +1225,76 @@ export interface CommitComparison {
 	/** 两提交之间的文件变更列表 */
 	readonly fileChanges: ReadonlyArray<GitFileChange>;
 }
+
+
+/**
+ * ============================================================
+ * 历史文件清理（Purge History）相关类型
+ * ============================================================
+ * 以下类型用于"清理历史文件"功能（Task 1-7）。
+ * 这些类型对应 Rust 后端 git/purge.rs 中的结构体，
+ * 用于扫描、检测、删除 Git 历史中的大文件。
+ * 字段名使用 camelCase，与 Rust 后端的 serde 序列化输出匹配。
+ */
+
+/**
+ * 历史文件信息（扫描结果）
+ *
+ * 对应 Rust 后端的 HistoryFileInfo 结构体。
+ * 描述一个文件在 Git 历史中所有版本的信息汇总。
+ *
+ * 字段说明：
+ *   - path：文件在仓库中的相对路径（相对于仓库根目录）
+ *   - maxSize：该文件所有版本中最大的大小（字节），
+ *              用于判断是否为"大文件"
+ *   - totalSize：该文件所有版本的总大小（字节），
+ *                用于评估清理此文件能节省多少空间
+ *   - commitCount：该文件出现在多少个提交中，
+ *                   用于评估清理此文件的影响范围
+ */
+export interface HistoryFileInfo {
+	/** 文件在仓库中的相对路径（如 "src/main.rs"） */
+	readonly path: string;
+	/** 该文件所有版本中最大的大小（字节） */
+	readonly maxSize: number;
+	/** 该文件所有版本的总大小（字节） */
+	readonly totalSize: number;
+	/** 该文件出现在多少个提交中 */
+	readonly commitCount: number;
+}
+
+/**
+ * filter-repo 可用性状态
+ *
+ * 对应 Rust 后端的 FilterRepoStatus 结构体。
+ * 描述 git-filter-repo 工具的可用性。
+ * 用于决定清理历史时使用 filter-repo（更快）还是 filter-branch（较慢）。
+ */
+export interface FilterRepoStatus {
+	/** 是否可用（true = 已安装 git-filter-repo，false = 未安装） */
+	readonly available: boolean;
+	/** 版本号字符串（如 "2.38.0"）；如果不可用则为 null */
+	readonly version: string | null;
+}
+
+/**
+ * 历史文件删除结果
+ *
+ * 对应 Rust 后端的 PurgeResult 结构体。
+ * 描述清理历史文件操作的结果，包括操作前后仓库大小对比、
+ * 使用的清理方法、备份分支名以及错误信息。
+ */
+export interface PurgeResult {
+	/** 是否成功（true = 清理成功，false = 清理失败） */
+	readonly success: boolean;
+	/** 操作前仓库大小（人类可读字符串，如 "12.5 MB"） */
+	readonly beforeSize: string;
+	/** 操作后仓库大小（人类可读字符串，如 "8.3 MB"） */
+	readonly afterSize: string;
+	/** 备份分支名（如 "backup/pre-purge-1700000000"）；如果未创建备份则为 null */
+	readonly backupBranch: string | null;
+	/** 使用的方法："filter-repo"（推荐）或 "filter-branch"（兼容） */
+	readonly method: string;
+	/** 错误信息（操作失败时）；如果成功则为 null */
+	readonly error: string | null;
+}

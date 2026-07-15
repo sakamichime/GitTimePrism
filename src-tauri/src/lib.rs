@@ -303,6 +303,23 @@ pub fn run() {
             commands::avatar::get_avatar,
             // 清除所有头像缓存（用户在设置中点击"清除头像缓存"时调用）
             commands::avatar::clear_avatar_cache,
+
+            // ============================================================
+            // 历史文件清理命令（Task 2：历史文件清理功能后端命令注册）
+            // ============================================================
+
+            // 扫描 Git 历史中的所有文件，返回文件列表及大小统计（max_size/total_size/commit_count）
+            // 执行 git rev-list --objects --all + git cat-file --batch-check
+            commands::purge::scan_history_files,
+            // 检测系统是否安装了 git-filter-repo 工具（返回 available + version）
+            // 执行 git filter-repo --version
+            commands::purge::check_filter_repo_available,
+            // 从 Git 历史中清除指定文件（重写历史，危险操作）
+            // 优先使用 git filter-repo（推荐），否则回退到 git filter-branch（兼容）
+            commands::purge::purge_files_from_history,
+            // 获取仓库当前大小（人类可读字符串，如 "12.5 MiB"）
+            // 执行 git count-objects -vH，解析 size-pack 行
+            commands::purge::get_repo_size,
         ])
         
         // 注册终端 PTY 管理器为全局状态（所有命令都可以访问）

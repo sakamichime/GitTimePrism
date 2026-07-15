@@ -33,6 +33,8 @@ import { TagManager } from './tag-manager.js';
 import { SubmoduleManager } from './submodule-manager.js';
 // 导入 LFS 管理组件（阶段 9：Task 9.4：用于 LFS 跟踪规则/文件锁/对象拉推管理）
 import { LfsManager } from './lfs-manager.js';
+// 导入历史文件清理对话框全局单例（Task 5.3：用于清理 Git 历史中的大文件）
+import { purgeHistoryDialog } from './purge-history-dialog.js';
 // 导入设置面板组件（Task 7.4：用于编辑应用配置和 Git 仓库配置）
 import { SettingsPanel } from './settings-panel.js';
 import { FileHistory } from './file-history.js';
@@ -260,6 +262,7 @@ export class App {
           <button class="btn" id="btn-pull" title="从远程仓库拉取更新">↓ 拉取</button>
           <button class="btn" id="btn-push" title="推送本地提交到远程仓库">↑ 推送</button>
           <button class="btn" id="btn-find" title="搜索提交 (Ctrl+F)">🔍 查找</button>
+          <button class="btn" id="btn-purge-history" title="清理历史文件">🧹 清理历史</button>
           <button class="btn" id="btn-settings" title="设置">⚙ 设置</button>
           <button class="btn" id="btn-wallpaper" title="设置壁纸">🖼</button>
           <button class="btn" id="btn-toggle-terminal" title="Ctrl+\`">${t('toolbar.toggleTerminal')}</button>
@@ -955,6 +958,24 @@ export class App {
         this.refreshAllComponents();
       });
       lfsManager.show();
+    });
+
+    // 清理历史按钮 - 点击后弹出"清理历史文件"对话框（Task 5.2）
+    // 用于扫描并删除 Git 历史中的大文件（重写 Git 历史，危险操作）
+    // 只有在已打开仓库的情况下才能清理，否则提示用户先打开仓库
+    document.getElementById('btn-purge-history')?.addEventListener('click', () => {
+      // 检查是否已经打开了仓库
+      if (!this.currentRepoPath) {
+        alert('请先打开一个仓库再进行清理历史操作');
+        return;
+      }
+      // 设置操作完成回调（清理成功后刷新所有组件，包括节点图）
+      // 注意：任务描述中提到的 loadCommits 方法在 app.ts 中实际名为 refreshAllComponents
+      purgeHistoryDialog.onComplete = () => {
+        void this.refreshAllComponents();
+      };
+      // 显示清理历史文件对话框
+      purgeHistoryDialog.show(this.currentRepoPath);
     });
 
     // Stash 按钮 - 点击后弹出"Stash 未提交的变更"对话框

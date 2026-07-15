@@ -179,3 +179,10 @@ pub mod tag_details;
 // 执行 git difftool --dir-diff 命令，启动外部差异工具对比目录差异
 // 用于前端文件右键菜单"Open in Diff Tool"选项
 pub mod difftool;
+
+// 历史文件清理模块（Task 1：历史文件清理功能）
+// 提供 scan_history_files / check_filter_repo_available /
+// purge_files_from_history / get_repo_size 四个函数
+// 用于扫描历史中的大文件、检测 filter-repo 可用性、清除历史文件、查询仓库大小
+// 支持两种清理方式：git filter-repo（推荐）和 git filter-branch（兼容）
+pub mod purge;
